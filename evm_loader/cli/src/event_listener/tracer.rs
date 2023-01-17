@@ -1,4 +1,4 @@
-use crate::{types::ec::trace::{FullTraceData, VMTrace, VMTracer},};
+use crate::{types::trace::{FullTraceData, VMTrace, VMTracer},};
 use super::{vm_tracer::VmTracer,};
 
 

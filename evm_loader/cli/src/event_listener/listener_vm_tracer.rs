@@ -1,7 +1,7 @@
 use evm_loader::{
     U256, Stack, ExitReason, Capture, StepTrace, StepResultTrace, SStoreTrace, SLoadTrace, Opcode
 };
-use crate::types::ec::trace::{INSTRUCTIONS, VMTracer};
+use crate::types::trace::{INSTRUCTIONS, VMTracer};
 use super::vm_tracer::VmTracer;
 use log::{warn, info};
 

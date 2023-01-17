@@ -1,5 +1,5 @@
-use crate::types::Bytes;
-use evm_loader::U256;
+use super::Bytes;
+use evm_loader::{U256, ExitReason};
 use lazy_static::lazy_static;
 use log::warn;
 use std::cmp::min;
@@ -86,6 +86,7 @@ pub struct ExecutiveVMTracer {
 
 impl ExecutiveVMTracer {
     /// Create a new top-level instance.
+    #[allow(dead_code)]
     pub fn toplevel() -> Self {
         ExecutiveVMTracer {
             data: VMTrace {
@@ -410,4 +411,12 @@ lazy_static! {
         arr[Opcode::REVERT.as_usize()] = Some(InstructionInfo::new("REVERT", 2, 0));
         arr
     };
+}
+
+#[derive(serde::Serialize, Debug)]
+pub struct TracedCall {
+    pub vm_trace: Option<VMTrace>,
+    pub full_trace_data: Vec<FullTraceData>,
+    pub used_gas: u64,
+    pub exit_reason: ExitReason,
 }

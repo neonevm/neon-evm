@@ -31,7 +31,7 @@ log = "0.4.17"
 fern = "0.6"
 rlp = "0.5"
 rand = "0.8"
-ethereum-types = "0.14.0"
+ethereum-types = "0.14.1"
 base64 = { version = "0.13.0" }
 goblin = { version = "0.4.2" }
 tokio = { version = "1", features = ["full"] }
@@ -39,3 +39,6 @@ postgres = { version = "0.19.2", features = ["with-chrono-0_4", "array-impls"] }
 tokio-postgres = {version="0.7.6", features=["with-uuid-0_8"]}
 lazy_static = "1.4"
 
+[lib]
+name = "neon_cli"
+path = "src/lib.rs"

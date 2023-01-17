@@ -1,5 +1,5 @@
 use log::{warn, info};
-use crate::types::ec::trace::{ExecutiveVMTracer, VMTracer};
+use crate::types::trace::{ExecutiveVMTracer, VMTracer};
 use evm_loader::{Memory, U256, Opcode, Stack};
 use super::listener_vm_tracer::PendingTrap;
 
