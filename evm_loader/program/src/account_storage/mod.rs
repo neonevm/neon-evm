@@ -5,6 +5,7 @@ use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
+use solana_program::slot_history::Slot;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -139,4 +140,16 @@ pub trait AccountStorage {
             )
             .collect()
     }
+}
+
+pub fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
+    let slot_bytes: [u8; 8] = slot.to_be().to_ne_bytes();
+    let non_null_bytes: Vec<_> = slot_bytes.into_iter().skip_while(|&n| n == 0).collect();
+    let non_null_len = non_null_bytes.len();
+    let mut hash = [255; 32];
+    hash[32 - 1 - non_null_len] = 0;
+    for i in 0..non_null_len {
+        hash[32 - non_null_len + i] = non_null_bytes[i];
+    }
+    hash
 }
