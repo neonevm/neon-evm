@@ -35,7 +35,6 @@ impl<T> DecodeError<T> for EvmLoaderError {
     }
 }
 
-
 /// Macro to log a `ProgramError` in the current transaction log
 /// with the source file position like: file.rc:42
 /// and additional info if needed
@@ -43,7 +42,7 @@ impl<T> DecodeError<T> for EvmLoaderError {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    return Err!(ProgramError::InvalidArgument; "Caller pubkey: {} ", &caller_info.key.to_string());
 /// ```
 ///
@@ -59,7 +58,6 @@ macro_rules! Err {
     });
 }
 
-
 /// Macro to log a `ProgramError` in the current transaction log.
 /// with the source file position like: file.rc:777
 /// and additional info if needed
@@ -67,7 +65,7 @@ macro_rules! Err {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
 /// ```
 ///
