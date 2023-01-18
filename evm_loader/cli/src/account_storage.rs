@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use evm_loader::account::ether_contract;
-use evm_loader::account_storage::{AccountOperation, AccountsOperations};
+use evm_loader::account_storage::{generate_fake_block_hash, AccountOperation, AccountsOperations};
 use evm_loader::{
     account::{EthereumAccount, EthereumStorage, ACCOUNT_SEED_VERSION},
     account_storage::AccountStorage,
@@ -18,7 +18,10 @@ use solana_sdk::{
     pubkey,
     pubkey::Pubkey,
     rent::Rent,
-    sysvar::{recent_blockhashes, Sysvar},
+    sysvar::{
+        slot_hashes::{self, SlotHashes},
+        Sysvar,
+    },
 };
 
 use crate::Config;
@@ -372,13 +375,25 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_hash(&self, number: U256) -> H256 {
         info!("block_hash {}", number);
 
-        self.add_solana_account(recent_blockhashes::ID, false);
+        let number_u64 = number.as_u64();
 
-        if self.block_number <= number.as_u64() {
+        self.add_solana_account(slot_hashes::ID, false);
+
+        if self.block_number <= number_u64 {
             return H256::default();
         }
 
-        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
+        let slot = self.block_number - 1 - number_u64;
+        if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
+            if let Ok(slot_hashes) = slot_hashes_account.deserialize_data::<SlotHashes>() {
+                return slot_hashes
+                    .get(&slot)
+                    .map_or_else(|| generate_fake_block_hash(slot), |x| x.to_bytes())
+                    .into();
+            }
+        }
+
+        if let Ok(timestamp) = self.config.rpc_client.get_block(slot) {
             H256::from_slice(
                 &bs58::decode(timestamp.blockhash)
                     .into_vec()
@@ -386,7 +401,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             )
         } else {
             warn!("Got error trying to get block hash");
-            H256::default()
+            generate_fake_block_hash(slot).into()
         }
     }
 
