@@ -43,5 +43,12 @@
   in {
     packages.default = package;
     devShells.default = shell;
+
+    devShells.bpf = pkgs.mkShell {
+      buildInputs = [ pkgs.rustup ];
+      shellHook = ''
+        echo "WARNING: You need to install the solana toolchain from within this shell manually to use it"
+      '';
+    };
   });
 }
