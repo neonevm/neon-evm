@@ -180,7 +180,7 @@ fn parse_tx(params: &ArgMatches) -> TxParams {
     let from = address_of(params, "sender").expect("sender parse error");
     let to = address_or_deploy_of(params, "contract");
     let data = read_stdin();
-    let value = value_of(params, "value");
+    let value = u256_of(params, "value");
     let gas_limit = u256_of(params, "gas_limit");
 
     TxParams {from, to, data, value, gas_limit}

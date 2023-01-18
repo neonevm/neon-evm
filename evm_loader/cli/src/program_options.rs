@@ -16,7 +16,8 @@ pub fn truncate(in_str: &str) -> &str {
 // Return an error if string cannot be parsed as a Address address
 fn is_valid_address<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    Address::from_hex(string.as_ref()).map(|_| ())
+    Address::from_hex(string.as_ref())
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -26,7 +27,8 @@ fn is_valid_address_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef
     if string.as_ref() == "deploy" {
         return Ok(());
     }
-    Address::from_hex(string.as_ref()).map(|_| ())
+    Address::from_hex(string.as_ref())
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
