@@ -1,26 +1,21 @@
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION, EthereumStorage};
+use crate::account::{EthereumAccount, EthereumStorage, ACCOUNT_SEED_VERSION};
 use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
-use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
+use solana_program::pubkey::Pubkey;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-mod base;
 mod apply;
 mod backend;
+mod base;
 
 #[derive(Debug)]
 pub enum AccountOperation {
-    Create {
-        space: usize,
-    },
+    Create { space: usize },
 
-    Resize {
-        from: usize,
-        to: usize,
-    },
+    Resize { from: usize, to: usize },
 }
 
 pub type AccountsOperations = Vec<(H160, AccountOperation)>;
@@ -41,8 +36,8 @@ pub struct ProgramAccountStorage<'a> {
     ethereum_accounts: BTreeMap<H160, EthereumAccount<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
 
-    storage_accounts: BTreeMap<(H160,U256), EthereumStorage<'a>>,
-    empty_storage_accounts: RefCell<BTreeSet<(H160,U256)>>,
+    storage_accounts: BTreeMap<(H160, U256), EthereumStorage<'a>>,
+    empty_storage_accounts: RefCell<BTreeSet<(H160, U256)>>,
 }
 
 /// Account storage
@@ -91,11 +86,19 @@ pub trait AccountStorage {
     fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo;
 
     /// Clone part of existing solana account
-    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial>;
+    fn clone_solana_account_partial(
+        &self,
+        address: &Pubkey,
+        offset: usize,
+        len: usize,
+    ) -> Option<OwnedAccountInfoPartial>;
 
     /// Calculate account solana address and bump seed
     fn calc_solana_address(&self, address: &H160) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], address.as_bytes()], self.program_id())
+        Pubkey::find_program_address(
+            &[&[ACCOUNT_SEED_VERSION], address.as_bytes()],
+            self.program_id(),
+        )
     }
 
     /// Resolve account solana address and bump seed
@@ -106,10 +109,7 @@ pub trait AccountStorage {
     /// Solana account data len
     fn solana_account_space(&self, address: &H160) -> Option<usize>;
 
-    fn calc_accounts_operations(
-        &self,
-        actions: &[Action],
-    ) -> AccountsOperations {
+    fn calc_accounts_operations(&self, actions: &[Action]) -> AccountsOperations {
         let mut accounts = HashMap::new();
         for action in actions {
             let (address, code_size) = match action {
@@ -126,14 +126,26 @@ pub trait AccountStorage {
             accounts.insert(address, space_needed);
         }
 
-        accounts.into_iter()
-            .filter_map(|(address, space_needed)|
-                match self.solana_account_space(address) {
-                    None => Some((*address, AccountOperation::Create { space: space_needed })),
-                    Some(space_current) if space_current < space_needed =>
-                        Some((*address, AccountOperation::Resize { from: space_current, to: space_needed })),
+        accounts
+            .into_iter()
+            .filter_map(
+                |(address, space_needed)| match self.solana_account_space(address) {
+                    None => Some((
+                        *address,
+                        AccountOperation::Create {
+                            space: space_needed,
+                        },
+                    )),
+                    Some(space_current) if space_current < space_needed => Some((
+                        *address,
+                        AccountOperation::Resize {
+                            from: space_current,
+                            to: space_needed,
+                        },
+                    )),
                     _ => None,
-                }
-            ).collect()
+                },
+            )
+            .collect()
     }
 }
