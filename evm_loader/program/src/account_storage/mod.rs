@@ -151,6 +151,7 @@ pub trait AccountStorage {
     }
 }
 
+#[must_use]
 pub fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
     let slot_bytes: [u8; 8] = slot.to_be().to_ne_bytes();
     let non_null_bytes: Vec<_> = slot_bytes.into_iter().skip_while(|&n| n == 0).collect();
