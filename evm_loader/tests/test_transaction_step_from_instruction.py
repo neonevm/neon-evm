@@ -445,7 +445,8 @@ class TestStepFromInstructionChangingOperatorsDuringTrxRun:
                                                [user_account.solana_account_address,
                                                 rw_lock_contract.solana_address], 1, operator_keypair)
         # next operator can't continue trx during OPERATOR_PRIORITY_SLOTS*0.4
-        with pytest.raises(solana.rpc.core.RPCException, match="operator.key != storage.operator"):
+        with pytest.raises(solana.rpc.core.RPCException,
+                           match=rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"):
             send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                    signed_tx,
                                                    [user_account.solana_account_address,

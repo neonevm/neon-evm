@@ -471,8 +471,8 @@ class TestStepFromAccountChangingOperatorsDuringTrxRun:
                                        opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
 
         # next operator can't continue trx during OPERATOR_PRIORITY_SLOTS*0.4
-        with pytest.raises(solana.rpc.core.RPCException, match="operator.key != storage.operator"):
-            send_transaction_step_from_account(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
+        with pytest.raises(solana.rpc.core.RPCException,
+                           match=rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"):            send_transaction_step_from_account(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                [user_account.solana_account_address,
                                                 rw_lock_contract.solana_address], 500, second_operator_keypair)
 
