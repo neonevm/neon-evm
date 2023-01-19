@@ -1,5 +1,6 @@
 mod db_call_client;
 mod db_trx_client;
+mod db_clickhouse;
 mod validator_client;
 
 use solana_client::{
