@@ -190,7 +190,7 @@ pub fn execute(
             let transaction = executor.create_transaction_with_payer_only(
                 &[
                     spl_associated_token_account::instruction::create_associated_token_account(
-                        &executor.fee_payer.pubkey(), 
+                        &executor.fee_payer.pubkey(),
                         &deposit_authority,
                         &neon_token_mint,
                         &spl_token::id(),
@@ -242,7 +242,7 @@ pub fn execute(
     for i in 0..treasury_pool_count {
         let minimum_balance = config.rpc_client.get_minimum_balance_for_rent_exemption(0)?;
         let aux_balance_address = Treasury::address(&config.evm_loader, i).0;
-        executor.check_and_create_object(&format!("Aux treasury pool {}", i),
+        executor.check_and_create_object(&format!("Aux treasury pool {i}"),
             executor.get_account(&aux_balance_address),
             |v| {
                 if v.lamports < minimum_balance {
@@ -279,7 +279,7 @@ pub fn execute(
 
     let stats = executor.stats.take();
     info!("Stats: {:?}", stats);
-    
+
     let signatures = executor.signatures.take()
         .into_iter()
         .map(|s| bs58::encode(s).into_string())

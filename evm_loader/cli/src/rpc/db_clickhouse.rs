@@ -30,7 +30,7 @@ impl ClickHouseClient {
         password: Option<&str>,
     ) -> ClickHouseClient {
         let client = match (username, password) {
-            (None, None) | (None, Some(_)) => Client::default().with_url(server_url),
+            (None, None | Some(_)) => Client::default().with_url(server_url),
             (Some(user), None) => Client::default().with_url(server_url).with_user(user),
             (Some(user), Some(password)) => Client::default()
                 .with_url(server_url)

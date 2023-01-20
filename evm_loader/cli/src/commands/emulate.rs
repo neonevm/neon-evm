@@ -2,7 +2,7 @@ use log::{debug};
 
 use ethnum::U256;
 use evm_loader::{
-    gasometer::LAMPORTS_PER_SIGNATURE, 
+    gasometer::LAMPORTS_PER_SIGNATURE,
     config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE},
     types::Transaction, executor::ExecutorState, evm::{Machine, ExitStatus}, account_storage::AccountStorage
 };
@@ -25,7 +25,7 @@ pub fn execute(config: &Config, tx_params: TxParams, token: Pubkey, chain: u64, 
         config,
         tx_params.to,
         tx_params.from,
-        &hex::encode(&data),
+        &hex::encode(data),
         tx_params.value);
 
     let syscall_stubs = Stubs::new(config)?;

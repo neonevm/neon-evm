@@ -30,10 +30,10 @@ impl Parse for NetSpecificConfig {
         let file_contents = std::fs::read(&file_path).map_err(|_| {
             syn::Error::new(
                 input.span(),
-                &format!("{} should be a valid path", file_path.display()),
+                format!("{} should be a valid path", file_path.display()),
             )
         })?;
-        toml::from_slice(&file_contents).map_err(|e| syn::Error::new(input.span(), &e.to_string()))
+        toml::from_slice(&file_contents).map_err(|e| syn::Error::new(input.span(), e.to_string()))
     }
 }
 
@@ -61,11 +61,11 @@ impl Parse for CommonConfig {
         let file_contents = std::fs::read(&file_path).map_err(|_| {
             syn::Error::new(
                 input.span(),
-                &format!("{} should be a valid path", file_path.display()),
+                format!("{} should be a valid path", file_path.display()),
             )
         })?;
         let config: HashMap<String, toml::Value> = toml::from_slice(&file_contents)
-            .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
+            .map_err(|e| syn::Error::new(input.span(), e.to_string()))?;
         let variables: Vec<_> = config
             .into_iter()
             .map(move |(name, value)| {
@@ -114,12 +114,12 @@ impl Parse for CommonConfig {
                         }
                         _ => Err(syn::Error::new(
                             input.span(),
-                            &format!("Unsupported TOML value {:?}", value),
+                            format!("Unsupported TOML value {:?}", value),
                         )),
                     },
                     _ => Err(syn::Error::new(
                         input.span(),
-                        &format!("Unsupported TOML value {:?}", value),
+                        format!("Unsupported TOML value {:?}", value),
                     )),
                 }
             })
@@ -156,11 +156,11 @@ impl Parse for ElfParams {
         let file_contents = std::fs::read(&file_path).map_err(|_| {
             syn::Error::new(
                 input.span(),
-                &format!("{} should be a valid path", file_path.display()),
+                format!("{} should be a valid path", file_path.display()),
             )
         })?;
         let InternalElfParams { env, formatcp } = toml::from_slice(&file_contents)
-            .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
+            .map_err(|e| syn::Error::new(input.span(), e.to_string()))?;
         let env_tokens = env
             .into_iter()
             .map(|(name, env_name)| {

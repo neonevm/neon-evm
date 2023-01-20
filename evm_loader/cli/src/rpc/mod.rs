@@ -78,8 +78,7 @@ pub trait Rpc{
 
 pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {
     let authority= format!(
-        "host={} port={} dbname={} user={} password={}", host, port, db, user, pass
-    );
+        "host={host} port={port} dbname={db} user={user} password={pass}");
 
     let mut attempt = 0;
     let mut result = None;
@@ -98,7 +97,7 @@ pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
+            eprintln!("connection error: {e}");
         }
     });
     client
