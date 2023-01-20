@@ -1,13 +1,16 @@
-use std::convert::{Infallible};
+#![allow(clippy::unnecessary_wraps)]
 
-use evm::{Capture, ExitReason, U256, ExitSucceed, ExitRevert};
-use solana_program::{program_error::ProgramError, pubkey::Pubkey};
+use std::convert::TryInto;
+
+use ethnum::U256;
+use solana_program::{pubkey::Pubkey};
 use mpl_token_metadata::state::{Creator, Metadata, TokenStandard, TokenMetadataAccount};
 
 
 use crate::{
     account_storage::AccountStorage,
-    executor::{ExecutorState}, account::ACCOUNT_SEED_VERSION,
+    executor::{ExecutorState}, account::ACCOUNT_SEED_VERSION, types::Address,
+    error::{Error, Result}
 };
 
 // "[0xc5, 0x73, 0x50, 0xc6]": "createMetadata(bytes32,string,string,string)"
@@ -18,31 +21,29 @@ use crate::{
 // "[0x69, 0x1f, 0x34, 0x31]": "name(bytes32)"
 // "[0x6b, 0xaa, 0x03, 0x30]": "symbol(bytes32)"
 
-#[must_use]
 pub fn metaplex<B: AccountStorage>(
-    input: &[u8],
-    context: &evm::Context,
     state: &mut ExecutorState<B>,
-) -> Capture<(ExitReason, Vec<u8>), Infallible>
-{
-    if !context.apparent_value.is_zero() {
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    address: &Address,
+    input: &[u8],
+    context: &crate::evm::Context,
+    is_static: bool,
+) -> Result<Vec<u8>> {
+    if context.value != 0 {
+        return Err(Error::Custom("Metaplex: value != 0".to_string()))
     }
 
-    if context.address == context.caller {
-        // callcode is not allowed
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
-    }
-
-    if context.address != super::SYSTEM_ACCOUNT_METAPLEX {
-        // delegatecall is not allowed
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    if &context.contract != address {
+        return Err(Error::Custom("Metaplex: callcode or delegatecall is not allowed".to_string()))
     }
 
 
     let (selector, input) = input.split_at(4);
-    let result = match *selector {
+    let selector: [u8; 4] = selector.try_into()?;
+
+    match selector {
         [0xc5, 0x73, 0x50, 0xc6] => { // "createMetadata(bytes32,string,string,string)"
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let mint = read_pubkey(input);
             let name = read_string(input, 32);
             let symbol = read_string(input, 64);
@@ -51,6 +52,8 @@ pub fn metaplex<B: AccountStorage>(
             create_metadata(context, state, mint, name, symbol, uri)
         }
         [0x4a, 0xe8, 0xb6, 0x6b] => { // "createMasterEdition(bytes32,uint64)"
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let mint = read_pubkey(input);
             let max_supply = read_u64(&input[32..]);
 
@@ -77,21 +80,15 @@ pub fn metaplex<B: AccountStorage>(
             symbol(context, state, mint)
         }
         _ => {
-            Ok(vec![])
+            Err(Error::UnknownPrecompileMethodSelector(*address, selector))
         }
-    };
-
-
-    result.map_or_else(
-        |_| Capture::Exit((ExitRevert::Reverted.into(), vec![])),
-        |value| Capture::Exit((ExitSucceed::Returned.into(), value))
-    )
+    }
 }
 
 
 #[inline]
 fn read_u64(input: &[u8]) -> u64 {
-    U256::from_big_endian_fast(arrayref::array_ref![input, 0, 32]).as_u64()
+    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32]).as_u64()
 }
 
 #[inline]
@@ -101,8 +98,8 @@ fn read_pubkey(input: &[u8]) -> Pubkey {
 
 #[inline]
 fn read_string(input: &[u8], offset_position: usize) -> String {
-    let offset = U256::from_big_endian_fast(arrayref::array_ref![input, offset_position, 32]).as_usize();
-    let length = U256::from_big_endian_fast(arrayref::array_ref![input, offset, 32]).as_usize();
+    let offset = U256::from_be_bytes(*arrayref::array_ref![input, offset_position, 32]).as_usize();
+    let length = U256::from_be_bytes(*arrayref::array_ref![input, offset, 32]).as_usize();
 
     let begin = offset + 32;
     let end = begin + length;
@@ -113,18 +110,14 @@ fn read_string(input: &[u8], offset_position: usize) -> String {
 
 
 fn create_metadata<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
     name: String,
     symbol: String,
     uri: String,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -160,16 +153,12 @@ fn create_metadata<B: AccountStorage>(
 
 
 fn create_master_edition<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
     max_supply: Option<u64>,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -194,10 +183,10 @@ fn create_master_edition<B: AccountStorage>(
 }
 
 fn is_initialized<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
-) -> Result<Vec<u8>, ProgramError> {
+) -> Result<Vec<u8>> {
     let is_initialized = metadata(context, state, mint)?
         .map_or_else(|| false, |_| true);
 
@@ -205,10 +194,10 @@ fn is_initialized<B: AccountStorage>(
 }
 
 fn is_nft<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let is_nft = metadata(context, state, mint)?
         .map_or_else(|| false, |m| m.token_standard == Some(TokenStandard::NonFungible));
@@ -217,10 +206,10 @@ fn is_nft<B: AccountStorage>(
 }
 
 fn uri<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let uri = metadata(context, state, mint)?
         .map_or_else(String::new, |m| m.data.uri);
@@ -229,10 +218,10 @@ fn uri<B: AccountStorage>(
 }
 
 fn token_name<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let token_name = metadata(context, state, mint)?
         .map_or_else(String::new, |m| m.data.name);
@@ -241,10 +230,10 @@ fn token_name<B: AccountStorage>(
 }
 
 fn symbol<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let symbol = metadata(context, state, mint)?
         .map_or_else(String::new, |m| m.data.symbol);
@@ -253,17 +242,17 @@ fn symbol<B: AccountStorage>(
 }
 
 fn metadata<B: AccountStorage>(
-    _context: &evm::Context,
+    _context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
-) -> Result<Option<Metadata>, ProgramError>
+) -> Result<Option<Metadata>>
 {
     let (metadata_pubkey, _) = mpl_token_metadata::pda::find_metadata_account(&mint);
     let metadata_account = state.external_account(metadata_pubkey)?;
 
     let result = {
         if mpl_token_metadata::check_id(&metadata_account.owner) {
-            let metadata: Result<Metadata, _> = Metadata::safe_deserialize(&metadata_account.data);
+            let metadata = Metadata::safe_deserialize(&metadata_account.data);
             metadata.ok()
         } else {
             None
@@ -296,8 +285,8 @@ fn to_solidity_string(s: &str) -> Vec<u8>
 
     result[31] = 0x20; // offset - 32 bytes
 
-    let length = U256::from(s.len());
-    length.into_big_endian_fast(&mut result[32..64]);
+    let length = U256::new(s.len() as u128);
+    result[32..64].copy_from_slice(&length.to_be_bytes());
     
     result[64..64 + s.len()].copy_from_slice(s.as_bytes());
 

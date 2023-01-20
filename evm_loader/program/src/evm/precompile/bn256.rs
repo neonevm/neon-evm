@@ -1,7 +1,3 @@
-use std::convert::Infallible;
-
-use evm::{Capture, ExitReason};
-
 
 /* Should be implemented via Solana syscall
 #[must_use]
@@ -54,9 +50,9 @@ fn get_g1(
 #[allow(unused)]
 pub fn bn256_add(
     _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+) -> Vec<u8> {
     // Should be implemented via Solana syscall
-    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
+    Vec::new()
 
     /*use tbn::{AffineG1, Fq, G1, Group};
     debug_print!("bn256Add");
@@ -114,9 +110,9 @@ pub fn bn256_add(
 #[allow(unused)]
 pub fn bn256_scalar_mul(
     _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+) -> Vec<u8> {
     // Should be implemented via Solana syscall
-    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
+    Vec::new()
 
     /*use tbn::{AffineG1, Fr, Group};
     debug_print!("bn256ScalarMul");
@@ -175,9 +171,10 @@ pub fn bn256_scalar_mul(
 #[allow(unused)]
 pub fn bn256_pairing(
     _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+) -> Vec<u8> {
     // Should be implemented via Solana syscall
-    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
+    Vec::new()
+    
     /*
     use tbn::{AffineG1, AffineG2, Fq, Fq2, pairing_batch, G1, G2, Gt, Group, GroupError};
     debug_print!("bn256Pairing");

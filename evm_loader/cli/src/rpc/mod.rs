@@ -14,7 +14,6 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use crate::commands::TxParams;
 use std::any::Any;
-use evm_loader::H256;
 use tokio::task::block_in_place;
 
 use tokio_postgres::{ connect, Client};
@@ -44,7 +43,7 @@ pub struct CallDbClient {
 
 #[derive(Debug)]
 pub struct TrxDbClient {
-    pub hash: H256,
+    pub hash: [u8; 32],
     tracer_db: Client,
     indexer_db: Client,
 }

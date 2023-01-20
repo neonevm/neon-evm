@@ -1,4 +1,4 @@
-use crate::error::EvmLoaderError;
+use crate::error::Error;
 use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
 use std::ops::Deref;
@@ -13,7 +13,7 @@ impl<'a> Operator<'a> {
             .binary_search(info.key).is_ok();
 
         if !is_authorized {
-            return Err!(EvmLoaderError::UnauthorizedOperator.into(); "Account {} - expected authorized operator", info.key);
+            return Err!(Error::UnauthorizedOperator.into(); "Account {} - expected authorized operator", info.key);
         }
 
         unsafe { Self::from_account_not_whitelisted(info) }

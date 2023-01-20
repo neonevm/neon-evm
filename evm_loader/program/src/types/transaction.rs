@@ -1,20 +1,15 @@
-use std::convert::TryInto;
+use ethnum::U256;
+use std::convert::{TryInto};
+use crate::error::Error;
 
-use evm::{H160, U256};
-use solana_program::{
-    entrypoint::{ProgramResult},
-    program_error::{ProgramError},
-    secp256k1_recover::{secp256k1_recover},
-};
-use crate::account_storage::ProgramAccountStorage;
-use crate::utils::{keccak256_digest};
+use super::Address;
 
-#[derive(Debug)]
+#[derive(Default)]
 pub struct Transaction {
     pub nonce: u64,
     pub gas_price: U256,
     pub gas_limit: U256,
-    pub to: Option<H160>,
+    pub target: Option<Address>,
     pub value: U256,
     pub call_data: Vec<u8>,
     pub v: U256,
@@ -28,35 +23,62 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn from_rlp(transaction: &[u8]) -> Result<Self, ProgramError> {
-        rlp::decode(transaction)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "RLP DecoderError={}", e))
+    pub fn from_rlp(transaction: &[u8]) -> Result<Self, Error> {
+        rlp::decode(transaction).map_err(Error::from)
+    }
+
+    pub fn recover_caller_address(&self) -> Result<Address, Error> {
+        use solana_program::keccak::{hash, Hash};
+        use solana_program::secp256k1_recover::secp256k1_recover;
+
+        let signature = [self.r, self.s].concat();
+        let public_key = secp256k1_recover(&self.signed_hash, self.recovery_id, &signature)?;
+    
+        let Hash(address) = hash(&public_key.to_bytes());
+        let address: [u8; 20] = address[12..32].try_into()?;
+    
+        Ok(Address::from(address))
     }
 }
 
 impl rlp::Decodable for Transaction {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
+        #[inline]
+        fn u256(rlp: &rlp::Rlp) -> Result<U256, rlp::DecoderError> {
+            rlp.decoder().decode_value(|bytes| {
+                if !bytes.is_empty() && bytes[0] == 0 {
+                    Err(rlp::DecoderError::RlpInvalidIndirection)
+                } else if bytes.len() <= 32 {
+                    let mut buffer = [0_u8; 32];
+                    buffer[(32 - bytes.len())..].copy_from_slice(bytes);
+                    Ok(U256::from_be_bytes(buffer))
+                } else {
+                    Err(rlp::DecoderError::RlpIsTooBig)
+                }
+            })
+        }
+
         let info = rlp.payload_info()?;
         let payload_size = info.header_len + info.value_len;
 
         let nonce: u64 = rlp.val_at(0)?;
-        let gas_price: U256 = rlp.val_at(1)?;
-        let gas_limit: U256 = rlp.val_at(2)?;
-        let to: Option<H160> = {
-            let to = rlp.at(3)?;
-            if to.is_empty() {
-                if to.is_data() {
+        let gas_price: U256 = u256(&rlp.at(1)?)?;
+        let gas_limit: U256 = u256(&rlp.at(2)?)?;
+        let target: Option<Address> = {
+            let target = rlp.at(3)?;
+            if target.is_empty() {
+                if target.is_data() {
                     None
                 } else {
                     return Err(rlp::DecoderError::RlpExpectedToBeData);
                 }
             } else {
-                Some(to.as_val()?)
+                Some(target.as_val()?)
             }
         };
-        let value: U256 = rlp.val_at(4)?;
+        let value: U256 = u256(&rlp.at(4)?)?;
         let call_data: Vec<u8> = rlp.val_at(5)?;
-        let v: U256 = rlp.val_at(6)?;
+        let v: U256 = u256(&rlp.at(6)?)?;
 
         let mut r: [u8; 32] = [0_u8; 32];
         let r_src: &[u8] = rlp.at(7)?.data()?;
@@ -68,13 +90,13 @@ impl rlp::Decodable for Transaction {
         let s_pos: usize = s.len() - s_src.len();
         s[s_pos..].copy_from_slice(s_src);
 
-        let (chain_id, recovery_id) = if v >= U256::from(35) {
+        let (chain_id, recovery_id) = if v >= 35 {
             let chain_id = (v - 1) / 2 - 17;
-            let recovery_id = u8::from((v % 2).is_zero());
+            let recovery_id = u8::from((v % 2) == U256::ZERO);
             (Some(chain_id), recovery_id)
-        } else if v == U256::from(27) {
+        } else if v == 27 {
             (None, 0_u8)
-        } else if v == U256::from(28) {
+        } else if v == 28 {
             (None, 1_u8)
         } else {
             return Err(rlp::DecoderError::RlpExpectedToBeData)
@@ -85,7 +107,7 @@ impl rlp::Decodable for Transaction {
         let signed_hash = signed_hash(rlp, chain_id)?;
 
         let tx = Self {
-            nonce, gas_price, gas_limit, to, value, call_data, v, r, s,
+            nonce, gas_price, gas_limit, target, value, call_data, v, r, s,
             chain_id, recovery_id, rlp_len: payload_size, hash, signed_hash
         };
 
@@ -105,9 +127,8 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
         |chain_id| {
             let chain_id = {
                 let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
-                let mut buffer = [0_u8; 32];
-                chain_id.to_big_endian(&mut buffer);
-                buffer[leading_empty_bytes..].to_vec()
+                let bytes = chain_id.to_be_bytes();
+                bytes[leading_empty_bytes..].to_vec()
             };
 
             let mut trailer = Vec::with_capacity(64);
@@ -160,36 +181,4 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
     ).to_bytes();
 
     Ok(hash)
-}
-
-pub fn recover_caller_address(trx: &Transaction) -> Result<H160, ProgramError> {
-    let signature = [trx.r, trx.s].concat();
-    let public_key = secp256k1_recover(&trx.signed_hash, trx.recovery_id, &signature)
-        .map_err(|e| E!(ProgramError::MissingRequiredSignature; "Secp256k1 Error={:?}", e))?;
-
-    let address = keccak256_digest(&public_key.to_bytes());
-    let address = H160::from_slice(&address[12..32]);
-
-    Ok(address)
-}
-
-pub fn check_ethereum_transaction(
-    account_storage: &ProgramAccountStorage,
-    recovered_address: &H160,
-    transaction: &Transaction
-) -> ProgramResult {
-    let sender_account = account_storage.ethereum_account(recovered_address)
-        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - sender must be initialized account", recovered_address))?;
-
-    if sender_account.trx_count != transaction.nonce {
-        return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender_account.trx_count, transaction.nonce);
-    }
-
-    if let Some(ref chain_id) = transaction.chain_id {
-        if &U256::from(crate::config::CHAIN_ID) != chain_id {
-            return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::config::CHAIN_ID);
-        }
-    }
-
-    Ok(())
 }

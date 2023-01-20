@@ -1,18 +1,22 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use evm::{H160, U256, H256, ExitError, ExitReason};
+use ethnum::U256;
+use serde::Serialize;
+use serde::de::DeserializeSeed;
+use bincode::Options;
 use solana_program::instruction::Instruction;
-use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use borsh::{BorshSerialize, BorshDeserialize};
 
-use crate::account_storage::AccountStorage;
-use crate::executor::cache::AccountMeta;
+use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::error::{Error, Result};
+use crate::evm::{ExitStatus, Context};
+use crate::evm::database::Database;
+use crate::types::Address;
 
 use super::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use super::action::Action;
-use super::cache::Cache;
+use super::cache::{Cache};
 
 
 /// Represents the state of executor abstracted away from a self.backend.
@@ -22,8 +26,7 @@ pub struct ExecutorState<'a, B: AccountStorage> {
     cache: RefCell<Cache>,
     actions: Vec<Action>,
     stack: Vec<usize>,
-    is_static: u32,
-    exit_reason: Option<ExitReason>,
+    exit_status: Option<ExitStatus>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -39,132 +42,43 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         Self {
             backend,
             cache: RefCell::new(cache),
-            actions: Vec::new(),
-            stack: Vec::new(),
-            is_static: 0_u32,
-            exit_reason: None,
+            actions: Vec::with_capacity(64),
+            stack: Vec::with_capacity(16),
+            exit_status: None,
         }
-    }
-
-    pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.cache.borrow().serialize(writer)?;
-        self.actions.serialize(writer)?;
-        self.stack.serialize(writer)?;
-        self.is_static.serialize(writer)?;
-        self.exit_reason.serialize(writer)?;
-
-        Ok(())
-    }
-
-    pub fn deserialize(buffer: &mut &[u8], backend: &'a B) -> std::io::Result<Self> {
-        Ok(Self {
-            backend,
-            cache: RefCell::new(BorshDeserialize::deserialize(buffer)?),
-            actions: BorshDeserialize::deserialize(buffer)?,
-            stack: BorshDeserialize::deserialize(buffer)?,
-            is_static: BorshDeserialize::deserialize(buffer)?,
-            exit_reason: BorshDeserialize::deserialize(buffer)?,
-        })
     }
 
     pub fn into_actions(self) -> Vec<Action> {
         self.actions
     }
 
-    /// Creates a snapshot of `ExecutorState` when entering next execution of a call or create.
-    pub fn enter(&mut self, is_static: bool) {
-        if (self.is_static > 0) || is_static {
-            self.is_static += 1;
-        }
-
-        self.stack.push(self.actions.len());
+    pub fn exit_status(&self) -> Option<&ExitStatus> {
+        self.exit_status.as_ref()
     }
 
-    /// Commits the state on exit of call or creation.
-    pub fn exit_commit(&mut self) {
-        self.stack.pop();
-
-        self.is_static = self.is_static.saturating_sub(1);
+    pub fn set_exit_status(&mut self, status: ExitStatus) {
+        self.exit_status = Some(status);
     }
 
-    /// Reverts the state on exit of call or creation.
-    pub fn exit_revert(&mut self) {
-        let actions_len = self.stack.pop().unwrap_or(0);
-        self.actions.truncate(actions_len);
-
-        self.is_static = self.is_static.saturating_sub(1);
+    pub fn call_depth(&self) -> usize {
+        self.stack.len()
     }
 
-
-    /// Increments nonce of an account: increases it by 1.
-    pub fn inc_nonce(&mut self, address: H160) {
-        let increment = Action::EvmIncrementNonce { address };
-        self.actions.push(increment);
-    }
-
-    /// Adds or changes a record in the storage of given account.
-    pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
-        let set_storage = Action::EvmSetStorage { address, key, value };
-        self.actions.push(set_storage);
-    }
-
-    /// Adds an Ethereum event log record.
-    pub fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
-        let log = Action::EvmLog { address, topics, data };
-        self.actions.push(log);
-    }
-
-    /// Initializes a contract account with it's code and corresponding bit array of valid jumps.
-    pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
-        let valids = evm::Valids::compute(&code);
-
-        let set_code = Action::EvmSetCode { address, code, valids };
-        self.actions.push(set_code);
-    }
-
-    /// Marks an account as deleted.
-    pub fn set_deleted(&mut self, address: H160) {
-        let suicide = Action::EvmSelfDestruct { address };
-        self.actions.push(suicide);
-    }
-
-    /// Adds a transfer to execute.
-    /// # Errors
-    /// May return `OutOfFund` if the source has no funds.
-    pub fn transfer(&mut self, source: H160, target: H160, value: U256) -> Result<(), ExitError> {
-        if value.is_zero() {
-            return Ok(())
-        }
-
-        if source == target {
-            return Ok(())
-        }
-
-        if self.balance(&source) < value {
-            return Err(ExitError::OutOfFund);
-        }
-
-        let transfer = Action::NeonTransfer { source, target, value };
-        self.actions.push(transfer);
-
-        Ok(())
-    }
-
-    pub fn withdraw(&mut self, source: H160, value: U256) {
+    pub fn withdraw_neons(&mut self, source: Address, value: U256) {
         let withdraw = Action::NeonWithdraw { source, value };
         self.actions.push(withdraw);
     }
 
     pub fn queue_external_instruction(
-        &mut self,
-        instruction: Instruction,
+        &mut self, 
+        instruction: Instruction, 
         seeds: Vec<Vec<u8>>,
-        allocate: usize
+        allocate: usize,
     ) {
         let action = Action::ExternalInstruction {
             program_id: instruction.program_id,
-            instruction: instruction.data,
-            accounts: instruction.accounts.into_iter().map(AccountMeta::from_solana_meta).collect(),
+            data: instruction.data,
+            accounts: instruction.accounts,
             seeds,
             allocate
         };
@@ -172,187 +86,39 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.actions.push(action);
     }
 
-    #[must_use]
-    pub fn is_static_context(&self) -> bool {
-        self.is_static > 0
-    }
-
-    #[must_use]
-    pub fn call_depth(&self) -> usize {
-        self.stack.len()
-    }
-
-    #[must_use]
-    pub fn balance(&self, from_address: &H160) -> U256 {
-        let mut balance = self.backend.balance(from_address);
-
-        for action in &self.actions {
-            match action {
-                Action::NeonTransfer { source, target, value } => {
-                    if from_address == source {
-                        balance -= *value;
-                    }
-
-                    if from_address == target {
-                        balance += *value;
-                    }
-                }
-                Action::NeonWithdraw { source, value } => {
-                    if from_address == source {
-                        balance -= *value;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        balance
-    }
-
-    #[must_use]
-    pub fn nonce(&self, from_address: &H160) -> U256 {
-        let mut nonce = self.backend.nonce(from_address);
-
-        for action in &self.actions {
-            if let Action::EvmIncrementNonce { address } = action {
-                if from_address == address {
-                    nonce += U256::one();
-                }
-            }
-        }
-
-        nonce
-    }
-
-    #[must_use]
-    pub fn storage(&self, from_address: &H160, from_key: &U256) -> U256 {
-        let mut known_storage: Option<U256> = None;
-
-        for action in &self.actions {
-            if let Action::EvmSetStorage { address, key, value } = action {
-                if (from_address == address) && (from_key == key) {
-                    known_storage = Some(*value);
-                }
-            }
-        }
-
-        known_storage.unwrap_or_else(|| self.backend.storage(from_address, from_key))
-    }
-
-    #[must_use]
-    pub fn code_size(&self, from_address: &H160) -> U256 {
-        let mut code_size = self.backend.code_size(from_address);
-
-        for action in &self.actions {
-            if let Action::EvmSetCode { address, code, valids: _ } = action {
-                if from_address == address {
-                    code_size = code.len();
-                }
-            }
-        }
-
-        U256::from(code_size)
-    }
-
-    #[must_use]
-    pub fn code_hash(&self, from_address: &H160) -> H256 {
-        let mut known_code: Option<&[u8]> = None;
-
-        for action in &self.actions {
-            if let Action::EvmSetCode { address, code, valids: _ } = action {
-                if from_address == address {
-                    known_code = Some(code);
-                }
-            }
-        }
-
-        known_code.map_or_else(|| self.backend.code_hash(from_address), crate::utils::keccak256_h256)
-    }
-
-    #[must_use]
-    pub fn code(&self, from_address: &H160) -> Vec<u8> {
-        let mut known_code: Option<&[u8]> = None;
-
-        for action in &self.actions {
-            if let Action::EvmSetCode { address, code, valids: _ } = action {
-                if from_address == address {
-                    known_code = Some(code);
-                }
-            }
-        }
-
-        known_code.map_or_else(|| self.backend.code(from_address), <[u8]>::to_vec)
-    }
-
-    #[must_use]
-    pub fn valids(&self, from_address: &H160) -> Vec<u8> {
-        let mut known_valids: Option<&[u8]> = None;
-
-        for action in &self.actions {
-            if let Action::EvmSetCode { address, code: _, valids } = action {
-                if from_address == address {
-                    known_valids = Some(valids);
-                }
-            }
-        }
-
-        known_valids.map_or_else(|| self.backend.valids(from_address), <[u8]>::to_vec)
-    }
-
-    #[must_use]
-    pub fn block_hash(&self, number: U256) -> H256 {
-        let origin_block = self.cache.borrow().block_number;
-        let current_block = self.backend.block_number();
-        let offset = current_block.saturating_sub(origin_block);
-
-        let number = number.saturating_add(offset);
-        self.backend.block_hash(number)
-    }
-
-    #[must_use]
-    pub fn block_number(&self) -> U256 {
-        self.cache.borrow().block_number
-    }
-
-    #[must_use]
-    pub fn block_timestamp(&self) -> U256 {
-        self.cache.borrow().block_timestamp
-    }
-
-    pub fn external_account(&self, address: Pubkey) -> Result<OwnedAccountInfo, ProgramError> {
+    pub fn external_account(&self, address: Pubkey) -> Result<OwnedAccountInfo> {
         let mut cache = self.cache.borrow_mut();
-
 
         let metas = self.actions.iter()
             .filter_map(|a| if let Action::ExternalInstruction { accounts, .. } = a { Some(accounts) } else { None })
             .flatten()
             .collect::<Vec<_>>();
 
-        if !metas.iter().any(|m| (m.key == address) && m.is_writable) {
+        if !metas.iter().any(|m| (m.pubkey == address) && m.is_writable) {
             return Ok(cache.get_account_or_insert(address, self.backend).clone())
         }
 
         let mut accounts = metas.into_iter()
-            .map(|m| (m.key, cache.get_account_or_insert(m.key, self.backend).clone()))
+            .map(|m| (m.pubkey, cache.get_account_or_insert(m.pubkey, self.backend).clone()))
             .collect::<BTreeMap<Pubkey, OwnedAccountInfo>>();
 
         for action in &self.actions {
-            if let Action::ExternalInstruction { program_id, instruction, accounts: meta, .. } = action {
+            if let Action::ExternalInstruction { program_id, data, accounts: meta, .. } = action {
                 match program_id {
                     program_id if solana_program::system_program::check_id(program_id) => {
-                        crate::external_programs::system::emulate(instruction, meta, &mut accounts)?;
+                        crate::external_programs::system::emulate(data, meta, &mut accounts)?;
                     },
                     program_id if spl_token::check_id(program_id) => {
-                        crate::external_programs::spl_token::emulate(instruction, meta, &mut accounts)?;
+                        crate::external_programs::spl_token::emulate(data, meta, &mut accounts)?;
                     },
                     program_id if spl_associated_token_account::check_id(program_id) => {
-                        crate::external_programs::spl_associated_token::emulate(instruction, meta, &mut accounts)?;
+                        crate::external_programs::spl_associated_token::emulate(data, meta, &mut accounts)?;
                     },
                     program_id if mpl_token_metadata::check_id(program_id) => {
-                        crate::external_programs::metaplex::emulate(instruction, meta, &mut accounts)?;
+                        crate::external_programs::metaplex::emulate(data, meta, &mut accounts)?;
                     },
                     _ => {
-                        return Err!(ProgramError::IncorrectProgramId; "Unknown external program: {}", program_id);
+                        return Err(Error::Custom(format!("Unknown external program: {program_id}")));
                     }
                 }
             }
@@ -361,9 +127,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         Ok(accounts[&address].clone())
     }
 
-    pub fn external_account_partial_cache(&mut self, address: Pubkey, offset: usize, len: usize) -> Result<(), ProgramError> {
+    pub fn external_account_partial_cache(&mut self, address: Pubkey, offset: usize, len: usize) -> Result<()> {
         if (len == 0) || (len > 8*1024) {
-            return Err!(ProgramError::InvalidArgument; "Account cache: invalid data len");
+            return Err(Error::Custom("Account cache: invalid data len".into()));
         }
         
         if let Some(account) = self.backend.clone_solana_account_partial(&address, offset, len) {
@@ -372,22 +138,315 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     
             Ok(())
         } else {
-            Err!(ProgramError::InvalidArgument; "Account cache: invalid data offset")
+            Err(Error::Custom("Account cache: invalid data offset".into()))
         }
     }
 
-    pub fn external_account_partial(&self, address: Pubkey) -> Result<OwnedAccountInfoPartial, ProgramError> {
+    pub fn external_account_partial(&self, address: Pubkey) -> Result<OwnedAccountInfoPartial> {
         let cache = self.cache.borrow();
         cache.solana_accounts_partial.get(&address)
             .cloned()
-            .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
+            .ok_or_else(|| Error::Custom(format!("Account cache: account {} is not cached", address)))
+    }
+}
+
+
+impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
+    fn chain_id(&self) -> U256 {
+        let chain_id = self.backend.chain_id();
+        U256::from(chain_id)
     }
 
-    pub fn set_exit_reason(&mut self, reason: Option<ExitReason>) {
-        self.exit_reason = reason;
+    fn nonce(&self, from_address: &Address) -> Result<u64> {
+        let mut nonce = self.backend.nonce(from_address);
+
+        for action in &self.actions {
+            if let Action::EvmIncrementNonce { address } = action {
+                if from_address == address {
+                    nonce += 1;
+                }
+            }
+        }
+
+        Ok(nonce)
     }
 
-    pub fn exit_reason(&self) -> &Option<ExitReason> {
-        &self.exit_reason
+    fn increment_nonce(&mut self, address: Address) -> Result<()> {
+        let increment = Action::EvmIncrementNonce { address };
+        self.actions.push(increment);
+
+        Ok(())
+    }
+
+    fn balance(&self, from_address: &Address) -> Result<U256> {
+        let mut balance = self.backend.balance(from_address);
+
+        for action in &self.actions {
+            match action {
+                Action::NeonTransfer { source, target, value } => {
+                    if from_address == source {
+                        balance -= value;
+                    }
+
+                    if from_address == target {
+                        balance += value;
+                    }
+                }
+                Action::NeonWithdraw { source, value } => {
+                    if from_address == source {
+                        balance -= value;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(balance)
+    }
+
+    fn transfer(&mut self, source: Address, target: Address, value: U256) -> Result<()> {
+        if value == U256::ZERO {
+            return Ok(())
+        }
+
+        if source == target {
+            return Ok(())
+        }
+
+        if self.balance(&source)? < value {
+            return Err(Error::InsufficientBalanceForTransfer(source, value));
+        }
+
+        let transfer = Action::NeonTransfer { source, target, value };
+        self.actions.push(transfer);
+
+        Ok(())
+    }
+
+    fn code_size(&self, from_address: &Address) -> Result<usize> {
+        if self.is_precompile_extension(from_address) {
+            return Ok(1); // This is required in order to make a normal call to an extension contract
+        }
+
+        for action in &self.actions {
+            if let Action::EvmSetCode { address, code } = action {
+                if from_address == address {
+                    return Ok(code.len());
+                }
+            }
+        }
+
+       Ok(self.backend.code_size(from_address))
+    }
+
+    fn code_hash(&self, from_address: &Address) -> Result<[u8; 32]> {
+        use solana_program::keccak::hash;
+
+        for action in &self.actions {
+            if let Action::EvmSetCode { address, code } = action {
+                if from_address == address {
+                    return Ok(hash(code).to_bytes());
+                }
+            }
+        }
+
+        Ok(self.backend.code_hash(from_address))
+    }
+
+    fn code(&self, from_address: &Address) -> Result<Vec<u8>> {
+        for action in &self.actions {
+            if let Action::EvmSetCode { address, code } = action {
+                if from_address == address {
+                    return Ok(code.clone())
+                }
+            }
+        }
+
+        Ok(self.backend.code(from_address))
+    }
+
+    fn set_code(&mut self, address: Address, code: Vec<u8>) -> Result<()> {
+        if code.starts_with(&[0xEF]) {
+            // https://eips.ethereum.org/EIPS/eip-3541
+            return Err(Error::EVMObjectFormatNotSupported(address));
+        }
+
+        if code.len() > 0x6000 {
+            // https://eips.ethereum.org/EIPS/eip-170
+            return Err(Error::ContractCodeSizeLimit(address, code.len()));
+        }
+
+        let set_code = Action::EvmSetCode { address, code };
+        self.actions.push(set_code);
+
+        Ok(())
+    }
+
+    fn selfdestruct(&mut self, address: Address) -> Result<()> {
+        let suicide = Action::EvmSelfDestruct { address };
+        self.actions.push(suicide);
+
+        Ok(())
+    }
+
+    fn storage(&self, from_address: &Address, from_index: &U256) -> Result<[u8; 32]> {
+        for action in self.actions.iter().rev() {
+            if let Action::EvmSetStorage { address, index, value } = action {
+                if (from_address == address) && (from_index == index) {
+                    return Ok(*value);
+                }
+            }
+        }
+
+        Ok(self.backend.storage(from_address, from_index))
+    }
+
+    fn set_storage(&mut self, address: Address, index: U256, value: [u8; 32]) -> Result<()> {
+        let set_storage = Action::EvmSetStorage { address, index, value };
+        self.actions.push(set_storage);
+
+        Ok(())
+    }
+
+    fn block_hash(&self, number: U256) -> Result<[u8; 32]> {
+        let origin_block = self.cache.borrow().block_number;
+        let current_block = self.backend.block_number();
+        let offset = current_block.saturating_sub(origin_block);
+
+        let number = number.saturating_add(offset);
+        let block_hash = self.backend.block_hash(number);
+
+        Ok(block_hash)
+    }
+
+    fn block_number(&self) -> Result<U256> {
+        let cache = self.cache.borrow();
+        Ok(cache.block_number)
+    }
+
+    fn block_timestamp(&self) -> Result<U256> {
+        let cache = self.cache.borrow();
+        Ok(cache.block_timestamp)
+    }
+
+    fn log(&mut self, address: Address, topics: &[[u8; 32]], data: &[u8]) -> Result<()> {
+        let log = Action::EvmLog {
+            address,
+            topics: topics.to_vec(),
+            data: data.to_vec()
+        };
+        self.actions.push(log);
+
+        Ok(())
+    }
+
+    fn snapshot(&mut self) -> Result<()> {
+        self.stack.push(self.actions.len());
+
+        Ok(())
+    }
+
+    fn revert_snapshot(&mut self) -> Result<()> {
+        let actions_len = self.stack.pop().unwrap_or(0);
+        self.actions.truncate(actions_len);
+
+        Ok(())
+    }
+
+    fn commit_snapshot(&mut self) -> Result<()> {
+        self.stack.pop();
+
+        Ok(())
+    }
+
+    fn precompile_extension(
+        &mut self,
+        context: &Context,
+        address: &Address,
+        data: &[u8],
+        is_static: bool,
+    ) -> Option<Result<Vec<u8>>> {
+        self.call_precompile_extension(context, address, data, is_static)
+    }
+}
+
+
+impl<'a> Serialize for ExecutorState<'_, ProgramAccountStorage<'a>> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer 
+    {
+        use serde::ser::SerializeSeq;
+
+        let mut seq = serializer.serialize_seq(Some(4))?;
+        seq.serialize_element(&self.cache)?;
+        seq.serialize_element(&self.actions)?;
+        seq.serialize_element(&self.stack)?;
+        seq.serialize_element(&self.exit_status)?;
+
+        seq.end()
+    }
+}
+
+impl<'de, 'a> DeserializeSeed<'de> for &'de ProgramAccountStorage<'a> {
+    type Value = ExecutorState<'de, ProgramAccountStorage<'a>>;
+
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de> 
+    {
+        struct SeqVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SeqVisitor {
+            type Value = (RefCell<Cache>, Vec<Action>, Vec<usize>, Option<ExitStatus>);
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("Iterative Executor State")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+                where
+                    A: serde::de::SeqAccess<'de>
+            {
+                let cache = seq.next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                let actions = seq.next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                let stack = seq.next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                let exit_status = seq.next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+
+                Ok((cache, actions, stack, exit_status))
+            }
+        }
+
+        let (cache, actions, stack, exit_status) 
+            = deserializer.deserialize_seq(SeqVisitor)?;
+
+        Ok(ExecutorState { backend: self, cache, actions, stack, exit_status })
+    }
+}
+
+impl<'de, 'a> ExecutorState<'de, ProgramAccountStorage<'a>> {
+    pub fn serialize_into<W>(&self, writer: &mut W) -> Result<()> 
+        where W: std::io::Write
+    {
+        let bincode = bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .allow_trailing_bytes();
+
+        bincode.serialize_into(writer, &self)
+            .map_err(Error::from)
+    }
+
+    pub fn deserialize_from(buffer: &mut &[u8], backend: &'de ProgramAccountStorage<'a>) -> Result<Self> 
+    {
+        let bincode = bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .allow_trailing_bytes();
+
+        bincode.deserialize_from_seed(backend, buffer)
+            .map_err(Error::from)
     }
 }

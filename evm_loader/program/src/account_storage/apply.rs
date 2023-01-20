@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 
-use evm::{H160, U256};
+use ethnum::U256;
 use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
 use solana_program::instruction::Instruction;
 use solana_program::program::{invoke, invoke_signed_unchecked};
@@ -13,12 +13,14 @@ use solana_program::sysvar::Sysvar;
 use crate::account::{ether_account, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
-use crate::executor::{AccountMeta, Action};
+use crate::executor::Action;
+use crate::types::Address;
+
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn transfer_gas_payment(
         &mut self,
-        origin: H160,
+        origin: Address,
         mut operator: EthereumAccount<'a>,
         value: U256,
     ) -> ProgramResult {
@@ -74,7 +76,7 @@ impl<'a> ProgramAccountStorage<'a> {
             self.create_account_if_not_exists(address)?;
         }
 
-        let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
+        let mut storage: BTreeMap<Address, Vec<(U256, [u8; 32])>> = BTreeMap::new();
 
         for action in actions {
             match action {
@@ -90,10 +92,18 @@ impl<'a> ProgramAccountStorage<'a> {
                     account.balance -= value;
                 }
                 Action::EvmLog { address, topics, data } => {
-                    neon_program.on_event(address, &topics, &data)?;
+                    use solana_program::log::sol_log_data;
+                    match topics.len() {
+                        0 => sol_log_data(&[b"LOG0", address.as_bytes(), &[0], &data]),
+                        1 => sol_log_data(&[b"LOG1", address.as_bytes(), &[1], &topics[0], &data]),
+                        2 => sol_log_data(&[b"LOG2", address.as_bytes(), &[2], &topics[0], &topics[1], &data]),
+                        3 => sol_log_data(&[b"LOG3", address.as_bytes(), &[3], &topics[0], &topics[1], &topics[2], &data]),
+                        4 => sol_log_data(&[b"LOG4", address.as_bytes(), &[4], &topics[0], &topics[1], &topics[2], &topics[3], &data]),
+                        _ => unreachable!()
+                    }
                 }
-                Action::EvmSetStorage { address, key, value } => {
-                    storage.entry(address).or_default().push((key, value));
+                Action::EvmSetStorage { address, index, value } => {
+                    storage.entry(address).or_default().push((index, value));
                 }
                 Action::EvmIncrementNonce { address } => {
                     let account = self.ethereum_account_mut(&address);
@@ -103,17 +113,16 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     account.trx_count += 1;
                 }
-                Action::EvmSetCode { address, code, valids } => {
-                    self.deploy_contract(address, &code, &valids)?;
+                Action::EvmSetCode { address, code } => {
+                    self.deploy_contract(address, &code)?;
                 }
                 Action::EvmSelfDestruct { address } => {
                     storage.remove(&address);
 
                     self.delete_account(address)?;
                 }
-                Action::ExternalInstruction { program_id, instruction, accounts, seeds, .. } => {
+                Action::ExternalInstruction { program_id, accounts, data, seeds, .. } => {
                     let seeds: Vec<&[u8]> = seeds.iter().map(|seed| &seed[..]).collect();
-                    let accounts: Vec<_> = accounts.into_iter().map(AccountMeta::into_solana_meta).collect();
 
                     let mut accounts_info = Vec::with_capacity(accounts.len() + 1);
 
@@ -122,8 +131,8 @@ impl<'a> ProgramAccountStorage<'a> {
                         accounts_info.push(self.solana_accounts[&meta.pubkey].clone());
                     }
 
-                    let instruction = Instruction { program_id, accounts, data: instruction };
-                    invoke_signed_unchecked(&instruction, &accounts_info, &[&seeds[..]])?;
+                    let instruction = Instruction { program_id, accounts, data };
+                    invoke_signed_unchecked(&instruction, &accounts_info, &[&seeds])?;
                 }
             }
         }
@@ -136,7 +145,8 @@ impl<'a> ProgramAccountStorage<'a> {
                         .expect("Account not found");
                     let contract = account.contract_data()
                         .expect("Contract expected");
-                    value.to_big_endian(&mut contract.storage()[index..index+32]);
+
+                    contract.storage()[index..index+32].copy_from_slice(&value);
                 } else {
                     self.update_storage_infinite(address, key, value, operator, system_program)?;
                 }
@@ -157,7 +167,7 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> Result<AccountsReadiness, ProgramError> {
         let mut accounts_readiness = AccountsReadiness::Ready;
         for (address, operation) in accounts_operations {
-            let (solana_address, bump_seed) = self.calc_solana_address(&address);
+            let (solana_address, bump_seed) = address.find_solana_address(self.program_id);
             let solana_account = self.solana_account(&solana_address)
                 .ok_or_else(||
                     E!(
@@ -224,10 +234,10 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
     /// Delete all data in the account.
-    fn delete_account(&mut self, address: H160) -> ProgramResult {
+    fn delete_account(&mut self, address: Address) -> ProgramResult {
         let account = self.ethereum_account_mut(&address);
 
-        assert_eq!(account.balance, U256::zero()); // balance should be moved by executor
+        assert_eq!(account.balance, U256::ZERO); // balance should be moved by executor
         account.trx_count = 0;
         account.generation = account.generation.checked_add(1)
             .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - generation overflow", address))?;
@@ -243,9 +253,8 @@ impl<'a> ProgramAccountStorage<'a> {
 
     fn deploy_contract(
         &mut self,
-        address: H160,
+        address: Address,
         code: &[u8],
-        valids: &[u8],
     ) -> ProgramResult {
         let account = self.ethereum_accounts.get_mut(&address)
             .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
@@ -278,25 +287,23 @@ impl<'a> ProgramAccountStorage<'a> {
             .expect("Contract data must be available at this point");
 
         contract.code().copy_from_slice(code);
-        contract.valids().copy_from_slice(valids);
 
         Ok(())
     }
 
     pub fn update_storage_infinite(
         &mut self,
-        address: H160,
+        address: Address,
         index: U256,
-        value: U256,
+        value: [u8; 32],
         operator: &Operator<'a>,
         system_program: &program::System<'a>,
     ) -> ProgramResult {
-        #[allow(clippy::cast_possible_truncation)]
-        let subindex = (index & U256::from(0xFF)).as_u64() as u8;
-        let index = index & !U256::from(0xFF);
+        let subindex = (index & 0xFF).as_u8();
+        let index = index & !U256::new(0xFF);
 
         if let Some(storage) = self.storage_accounts.get_mut(&(address, index)) {
-            return storage.set(subindex, value, operator, system_program);
+            return storage.set(subindex, &value, operator, system_program);
         }
 
         let solana_address = EthereumStorage::solana_address(self, &address, &index);
@@ -306,7 +313,7 @@ impl<'a> ProgramAccountStorage<'a> {
         if solana_program::system_program::check_id(account.owner) {
             use crate::account::ether_storage::Data;
 
-            if value.is_zero() {
+            if value == [0_u8; 32] {
                 return Ok(());
             }
 
@@ -317,7 +324,7 @@ impl<'a> ProgramAccountStorage<'a> {
             system_program.create_account_with_seed(operator, base, self.program_id, account, &seed, EthereumStorage::SIZE)?;
 
             let mut storage = EthereumStorage::init(account, Data { address, generation, index })?;
-            storage.set(subindex, value, operator, system_program)?;
+            storage.set(subindex, &value, operator, system_program)?;
 
             self.storage_accounts.insert((address, index), storage);
 
@@ -328,7 +335,7 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
 
-    fn transfer_neon_tokens(&mut self, source: &H160, target: &H160, value: U256) -> ProgramResult {
+    fn transfer_neon_tokens(&mut self, source: &Address, target: &Address, value: U256) -> ProgramResult {
         debug_print!("Transfer {} NEONs from {} to {}", value, source, target);
 
         if source == target {
@@ -352,12 +359,12 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn create_account_if_not_exists(&mut self, address: &H160) -> ProgramResult {
+    fn create_account_if_not_exists(&mut self, address: &Address) -> ProgramResult {
         if self.ethereum_accounts.contains_key(address) {
             return Ok(());
         }
 
-        let (solana_address, bump_seed) = self.calc_solana_address(address);
+        let (solana_address, bump_seed) = address.find_solana_address(self.program_id);
         let info = self.solana_account(&solana_address)
             .ok_or_else(
                 || E!(

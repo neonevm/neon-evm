@@ -1,10 +1,10 @@
 use crate::{
     config::OPERATOR_PRIORITY_SLOTS,
-    error::EvmLoaderError,
+    error::Error,
     account::{State, FinalizedState, Operator, Incinerator, program, Holder, EthereumAccount},
-    transaction::Transaction,
+    types::{Transaction, Address},
 };
-use evm::{H160, U256};
+use ethnum::U256;
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
@@ -42,7 +42,7 @@ impl<'a> State<'a> {
         program_id: &'a Pubkey,
         info: &'a AccountInfo<'a>,
         accounts: &crate::instruction::transaction::Accounts<'a>,
-        caller: H160,
+        caller: Address,
         trx: &Transaction,
     ) -> Result<Self, ProgramError> {
         let owner = match crate::account::tag(program_id, info)? {
@@ -53,7 +53,7 @@ impl<'a> State<'a> {
             FinalizedState::TAG => {
                 let finalized_storage = FinalizedState::from_account(program_id, info)?;
                 if !finalized_storage.is_outdated(&trx.hash) {
-                    return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
+                    return Err!(Error::StorageAccountFinalized.into(); "Transaction already finalized")
                 }
 
                 finalized_storage.owner
@@ -71,7 +71,7 @@ impl<'a> State<'a> {
             caller,
             gas_limit: trx.gas_limit,
             gas_price: trx.gas_price,
-            gas_used: U256::zero(),
+            gas_used: U256::ZERO,
             operator: *accounts.operator.key,
             slot: Clock::get()?.slot,
             accounts_len: accounts.remaining_accounts.len(),
@@ -94,10 +94,10 @@ impl<'a> State<'a> {
     ) -> Result<(Self, BlockedAccounts), ProgramError> {
         let account_tag = crate::account::tag(program_id, info)?;
         if account_tag == FinalizedState::TAG {
-            return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
+            return Err!(Error::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
         }
         if account_tag == Holder::TAG {
-            return Err!(EvmLoaderError::StorageAccountUninitialized.into(); "Account {} - Storage Uninitialized", info.key);
+            return Err!(Error::StorageAccountUninitialized.into(); "Account {} - Storage Uninitialized", info.key);
         }
 
         let mut storage = State::from_account(program_id, info)?;

@@ -38,7 +38,7 @@ def test_emulate_transfer(user_account, evm_loader, session_user):
         )
     )
     assert result['exit_status'] == 'succeed', f"The 'exit_status' field is not succeed. Result: {result}"
-    assert result['steps_executed'] == 0, f"Steps executed amount is not 0. Result: {result}"
+    assert result['steps_executed'] == 1, f"Steps executed amount is not 1. Result: {result}"
     assert result['used_gas'] > 0, f"Used gas is less than 0. Result: {result}"
 
 
@@ -137,7 +137,7 @@ def test_get_ether_account_data(evm_loader, user_account):
 
 
 def test_create_ether_account(evm_loader):
-    acc = gen_hash_of_block(20)[2:]
+    acc = gen_hash_of_block(20)
     result = neon_cli().call(
         f"create-ether-account --evm_loader {evm_loader.loader_id} {acc}").strip()
     created_acc = json.loads(result.split(' ')[-1])
