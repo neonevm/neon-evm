@@ -1,50 +1,53 @@
 {
   inputs = {
-    flake-utils.url = "github:numtide/flake-utils";
-
-    naersk.url = "github:nix-community/naersk";
-    naersk.inputs.nixpkgs.follows = "nixpkgs";
-
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
-    rust-overlay.inputs.flake-utils.follows = "flake-utils";
+    cargo2nix.url = "github:cargo2nix/cargo2nix/unstable";
+    flake-utils.follows = "cargo2nix/flake-utils";
+    nixpkgs.follows = "cargo2nix/nixpkgs";
   };
 
-  outputs = { self, flake-utils, naersk, nixpkgs, rust-overlay, ... }:
+  outputs = { self, cargo2nix, flake-utils, nixpkgs, ... }:
   flake-utils.lib.eachDefaultSystem (system:
   let
     pkgs = import nixpkgs {
       inherit system;
-      overlays = [ (import rust-overlay) ];
+      overlays = [ cargo2nix.overlays.default ];
     };
 
-    rust-toolchain = pkgs.rust-bin.stable.latest.default.override {
-      extensions = [
+    rust-pkgs = pkgs.rustBuilder.makePackageSet {
+      rustVersion = "1.66.1";
+      packageFun = import ./Cargo.nix;
+
+      extraRustComponents = [
         "rustfmt" "rustc" "clippy" "llvm-tools-preview" "rust-src" "rust-analyzer"
       ];
-    };
 
-    naersk' = pkgs.callPackage naersk {
-      cargo = rust-toolchain;
-      rustc = rust-toolchain;
-    };
-
-    package = naersk'.buildPackage {
-      src = ./.;
-
-      nativeBuildInputs = [
-        pkgs.pkg-config
+      packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
+        (pkgs.rustBuilder.rustLib.makeOverride {
+          name = "hidapi";
+          overrideAttrs = drv: {
+            propagatedBuildInputs = (drv.propagatedBuildInputs or []) ++ [
+              pkgs.udev
+            ];
+          };
+        })
+        (pkgs.rustBuilder.rustLib.makeOverride {
+          name = "evm-loader";
+          overrideAttrs = drv: {
+            NEON_REVISION = "1";
+          };
+        })
+        (pkgs.rustBuilder.rustLib.makeOverride {
+          name = "neon-cli";
+          overrideAttrs = drv: {
+            NEON_REVISION = "1";
+          };
+        })
       ];
-
-      buildInputs = [
-        pkgs.openssl pkgs.udev
-      ];
     };
 
-    shell = pkgs.mkShell {
-      inputsFrom = [ package ];
+    package = rust-pkgs.workspace.neon-cli {};
+
+    shell = rust-pkgs.workspaceShell {
     };
   in {
     packages.default = package;
