@@ -190,18 +190,16 @@ class neon_cli:
 
     def call(self, arguments):
         cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, SOLANA_URL, arguments)
-        try:
-            return subprocess.check_output(cmd, shell=True, text=True, universal_newlines=True,
-                                           stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as err:
-            print(f"ERR: neon-cli error {err}")
-            raise
+        proc_result = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, universal_newlines=True)
+        result = json.loads(proc_result.stdout)
+        if result["result"] == "error":
+            error = result["error"]
+            raise Exception(f"ERR: neon-cli error {error}")
+
+        proc_result.check_returncode()
+        return result["value"]
 
     def emulate(self, loader_id, sender, contract, data):
-        # cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
-        #                                                                                       loader_id,
-        #                                                                                       SOLANA_URL,
-        #                                                                                       arguments)
         cmd = ["neon-cli",
                "--commitment=recent",
                "--url", SOLANA_URL,
@@ -211,48 +209,39 @@ class neon_cli:
                contract
                ]
         print('cmd:', cmd)
-        try:
-            if data:
-                proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                             universal_newlines=True)
-            else:
-                proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                             universal_newlines=True)
-            if proc_result.stderr is not None:
-                print(proc_result.stderr)
-            output = proc_result.stdout
-            if not output:
-                proc_result.check_returncode()
+        print("data:", data)
 
-            without_empty_lines = os.linesep.join([s for s in output.splitlines() if s])
-            last_line = without_empty_lines.splitlines()[-1]
-            return last_line
-        except subprocess.CalledProcessError as err:
-            print(f"ERR: neon-cli error {err}")
-            raise
+        if data:
+            proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, universal_newlines=True)
+        else:
+            proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, universal_newlines=True)
+
+        result = json.loads(proc_result.stdout)
+        if result["result"] == "error":
+            error = result["error"]
+            raise Exception(f"ERR: neon-cli error {error}")
+
+        proc_result.check_returncode()
+        return result["value"]
 
     def call_contract_get_function(self, evm_loader, sender, contract, function_signature: str, constructor_args=None):
         data = abi.function_signature_to_4byte_selector(function_signature)
         if constructor_args is not None:
             data += constructor_args
-        result = json.loads(
-            self.emulate(evm_loader.loader_id, sender.eth_address.hex(), contract.eth_address.hex(),
-                         data.hex())
-        )
+        result = self.emulate(evm_loader.loader_id, sender.eth_address.hex(), contract.eth_address.hex(), data.hex())
         return result["result"]
 
     def get_steps_count(self, evm_loader, from_acc, to, data):
         if isinstance(to, (Caller, Contract)):
             to = to.eth_address.hex()
 
-        result = json.loads(
-            neon_cli().emulate(
-                evm_loader.loader_id,
-                from_acc.eth_address.hex(),
-                to,
-                data
-            )
+        result = neon_cli().emulate(
+            evm_loader.loader_id,
+            from_acc.eth_address.hex(),
+            to,
+            data
         )
+
         return result["steps_executed"]
 
 
@@ -371,10 +360,8 @@ class EvmLoader:
         return acc, 255
 
     def ether2program(self, ether: Union[str, bytes]) -> Tuple[str, int]:
-        output = neon_cli().call("create-program-address --evm_loader {} {}"
-                                 .format(self.loader_id, self.ether2hex(ether)))
-        items = output.rstrip().split(' ')
-        return items[0], int(items[1])
+        items = PublicKey.find_program_address([ACCOUNT_SEED_VERSION, self.ether2bytes(ether)], PublicKey(EVM_LOADER))
+        return str(items[0]), items[1]
 
     def check_account(self, solana):
         info = solana_client.get_account_info(solana)

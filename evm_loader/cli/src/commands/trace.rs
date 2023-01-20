@@ -14,7 +14,7 @@ pub fn execute(config: &Config, tx: TxParams, token: Pubkey, chain: u64, steps: 
     let mut tracer = Tracer::new();
 
     evm_loader::evm::tracing::using( &mut tracer, || {
-        emulate::send(config, tx, token, chain, steps)
+        emulate::execute(config, tx, token, chain, steps)
     })?;
 
     let (vm_trace, full_trace_data) = tracer.into_traces();
@@ -25,6 +25,5 @@ pub fn execute(config: &Config, tx: TxParams, token: Pubkey, chain: u64, steps: 
         used_gas: 0,
     };
 
-    println!("{}", serde_json::json!(trace));
-    NeonCliResult::Ok(())
+    Ok(serde_json::json!(trace))
 }

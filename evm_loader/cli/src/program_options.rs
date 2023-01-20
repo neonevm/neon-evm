@@ -284,15 +284,6 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
         .arg(
-            Arg::with_name("logging_ctx")
-                .short("L")
-                .long("logging_ctx")
-                .value_name("LOG_CONTEXT")
-                .takes_value(true)
-                .global(true)
-                .help("Logging context"),
-        )
-        .arg(
             Arg::with_name("loglevel")
                 .short("l")
                 .long("loglevel")

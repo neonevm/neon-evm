@@ -19,7 +19,7 @@ use super::TxParams;
 use solana_sdk::pubkey::Pubkey;
 
 
-pub fn send(config: &Config, tx_params: TxParams, token: Pubkey, chain: u64, steps: u64) -> Result<serde_json::Value, NeonCliError> {
+pub fn execute(config: &Config, tx_params: TxParams, token: Pubkey, chain: u64, steps: u64) -> NeonCliResult {
     let data = tx_params.data.clone().unwrap_or_default();
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -99,11 +99,4 @@ pub fn send(config: &Config, tx_params: TxParams, token: Pubkey, chain: u64, ste
     });
 
     Ok(json)
-}
-
-pub fn execute(config: &Config, tx: TxParams, token: Pubkey, chain: u64, steps: u64) -> NeonCliResult {
-
-    let json = send(config, tx, token, chain, steps)?;
-    println!("{}", json);
-    Ok(())
 }

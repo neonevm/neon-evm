@@ -1,50 +1,20 @@
-use serde::{ Deserialize };
-use fern::{ Dispatch };
-use std::{ process, path, ffi::OsStr };
+use std::sync::Mutex;
+
+use serde::{ Deserialize, Serialize };
 use clap::ArgMatches;
 
-#[derive(Deserialize)]
-#[derive(Default)]
-pub struct LogContext {
-    req_id: String,
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LogRecord {
+    message: String,
+    source: String,
+    level: &'static str,
 }
 
-impl LogContext {
-    pub fn new(id: String) -> LogContext {
-        LogContext {
-            req_id: id,
-        }
-    }
-}
-
-
-const LOG_MODULES: [&str; 16] = [
-  "neon_cli",
-  "neon_cli::account_storage",
-  "neon_cli::commands::cancel_trx",
-  "neon_cli::commands::create_ether_account",
-  "neon_cli::commands::create_program_address",
-  "neon_cli::commands::deploy",
-  "neon_cli::commands::emulate",
-  "neon_cli::commands::get_ether_account_data",
-  "neon_cli::commands::get_neon_elf",
-  "neon_cli::commands::get_storage_at",
-  "neon_cli::commands::update_valids_table",
-  "evm_loader::precompile",
-  "evm_loader::executor",
-  "evm_loader::external_programs",
-  "evm_loader::evm",
-  "evm_loader::evm::opcode",
-];
+pub static CONTEXT: Mutex<Vec<LogRecord>> = Mutex::new(Vec::new());
 
 
 pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
-
-    let context: LogContext = options.value_of("logging_ctx")
-        .map(|ctx| LogContext::new(ctx.to_string()) )
-        .unwrap_or_default();
-
-    let loglevel: log::LevelFilter =
+    let log_level: log::LevelFilter =
         options.value_of("loglevel")
             .map_or(log::LevelFilter::Trace, |ll|
                 match ll.to_ascii_lowercase().as_str() {
@@ -57,43 +27,26 @@ pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
                 }
             );
 
-    let dispatch: Dispatch =
-        if loglevel == log::LevelFilter::Off {
+    fern::Dispatch::new()
+        .filter(move |metadata| {
+            let target = metadata.target();
 
-            fern::Dispatch::new().level(log::LevelFilter::Off)
-
-        } else {
-            let mut dispatch: Dispatch = fern::Dispatch::new().level(log::LevelFilter::Error);
-
-            for module_name in LOG_MODULES {
-                dispatch = dispatch.level_for(module_name, loglevel);
+            if target.starts_with("neon_cli") || target.starts_with("evm_loader") {
+                return metadata.level().to_level_filter() <= log_level;
             }
 
-            dispatch
-        };
-
-    dispatch
-        .format(move |out, message, record| {
-            let line: String = record.line().map_or("NA".to_string(), |v| v.to_string());
-
-            let file_name: &str = record.file()
-                                        .and_then(|filepath| path::Path::new(filepath).file_name())
-                                        .and_then(OsStr::to_str)
-                                        .unwrap_or("Undefined");
-
-            out.finish(format_args!(
-                "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
-                datetime=chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-                level=record.level(),
-                file=file_name,
-                lineno=line,
-                pid=process::id(),
-                component="Emulator",
-                entity="Undefined",
-                context=context.req_id,
-                message=message
-            ));
+            metadata.level() <= log::Level::Warn
         })
-        .chain(std::io::stderr())
+        .chain(fern::Output::call(|record| {
+            let file: &str = record.file().unwrap_or("undefined");
+            let line: u32 = record.line().unwrap_or(0);
+
+            let mut context = CONTEXT.lock().unwrap();
+            context.push(LogRecord {
+                message: record.args().to_string(),
+                source: format!("{}:{}", file, line),
+                level: record.metadata().level().as_str()
+            });
+        }))
         .apply()
 }

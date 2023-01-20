@@ -1,6 +1,5 @@
 pub mod cancel_trx;
 pub mod create_ether_account;
-pub mod create_program_address;
 pub mod deposit;
 pub mod emulate;
 pub mod get_ether_account_data;
@@ -44,7 +43,7 @@ pub struct TxParams {
     pub gas_limit: Option<U256>,
 }
 
-pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
+pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult {
     match (cmd, params) {
         ("emulate", Some(params)) => {
             let tx= parse_tx(params);
@@ -66,11 +65,6 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             let (token, chain, steps) = parse_tx_params(config, params);
             trace::execute(config, tx, token, chain, steps)
         }
-        ("create-program-address", Some(params)) => {
-            let ether = address_of(params, "seed").expect("seed parse error");
-            create_program_address::execute(config, &ether);
-            Ok(())
-        }
         ("create-ether-account", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
             create_ether_account::execute(config, &ether)
@@ -82,8 +76,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
         }
         ("get-ether-account-data", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
-            get_ether_account_data::execute(config, &ether);
-            Ok(())
+            get_ether_account_data::execute(config, &ether)
         }
         ("cancel-trx", Some(params)) => {
             let storage_account = pubkey_of(params, "storage_account").expect("storage_account parse error");
@@ -106,8 +99,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
         ("get-storage-at", Some(params)) => {
             let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
             let index = u256_of(params, "index").expect("index parse error");
-            get_storage_at::execute(config, contract_id, &index);
-            Ok(())
+            get_storage_at::execute(config, contract_id, &index)
         }
             _ => unreachable!(),
     }

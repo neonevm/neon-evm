@@ -352,11 +352,10 @@ class TestInstructionStepContractCallContractInteractions:
 
         func_name = abi.function_signature_to_4byte_selector('update_storage_map(uint256)')
         data = func_name + eth_abi.encode(['uint256'], [3])
-        result = json.loads(
-            neon_cli().emulate(evm_loader.loader_id,
-                               session_user.eth_address.hex(),
-                               rw_lock_caller.eth_address.hex(),
-                               data.hex()))
+        result = neon_cli().emulate(evm_loader.loader_id,
+                                    session_user.eth_address.hex(),
+                                    rw_lock_caller.eth_address.hex(),
+                                    data.hex())
         additional_accounts = [session_user.solana_account_address, rw_lock_contract.solana_address,
                                rw_lock_caller.solana_address]
         for acc in result['solana_accounts']:
@@ -435,29 +434,30 @@ class TestTransactionStepFromInstructionParallelRuns:
 
 
 class TestStepFromInstructionChangingOperatorsDuringTrxRun:
-    def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, session_user, evm_loader,
+    def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, user_account, evm_loader,
                                                             operator_keypair, second_operator_keypair, treasury_pool,
                                                             new_holder_acc):
-        signed_tx = make_contract_call_trx(session_user, rw_lock_contract, 'update_storage_str(string)', ['text'])
+        signed_tx = make_contract_call_trx(user_account, rw_lock_contract, 'update_storage_str(string)', ['text'])
 
         send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                signed_tx,
-                                               [session_user.solana_account_address,
+                                               [user_account.solana_account_address,
                                                 rw_lock_contract.solana_address], 1, operator_keypair)
         # next operator can't continue trx during OPERATOR_PRIORITY_SLOTS*0.4
-        with pytest.raises(solana.rpc.core.RPCException, match="operator.key != storage.operator"):
+        with pytest.raises(solana.rpc.core.RPCException,
+                           match=rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"):
             send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                    signed_tx,
-                                                   [session_user.solana_account_address,
+                                                   [user_account.solana_account_address,
                                                     rw_lock_contract.solana_address], 500, second_operator_keypair)
 
-        time.sleep(8)
+        time.sleep(15)
         send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                signed_tx,
-                                               [session_user.solana_account_address,
+                                               [user_account.solana_account_address,
                                                 rw_lock_contract.solana_address], 500, second_operator_keypair)
         resp = send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool,
                                                       new_holder_acc, signed_tx,
-                                                      [session_user.solana_account_address,
+                                                      [user_account.solana_account_address,
                                                        rw_lock_contract.solana_address], 1, second_operator_keypair)
         check_transaction_logs_have_text(resp.value, "exit_status=0x11")
