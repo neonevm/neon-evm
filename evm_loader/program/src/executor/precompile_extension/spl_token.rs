@@ -1,14 +1,17 @@
-use std::convert::{Infallible, TryInto};
+use std::convert::{TryInto};
 
-use evm::{Capture, ExitReason, U256, ExitSucceed, ExitRevert};
+use ethnum::U256;
 use solana_program::{
     pubkey::Pubkey, rent::Rent, sysvar::Sysvar, 
-    program_error::ProgramError, system_instruction, program_pack::Pack
+    system_instruction, program_pack::Pack, system_program
 };
 
 use crate::{
     account_storage::AccountStorage,
-    executor::{ExecutorState, OwnedAccountInfo}, account::ACCOUNT_SEED_VERSION,
+    executor::{ExecutorState, OwnedAccountInfo}, 
+    account::ACCOUNT_SEED_VERSION, 
+    types::Address,
+    error::{Error, Result}
 };
 
 // [0xa9, 0xc1, 0x58, 0x06] : "approve(bytes32,bytes32,uint64)",
@@ -28,38 +31,42 @@ use crate::{
 // [0xc2, 0x59, 0xdd, 0xfe] : "thaw(bytes32)",
 // [0x78, 0x42, 0x3b, 0xcf] : "transfer(bytes32,bytes32,uint64)"
 
-#[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn spl_token<B: AccountStorage>(
-    input: &[u8],
-    context: &evm::Context,
     state: &mut ExecutorState<B>,
-) -> Capture<(ExitReason, Vec<u8>), Infallible>
-{
-    if !context.apparent_value.is_zero() {
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    address: &Address,
+    input: &[u8],
+    context: &crate::evm::Context,
+    is_static: bool,
+) -> Result<Vec<u8>> {
+    if context.value != 0 {
+        return Err(Error::Custom("SplToken: value != 0".to_string()))
     }
 
-    if context.address == context.caller { 
-        // callcode is not allowed
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    if context.contract == context.caller { 
+        return Err(Error::Custom("SplToken: callcode is not allowed".to_string()))
     }
 
-    if (context.address != super::SYSTEM_ACCOUNT_SPL_TOKEN) && (state.call_depth() != 1) {
-        // delegatecall is only allowed in top level contract
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    if (&context.contract != address) && (state.call_depth() != 1) {
+        return Err(Error::Custom("SplToken: delegatecall is only allowed in top level contract".to_string()))
     }
 
 
     let (selector, input) = input.split_at(4);
+    let selector: [u8; 4] = selector.try_into()?;
 
-    let result = match *selector {
+    match selector {
         [0xb1, 0x1e, 0xcc, 0x50] => { // initializeMint(bytes32 seed, uint8 decimals)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let seed = read_salt(input);
             let decimals = read_u8(&input[32..]);
 
             initialize_mint(context, state, seed, decimals, None, None)
         }
         [0xc3, 0xf3, 0xf2, 0xf2] => { // initializeMint(bytes32 seed, uint8 decimals, bytes32 mint_authority, bytes32 freeze_authority)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+            
             let seed = read_salt(input);
             let decimals = read_u8(&input[32..]);
             let mint_authority = read_pubkey(&input[64..]);
@@ -67,52 +74,72 @@ pub fn spl_token<B: AccountStorage>(
             initialize_mint(context, state, seed, decimals, Some(mint_authority), Some(freeze_authority))
         }
         [0xda, 0xa1, 0x2c, 0x5c] => { // initializeAccount(bytes32 seed, bytes32 mint)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+            
             let seed = read_salt(input);
             let mint = read_pubkey(&input[32..]);
 
             initialize_account(context, state, seed, mint, None)
         }
         [0xfc, 0x86, 0xb7, 0x17] => { // initializeAccount(bytes32 seed, bytes32 mint, bytes32 owner)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+            
             let seed = read_salt(input);
             let mint = read_pubkey(&input[32..]);
             let owner = read_pubkey(&input[64..]);
             initialize_account(context, state, seed, mint, Some(owner))
         }
         [0x57, 0x82, 0xa0, 0x43] => { // closeAccount(bytes32 account)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let account = read_pubkey(input);
             close_account(context, state, account)
         }
         [0xa9, 0xc1, 0x58, 0x06] => { // approve(bytes32 source, bytes32 target, uint64 amount)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let source = read_pubkey(input);
             let target = read_pubkey(&input[32..]);
             let amount = read_u64(&input[64..]);
             approve(context, state, source, target, amount)
         }
         [0xb7, 0x5c, 0x7d, 0xc6] => { // revoke(bytes32 source)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let source = read_pubkey(input);
             revoke(context, state, source)
         }
         [0x78, 0x42, 0x3b, 0xcf] => { // transfer(bytes32 source, bytes32 target, uint64 amount)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let source = read_pubkey(input);
             let target = read_pubkey(&input[32..]);
             let amount = read_u64(&input[64..]);
             transfer(context, state, source, target, amount)
         }
         [0xa9, 0x05, 0x74, 0x01] => { // mintTo(bytes32 account, uint64 amount)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let account = read_pubkey(input);
             let amount = read_u64(&input[32..]);
             mint(context, state, account, amount)
         }
         [0xe3, 0x41, 0x08, 0x55] => { // burn(bytes32 account, uint64 amount)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let account = read_pubkey(input);
             let amount = read_u64(&input[32..]);
             burn(context, state, account, amount)
         }
         [0xec, 0x13, 0xcc, 0x7b] => { // freeze(bytes32 account)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let account = read_pubkey(input);
             freeze(context, state, account)
         }
         [0xc2, 0x59, 0xdd, 0xfe] => { // thaw(bytes32 account)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
             let account = read_pubkey(input);
             thaw(context, state, account)
         }
@@ -133,25 +160,20 @@ pub fn spl_token<B: AccountStorage>(
             get_mint(context, state, account)
         }
         _ => {
-            Ok(vec![])
+            Err(Error::UnknownPrecompileMethodSelector(*address, selector))
         }
-    };
-
-    result.map_or_else(
-        |_| Capture::Exit((ExitRevert::Reverted.into(), vec![])),
-        |value| Capture::Exit((ExitSucceed::Returned.into(), value))
-    )
+    }
 }
 
 
 #[inline]
 fn read_u8(input: &[u8]) -> u8 {
-    U256::from_big_endian_fast(arrayref::array_ref![input, 0, 32]).try_into().unwrap()
+    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32]).as_u8()
 }
 
 #[inline]
 fn read_u64(input: &[u8]) -> u64 {
-    U256::from_big_endian_fast(arrayref::array_ref![input, 0, 32]).as_u64()
+    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32]).as_u64()
 }
 
 #[inline]
@@ -170,7 +192,7 @@ fn create_account<B: AccountStorage>(
     account: &OwnedAccountInfo,
     space: usize,
     seeds: Vec<Vec<u8>>
-) -> Result<(), ProgramError> {
+) -> Result<()> {
     let rent = Rent::get()?;
     let minimum_balance = rent.minimum_balance(space);
 
@@ -202,18 +224,13 @@ fn create_account<B: AccountStorage>(
 }
 
 fn initialize_mint<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     seed: &[u8],
     decimals: u8,
     mint_authority: Option<Pubkey>,
     freeze_authority: Option<Pubkey>,
-) -> Result<Vec<u8>, ProgramError>
-{
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
+) -> Result<Vec<u8>> {
     let signer = context.caller;
     let (signer_pubkey, _) = state.backend.solana_address(&signer);
 
@@ -223,8 +240,8 @@ fn initialize_mint<B: AccountStorage>(
     );
 
     let account = state.external_account(mint_key)?;
-    if !solana_program::system_program::check_id(&account.owner) {
-        return Err!(ProgramError::IllegalOwner; "Account {} - is not system owned", mint_key);
+    if !system_program::check_id(&account.owner) {
+        return Err(Error::AccountInvalidOwner(mint_key, account.owner, system_program::ID));
     }
 
     let seeds: Vec<Vec<u8>> = vec![
@@ -248,17 +265,13 @@ fn initialize_mint<B: AccountStorage>(
 }
 
 fn initialize_account<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     seed: &[u8],
     mint: Pubkey,
     owner: Option<Pubkey>,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, _) = state.backend.solana_address(&signer);
 
@@ -268,8 +281,8 @@ fn initialize_account<B: AccountStorage>(
     );
 
     let account = state.external_account(account_key)?;
-    if !solana_program::system_program::check_id(&account.owner) {
-        return Err!(ProgramError::IllegalOwner; "Account {} - is not system owned", account_key);
+    if !system_program::check_id(&account.owner) {
+        return Err(Error::AccountInvalidOwner(account_key, account.owner, system_program::ID));
     }
 
     let seeds: Vec<Vec<u8>> = vec![
@@ -292,15 +305,11 @@ fn initialize_account<B: AccountStorage>(
 }
 
 fn close_account<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     account: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -319,17 +328,13 @@ fn close_account<B: AccountStorage>(
 }
 
 fn approve<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     source: Pubkey,
     target: Pubkey,
     amount: u64,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -349,15 +354,11 @@ fn approve<B: AccountStorage>(
 }
 
 fn revoke<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     account: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -375,17 +376,13 @@ fn revoke<B: AccountStorage>(
 }
 
 fn transfer<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     source: Pubkey,
     target: Pubkey,
     amount: u64,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -405,16 +402,12 @@ fn transfer<B: AccountStorage>(
 }
 
 fn mint<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     target: Pubkey,
     amount: u64,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -439,16 +432,12 @@ fn mint<B: AccountStorage>(
 }
 
 fn burn<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     source: Pubkey,
     amount: u64,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
     
@@ -473,15 +462,11 @@ fn burn<B: AccountStorage>(
 }
 
 fn freeze<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     target: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
     
@@ -505,15 +490,11 @@ fn freeze<B: AccountStorage>(
 }
 
 fn thaw<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     target: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
-    if state.is_static_context() {
-        return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
-    }
-    
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
     
@@ -538,10 +519,10 @@ fn thaw<B: AccountStorage>(
 
 #[allow(clippy::unnecessary_wraps)]
 fn find_account<B: AccountStorage>(
-    context: &evm::Context,
+    context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     seed: &[u8]
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let signer = context.caller;
 
@@ -554,13 +535,13 @@ fn find_account<B: AccountStorage>(
 }
 
 fn exists<B: AccountStorage>(
-    _context: &evm::Context,
+    _context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     account: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let account = state.external_account(account)?;
-    if solana_program::system_program::check_id(&account.owner) {
+    if system_program::check_id(&account.owner) {
         Ok(vec![0_u8; 32])
     } else {
         let mut result = vec![0_u8; 32];
@@ -571,10 +552,10 @@ fn exists<B: AccountStorage>(
 }
 
 fn get_account<B: AccountStorage>(
-    _context: &evm::Context,
+    _context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     account: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let account = state.external_account(account)?;
     let token = if spl_token::check_id(&account.owner) {
@@ -601,10 +582,10 @@ fn get_account<B: AccountStorage>(
 }
 
 fn get_mint<B: AccountStorage>(
-    _context: &evm::Context,
+    _context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     account: Pubkey,
-) -> Result<Vec<u8>, ProgramError>
+) -> Result<Vec<u8>>
 {
     let account = state.external_account(account)?;
     let mint = if spl_token::check_id(&account.owner) {

@@ -19,16 +19,11 @@ pub mod entrypoint;
 pub mod executor;
 pub mod external_programs;
 pub mod instruction;
-pub mod precompile;
 pub mod state_account;
-pub mod transaction;
-pub mod utils;
+pub mod types;
+pub mod evm;
+pub mod gasometer;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
 pub use solana_program;
-
-//solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
-
-#[cfg(feature = "tracing")]
-pub use evm::*;

@@ -1,46 +1,51 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use evm::{H160, H256, U256};
-use solana_program::pubkey::Pubkey;
+use ethnum::U256;
+use serde::{Deserialize, Serialize};
+use solana_program::{instruction::AccountMeta, pubkey::Pubkey};
 
-use super::cache::AccountMeta;
+use crate::types::Address;
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum Action {
     ExternalInstruction {
         program_id: Pubkey,
-        instruction: Vec<u8>,
         accounts: Vec<AccountMeta>,
+        #[serde(with = "serde_bytes")]
+        data: Vec<u8>,
         seeds: Vec<Vec<u8>>,
-        allocate: usize
+        allocate: usize,
     },
     NeonTransfer {
-        source: H160,
-        target: H160,
+        source: Address,
+        target: Address,
+        #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
     NeonWithdraw {
-        source: H160,
+        source: Address,
+        #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
     EvmLog {
-        address: H160,
-        topics: Vec<H256>,
+        address: Address,
+        topics: Vec<[u8; 32]>,
+        #[serde(with = "serde_bytes")]
         data: Vec<u8>,
     },
     EvmSetStorage {
-        address: H160,
-        key: U256,
-        value: U256,
+        address: Address,
+        #[serde(with = "ethnum::serde::bytes::le")]
+        index: U256,
+        value: [u8; 32],
     },
     EvmIncrementNonce {
-        address: H160,
+        address: Address,
     },
     EvmSetCode {
-        address: H160,
+        address: Address,
+        #[serde(with = "serde_bytes")]
         code: Vec<u8>,
-        valids: Vec<u8>,
     },
     EvmSelfDestruct {
-        address: H160,
+        address: Address,
     },
 }

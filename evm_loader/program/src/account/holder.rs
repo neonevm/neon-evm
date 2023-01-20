@@ -5,7 +5,7 @@ use arrayref::{array_mut_ref, array_ref};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
-use crate::transaction::Transaction;
+use crate::types::Transaction;
 
 use super::Holder;
 use super::Operator;

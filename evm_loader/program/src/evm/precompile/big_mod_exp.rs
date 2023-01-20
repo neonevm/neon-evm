@@ -1,14 +1,10 @@
-use std::convert::Infallible;
-
-use evm::{Capture, ExitReason};
-
 
 #[must_use]
 pub fn big_mod_exp(
     _input: &[u8]
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+) -> Vec<u8> {
     // Should be implemented via Solana syscall
-    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
+    Vec::new()
 
     /*
     use num_bigint::BigUint;

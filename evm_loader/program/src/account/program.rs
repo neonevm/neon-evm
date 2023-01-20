@@ -3,15 +3,12 @@ use solana_program::account_info::AccountInfo;
 use solana_program::program::{invoke_unchecked, invoke_signed_unchecked};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use solana_program::log::sol_log_data;
 use solana_program::{
     program::{invoke, invoke_signed}, system_instruction,
     rent::Rent, sysvar::Sysvar
 };
 use super::{Operator, EthereumAccount, ACCOUNT_SEED_VERSION};
 use std::ops::Deref;
-use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
-
 
 
 pub struct Neon<'a> (&'a AccountInfo<'a>);
@@ -23,93 +20,6 @@ impl<'a> Neon<'a> {
         }
 
         Ok(Self ( info ))
-    }
-
-    #[allow(clippy::unused_self)]
-    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256)
-    {
-        let (exit_message, exit_status) = match exit_reason {
-            ExitReason::Succeed(success_code) => {
-                match success_code {
-                    ExitSucceed::Stopped => {("ExitSucceed: Machine encountered an explict stop.", 0x11_u8)},
-                    ExitSucceed::Returned => {("ExitSucceed: Machine encountered an explict return.", 0x12)},
-                    ExitSucceed::Suicided => {("ExitSucceed: Machine encountered an explict suicide.", 0x13)},
-                }
-            },
-            ExitReason::Error(error_code) => {
-                match error_code {
-                    ExitError::StackUnderflow => {("ExitError: Trying to pop from an empty stack.", 0xe1)},
-                    ExitError::StackOverflow => {("ExitError: Trying to push into a stack over stack limit.", 0xe2)},
-                    ExitError::InvalidJump => {("ExitError: Jump destination is invalid.", 0xe3)},
-                    ExitError::InvalidRange => {("ExitError: An opcode accesses memory region, but the region is invalid.", 0xe4)},
-                    ExitError::DesignatedInvalid => {("ExitError: Encountered the designated invalid opcode.", 0xe5)},
-                    ExitError::CallTooDeep => {("ExitError: Call stack is too deep (runtime).", 0xe6)},
-                    ExitError::CreateCollision => {("ExitError: Create opcode encountered collision (runtime).", 0xe7)},
-                    ExitError::CreateContractLimit => {("ExitError: Create init code exceeds limit (runtime).", 0xe8)},
-                    ExitError::OutOfOffset => {("ExitError: An opcode accesses external information, but the request is off offset limit (runtime).", 0xe9)},
-                    ExitError::OutOfGas => {("ExitError: Execution runs out of gas (runtime).", 0xea)},
-                    ExitError::OutOfFund => {("ExitError: Not enough fund to start the execution (runtime).", 0xeb)},
-                    ExitError::PCUnderflow => {("ExitError: PC underflowed (unused).", 0xec)},
-                    ExitError::CreateEmpty => {("ExitError: Attempt to create an empty account (runtime, unused).", 0xed)},
-                    ExitError::StaticModeViolation => {("ExitError: STATICCALL tried to change state", 0xee)}
-                }
-            },
-            ExitReason::Revert(_) => {("Revert", 0xd0)},
-            ExitReason::Fatal(fatal_code) => {
-                match fatal_code {
-                    ExitFatal::NotSupported => {("Fatal: The operation is not supported.", 0xf1)},
-                    ExitFatal::UnhandledInterrupt => {("Fatal: The trap (interrupt) is unhandled.", 0xf2)},
-                    ExitFatal::CallErrorAsFatal(_) => {("Fatal: The environment explictly set call errors as fatal error.", 0xf3)},
-                }
-            },
-            ExitReason::StepLimitReached => unreachable!(),
-        };
-
-        solana_program::msg!("{} exit_status={:#04X}", exit_message, exit_status);
-        debug_print!("used gas {}", used_gas);
-
-        let used_gas = if used_gas > U256::from(u64::MAX) { // Convert to u64 to not break ABI
-            solana_program::msg!("Error: used gas {} exceeds u64::MAX", used_gas);
-            u64::MAX
-        } else {
-            used_gas.as_u64()
-        };
-
-        let mnemonic = b"RETURN";
-        let exit_status = exit_status.to_le_bytes();
-        let used_gas = used_gas.to_le_bytes();
-        let fields = [
-            mnemonic.as_slice(),
-            exit_status.as_slice(),
-            used_gas.as_slice(),
-        ];
-        sol_log_data(&fields);
-    }
-
-    #[allow(clippy::unused_self)]
-    pub fn on_event(&self, address: H160, topics: &[H256], data: &[u8]) -> Result<(), ProgramError> {
-        assert!(topics.len() < 5);
-        #[allow(clippy::cast_possible_truncation)]
-        let nt = topics.len() as u8;
-        let count_topics = topics.len().to_le_bytes();
-        let empty = [] as [u8; 0];
-
-        let mnemonic = [b'L', b'O', b'G', b'0' + nt];
-        let t1 = if nt < 1 { &empty } else { topics[0].as_bytes() };
-        let t2 = if nt < 2 { &empty } else { topics[1].as_bytes() };
-        let t3 = if nt < 3 { &empty } else { topics[2].as_bytes() };
-        let t4 = if nt < 4 { &empty } else { topics[3].as_bytes() };
-        let fields = [mnemonic.as_slice(),
-                      address.as_bytes(),
-                      count_topics.as_slice(),
-                      t1,
-                      t2,
-                      t3,
-                      t4,
-                      data];
-        sol_log_data(&fields);
-
-        Ok(())
     }
 }
 

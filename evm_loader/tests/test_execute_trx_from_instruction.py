@@ -40,7 +40,7 @@ class TestExecuteTrxFromInstruction:
         recipient_balance_after = get_neon_balance(solana_client, session_user.solana_account_address)
         assert sender_balance_before - amount == sender_balance_after
         assert recipient_balance_before + amount == recipient_balance_after
-        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
 
     def test_transfer_transaction_with_non_existing_recipient(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                               evm_loader):
@@ -58,23 +58,9 @@ class TestExecuteTrxFromInstruction:
                                              PublicKey(recipient_solana_address)],
                                             operator_keypair)
         recipient_balance_after = get_neon_balance(solana_client, PublicKey(recipient_solana_address))
-        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
 
         assert recipient_balance_after == amount
-
-    def test_deploy_contract_not_allowed(self, operator_keypair, evm_loader, treasury_pool, sender_with_tokens):
-        contract_filename = "small.binary"
-
-        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename)
-        contract = create_contract_address(sender_with_tokens, evm_loader)
-
-        with pytest.raises(solana.rpc.core.RPCException, match="Deploy transactions are not allowed"):
-            execute_trx_from_instruction(operator_keypair, evm_loader, treasury_pool.account,
-                                         treasury_pool.buffer,
-                                         signed_tx,
-                                         [sender_with_tokens.solana_account_address,
-                                          contract.solana_address],
-                                         operator_keypair)
 
     @pytest.mark.parametrize("chain_id", [None, 111])
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
@@ -89,7 +75,7 @@ class TestExecuteTrxFromInstruction:
                                              string_setter_contract.solana_address],
                                             operator_keypair)
 
-        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
         assert text in to_text(
             neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
                                                   "get()"))
@@ -115,7 +101,7 @@ class TestExecuteTrxFromInstruction:
                                              contract.solana_address],
                                             operator_keypair)
 
-        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
 
         assert text in to_text(neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, contract, "get()"))
 
@@ -242,7 +228,7 @@ class TestExecuteTrxFromInstruction:
                                             [sender_with_tokens.solana_account_address,
                                              session_user.solana_account_address],
                                             sender_with_tokens.solana_account)
-        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
 
     def test_incorrect_system_program(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
                                       session_user):

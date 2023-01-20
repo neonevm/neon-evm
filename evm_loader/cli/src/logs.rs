@@ -18,7 +18,7 @@ impl LogContext {
 }
 
 
-const LOG_MODULES: [&str; 14] = [
+const LOG_MODULES: [&str; 16] = [
   "neon_cli",
   "neon_cli::account_storage",
   "neon_cli::commands::cancel_trx",
@@ -33,6 +33,8 @@ const LOG_MODULES: [&str; 14] = [
   "evm_loader::precompile",
   "evm_loader::executor",
   "evm_loader::external_programs",
+  "evm_loader::evm",
+  "evm_loader::evm::opcode",
 ];
 
 

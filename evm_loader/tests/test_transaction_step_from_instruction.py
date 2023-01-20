@@ -128,7 +128,7 @@ class TestTransactionStepFromInstruction:
                                                                       sender_with_tokens.solana_account_address], 0)
 
         recipient_balance_after = get_neon_balance(solana_client, PublicKey(recipient_solana_address))
-        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
 
         assert recipient_balance_after == amount
 

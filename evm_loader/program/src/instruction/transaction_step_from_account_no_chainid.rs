@@ -1,16 +1,17 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury};
 use crate::config::GAS_LIMIT_MULTIPLIER_NO_CHAINID;
 use crate::account_storage::ProgramAccountStorage;
+use crate::error::Result;
 use arrayref::{array_ref};
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult,
+    account_info::AccountInfo,
     pubkey::Pubkey,
 };
 use crate::instruction::transaction::Accounts;
-use evm::U256;
+use ethnum::U256;
 
 
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
+pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> Result<()> {
     solana_program::msg!("Instruction: Begin or Continue Transaction from Account Without ChainId");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);

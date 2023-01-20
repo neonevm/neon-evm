@@ -1,6 +1,7 @@
-use evm_loader::{H160};
-
-use evm_loader::account::EthereumAccount;
+use evm_loader::{
+    account::EthereumAccount,
+    types::Address
+};
 
 use crate::{
     account_storage::{
@@ -13,14 +14,14 @@ use crate::{
 
 pub fn execute (
     config: &Config,
-    ether_address: &H160,
+    ether_address: &Address,
 ) {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
         (solana_address, Some(mut acc)) => {
             let acc_info = account_info(&solana_address, &mut acc);
             let account_data = EthereumAccount::from_account(&config.evm_loader, &acc_info).expect("EthereumAccount ctor error ");
 
-            println!("Ethereum address: 0x{}", &hex::encode(ether_address.as_fixed_bytes()));
+            println!("Ethereum address: {}", ether_address);
             println!("Solana address: {}", solana_address);
 
             println!("Account fields");
