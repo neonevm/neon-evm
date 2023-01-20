@@ -2,7 +2,7 @@ use log::{info, warn};
 use crate::{
     Config,
     commands::get_neon_elf::read_elf_parameters_from_account,
-    errors::NeonCliError,
+    errors::NeonCliError, NeonCliResult,
 };
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -19,7 +19,7 @@ use evm_loader::account::{MainTreasury, Treasury};
 
 pub fn execute(
     config: &Config,
-) -> Result<(), NeonCliError> {
+) -> NeonCliResult {
     let neon_params = read_elf_parameters_from_account(config)?;
 
     let pool_count: u32 = neon_params.get("NEON_POOL_COUNT")
@@ -85,5 +85,9 @@ pub fn execute(
     trx.try_sign(&[&*config.signer], blockhash)?;
     config.rpc_client.send_and_confirm_transaction_with_spinner(&trx)?;
 
-    Ok(())
+    let main_balance_account = config.rpc_client.get_account(&main_balance_address)?;
+    Ok(serde_json::json!({
+        "pool_address": main_balance_address.to_string(),
+        "balance": main_balance_account.lamports
+    }))
 }

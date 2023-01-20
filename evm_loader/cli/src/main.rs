@@ -16,10 +16,9 @@ mod types;
 pub use config::Config;
 
 use std::process::exit;
-use log::error;
 use crate::errors::NeonCliError;
 
-type NeonCliResult = Result<(),NeonCliError>;
+type NeonCliResult = Result<serde_json::Value, NeonCliError>;
 
 #[tokio::main]
 async fn main() {
@@ -31,12 +30,30 @@ async fn main() {
 
     let (cmd, params) = options.subcommand();
 
-    match commands::execute(cmd, params, &config) {
-        Ok(_)  => exit(0),
-        Err(e) => {
-            let code = e.error_code();
-            error!("NeonCli Error ({}): {}", code, e);
-            exit(code as i32)
+    let result = commands::execute(cmd, params, &config);
+    let logs = {
+        let context = crate::logs::CONTEXT.lock().unwrap();
+        context.clone()
+    };
+
+    let (result, exit_code) = match result {
+        Ok(result) => {
+            (serde_json::json!({
+                "result": "success",
+                "value": result,
+                "logs": logs
+            }), 0_i32)
         }
-    }
+        Err(e) => {
+            let error_code = e.error_code() as i32;
+            (serde_json::json!({
+                "result": "error",
+                "error": e.to_string(),
+                "logs": logs
+            }), error_code)
+        }
+    };
+
+    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+    exit(exit_code);
 }

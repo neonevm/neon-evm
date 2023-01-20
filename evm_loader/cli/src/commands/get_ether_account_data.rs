@@ -8,50 +8,34 @@ use crate::{
         EmulatorAccountStorage,
         account_info,
     },
-    Config,
+    Config, NeonCliResult, errors::NeonCliError,
 };
 
 
 pub fn execute (
     config: &Config,
     ether_address: &Address,
-) {
+) -> NeonCliResult {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
         (solana_address, Some(mut acc)) => {
             let acc_info = account_info(&solana_address, &mut acc);
-            let account_data = EthereumAccount::from_account(&config.evm_loader, &acc_info).expect("EthereumAccount ctor error ");
+            let account_data = EthereumAccount::from_account(&config.evm_loader, &acc_info).unwrap();
+            let contract_code = account_data.contract_data().map_or_else(Vec::new, |c| c.code().to_vec());
 
-            println!("Ethereum address: {}", ether_address);
-            println!("Solana address: {}", solana_address);
-
-            println!("Account fields");
-            println!("    address: {}", account_data.address);
-            println!("    bump_seed: {}", account_data.bump_seed);
-            println!("    trx_count: {}", account_data.trx_count);
-            println!("    rw_blocked: {}", account_data.rw_blocked);
-            println!("    balance: {}", account_data.balance);
-            println!("    code_size: {}", account_data.code_size);
-
-            if let Some(contract) = account_data.contract_data() {
-                let code_size = account_data.code_size as usize;
-                let mut offset = 0;
-                while offset < code_size {
-                    let data_slice = &contract.code();
-                    let remains = if code_size - offset > 80 {
-                        80
-                    } else {
-                        code_size - offset
-                    };
-
-                    println!("        {}", &hex::encode(&data_slice[offset..offset+remains]));
-                    offset += remains;
-                }
-            }
-
-
+            Ok(serde_json::json!({
+                "solana_address": solana_address.to_string(),
+                "address": account_data.address,
+                "bump_seed": account_data.bump_seed,
+                "trx_count": account_data.trx_count,
+                "rw_blocked": account_data.rw_blocked,
+                "balance": account_data.balance.to_string(),
+                "generation": account_data.generation,
+                "code_size": account_data.code_size,
+                "code": hex::encode(contract_code)
+            }))
         },
-        (_, None) => {
-            println!("Account not found {}", &ether_address.to_string());
+        (solana_address, None) => {
+            Err(NeonCliError::AccountNotFound(solana_address))
         }
     }
 }

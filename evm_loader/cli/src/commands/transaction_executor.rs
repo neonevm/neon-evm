@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 use {
     log::{error, warn, info, debug},
     std::cell::RefCell,
@@ -15,7 +17,7 @@ use {
     crate::{errors::NeonCliError, rpc}
 };
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Stats {
     pub total_objects: u32,
     pub corrected_objects: u32,

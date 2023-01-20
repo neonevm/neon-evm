@@ -13,3 +13,4 @@ class InstructionAsserts:
     NOT_NEON_PROGRAM = "Account {} - is not Neon program"
     NOT_PROGRAM_OWNED = "Account {} - expected program owned"
     INVALID_HOLDER_OWNER = "Invalid Holder account owner"
+    INVALID_OPERATOR_KEY = "operator.key != storage.operator"
