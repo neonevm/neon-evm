@@ -1,5 +1,5 @@
 use arrayref::array_ref;
-use evm::{H160, U256};
+use ethnum::U256;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
@@ -10,6 +10,7 @@ use solana_program::program::invoke_signed;
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program, token};
+use crate::types::Address;
 
 struct Accounts<'a> {
     source: token::State<'a>,
@@ -39,7 +40,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     solana_program::msg!("Instruction: Deposit");
 
     let parsed_accounts = Accounts::from_slice(accounts)?;
-    let ethereum_address = H160::from(array_ref![instruction, 0, 20]);
+    let ethereum_address = Address::from(*array_ref![instruction, 0, 20]);
 
     let ethereum_bump_seed = validate(program_id, &parsed_accounts, &ethereum_address)?;
     execute(program_id, &parsed_accounts, ethereum_address, ethereum_bump_seed)
@@ -48,11 +49,9 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 fn validate(
     program_id: &Pubkey,
     accounts: &Accounts,
-    ethereum_address: &H160,
+    ethereum_address: &Address,
 ) -> Result<u8, ProgramError> {
-    let program_seeds = [&[ACCOUNT_SEED_VERSION], ethereum_address.as_bytes()];
-    let (expected_solana_address, ethereum_bump_seed) =
-        Pubkey::find_program_address(&program_seeds, program_id);
+    let (expected_solana_address, ethereum_bump_seed) = ethereum_address.find_solana_address(program_id);
     if expected_solana_address != *accounts.ethereum_account.key {
         return Err!(
             ProgramError::InvalidArgument;
@@ -115,7 +114,7 @@ fn validate(
 fn execute<'a>(
     program_id: &'a Pubkey,
     accounts: &Accounts,
-    ethereum_address: H160,
+    ethereum_address: Address,
     ethereum_bump_seed: u8,
 ) -> ProgramResult {
     let signers_seeds: &[&[&[u8]]] = &[&[

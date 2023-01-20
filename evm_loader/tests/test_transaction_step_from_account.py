@@ -14,8 +14,7 @@ from solana.rpc.commitment import Processed, Confirmed
 from solana.rpc.types import TxOpts
 
 from .solana_utils import get_neon_balance, solana_client, neon_cli, execute_transaction_steps_from_account, \
-    write_transaction_to_holder_account, create_treasury_pool_address, send_transaction_step_from_account, \
-    send_transaction
+    write_transaction_to_holder_account, create_treasury_pool_address, send_transaction_step_from_account
 from .utils.assert_messages import InstructionAsserts
 from .utils.constants import TAG_FINALIZED_STATE
 from .utils.contract import make_deployment_transaction, make_contract_call_trx, deploy_contract
@@ -135,7 +134,7 @@ class TestTransactionStepFromAccount:
                                                        sender_with_tokens.solana_account_address], 0)
 
         recipient_balance_after = get_neon_balance(solana_client, PublicKey(recipient_solana_address))
-        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "ExitSucceed")
+        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
 
         assert recipient_balance_after == amount
 

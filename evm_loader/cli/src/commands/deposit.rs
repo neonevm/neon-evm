@@ -1,5 +1,6 @@
 use log::{debug};
 
+use solana_cli::checks::check_account_for_fee;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
@@ -7,12 +8,8 @@ use solana_sdk::{
     transaction::Transaction,
     system_program,
 };
-
-use solana_cli::{
-    checks::{check_account_for_fee},
-};
 use solana_client::rpc_client::RpcClient;
-use evm::{H160};
+use evm_loader::types::Address;
 use spl_associated_token_account::get_associated_token_address;
 use crate::{
     Config,
@@ -23,9 +20,9 @@ use crate::{
 pub fn execute(
     config: &Config,
     amount: u64,
-    ether_address: &H160,
+    ether_address: &Address,
 ) -> NeonCliResult {
-    let (ether_pubkey, _) = crate::make_solana_program_address(ether_address, &config.evm_loader);
+    let (ether_pubkey, _) = ether_address.find_solana_address(&config.evm_loader);
 
     let token_mint_id = evm_loader::config::token_mint::id();
 
@@ -103,12 +100,12 @@ fn deposit_instruction(
     config: &Config,
     source_pubkey: Pubkey,
     destination_pubkey: Pubkey,
-    ether_address: &H160,
+    ether_address: &Address,
     ether_account_pubkey: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(0x27_u8, ether_address.as_fixed_bytes()),
+        &(0x27_u8, ether_address.as_bytes()),
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),

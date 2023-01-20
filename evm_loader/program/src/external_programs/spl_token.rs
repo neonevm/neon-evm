@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::executor::{OwnedAccountInfo, AccountMeta};
+use crate::executor::{OwnedAccountInfo};
 use solana_program::{
     entrypoint::ProgramResult,
     pubkey::Pubkey,
-    account_info::{AccountInfo, IntoAccountInfo}, program_error::ProgramError
+    account_info::{AccountInfo, IntoAccountInfo}, program_error::ProgramError, instruction::AccountMeta
 };
 use spl_token::instruction::TokenInstruction;
 
@@ -15,7 +15,7 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
         .collect::<BTreeMap<Pubkey, AccountInfo>>();
 
     let instruction_accounts: Vec<AccountInfo> = meta.iter().map(|a| {
-        let mut info = accounts_info[&a.key].clone();
+        let mut info = accounts_info[&a.pubkey].clone();
         info.is_writable = a.is_writable;
         info.is_signer = a.is_signer;
         info

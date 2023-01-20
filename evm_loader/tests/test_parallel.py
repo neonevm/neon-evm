@@ -4,14 +4,12 @@ from unittest import TestCase
 from _pytest.fixtures import fixture
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
-from solana.rpc.commitment import Finalized
 from solana.rpc.core import RPCException
 
-from .solana_utils import EvmLoader, send_transaction, solana_client, get_account_data, make_new_user, deposit_neon, \
-    cancel_transaction, send_transaction_step_from_account
+from .solana_utils import EvmLoader, solana_client, get_account_data, make_new_user, deposit_neon, \
+    cancel_transaction, send_transaction_step_from_account, execute_trx_from_instruction
 from .utils.contract import write_transaction_to_holder_account, make_deployment_transaction
 from .utils.ethereum import create_contract_address, make_eth_transaction
-from .utils.instructions import TransactionWithComputeBudget, make_ExecuteTrxFromInstruction
 from .utils.layouts import ACCOUNT_INFO_LAYOUT
 from .utils.storage import create_holder
 from .utils.types import Caller, TreasuryPool
@@ -25,11 +23,11 @@ MAX_PERMITTED_DATA_INCREASE = 10240
 class ParallelTransactionsTest(TestCase):
     @fixture(autouse=True)
     def prepare_fixture(
-        self,
-        user_account: Caller,
-        evm_loader: EvmLoader,
-        operator_keypair: Keypair,
-        treasury_pool: TreasuryPool,
+            self,
+            user_account: Caller,
+            evm_loader: EvmLoader,
+            operator_keypair: Keypair,
+            treasury_pool: TreasuryPool,
     ):
         self.user_account = user_account
         self.evm_loader = evm_loader
@@ -118,6 +116,7 @@ class ParallelTransactionsTest(TestCase):
     def check_iteration_deployed(receipt: Any) -> bool:
         if receipt.value.transaction.meta.err:
             raise AssertionError(f"Can't deploy contract: {receipt.value.transaction.meta.err}")
+
         for log in receipt.value.transaction.meta.log_messages:
             if "exit_status" in log:
                 return True
@@ -127,13 +126,13 @@ class ParallelTransactionsTest(TestCase):
 
     @staticmethod
     def transfer(
-        src_account: Caller,
-        dst_addr: bytes,
-        value: int,
-        dst_solana_addr: PublicKey,
-        evm_loader: EvmLoader,
-        operator_keypair: Keypair,
-        treasury_pool: TreasuryPool,
+            src_account: Caller,
+            dst_addr: bytes,
+            value: int,
+            dst_solana_addr: PublicKey,
+            evm_loader: EvmLoader,
+            operator_keypair: Keypair,
+            treasury_pool: TreasuryPool,
     ):
         message = make_eth_transaction(
             dst_addr,
@@ -141,20 +140,14 @@ class ParallelTransactionsTest(TestCase):
             src_account.solana_account,
             src_account.solana_account_address,
             value,
-        ).rawTransaction
-
-        trx = TransactionWithComputeBudget(operator_keypair)
-        trx.add(
-            make_ExecuteTrxFromInstruction(
-                operator_keypair,
-                evm_loader,
-                treasury_pool.account,
-                treasury_pool.buffer,
-                message,
-                [dst_solana_addr, src_account.solana_account_address],
-            )
         )
-        receipt = send_transaction(solana_client, trx, operator_keypair, Finalized)
+
+        trx = execute_trx_from_instruction(operator_keypair, evm_loader, treasury_pool.account, treasury_pool.buffer,
+                                           message,
+                                           [dst_solana_addr,
+                                            src_account.solana_account_address],
+                                           operator_keypair)
+        receipt = solana_client.get_transaction(trx.value)
         print("Transfer receipt:", receipt)
         assert receipt.value.transaction.meta.err is None
 

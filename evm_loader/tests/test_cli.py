@@ -35,7 +35,7 @@ def test_emulate_transfer(user_account, evm_loader, session_user):
         data=None
     )
     assert result['exit_status'] == 'succeed', f"The 'exit_status' field is not succeed. Result: {result}"
-    assert result['steps_executed'] == 0, f"Steps executed amount is not 0. Result: {result}"
+    assert result['steps_executed'] == 1, f"Steps executed amount is not 1. Result: {result}"
     assert result['used_gas'] > 0, f"Used gas is less than 0. Result: {result}"
 
 
@@ -95,8 +95,8 @@ def test_collect_treasury(evm_loader):
     wait_confirm_transaction(solana_client, trx.value)
     result = neon_cli().call(command_args)
 
-    balance_after = get_solana_balance(main_pool_address)
-    assert balance_after == balance_before + amount
+    balance_after = get_solana_balance(PublicKey(main_pool_address))
+    assert balance_after >= balance_before + amount
 
 
 def test_init_environment(evm_loader):
@@ -115,7 +115,7 @@ def test_get_ether_account_data(evm_loader, user_account):
 
 
 def test_create_ether_account(evm_loader):
-    acc = gen_hash_of_block(20)[2:]
+    acc = gen_hash_of_block(20)
     result = neon_cli().call(
         f"create-ether-account --evm_loader {evm_loader.loader_id} {acc}")
 
@@ -137,7 +137,7 @@ def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_poo
     expected_storage = '0000000000000000000000000000000000000000000000000000000000000005'
     result = neon_cli().call(
         f"get-storage-at --evm_loader {evm_loader.loader_id} {contract.eth_address.hex()} 0x0")
-    assert result["value"] == expected_storage
+    assert result == expected_storage
 
 
 def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool):

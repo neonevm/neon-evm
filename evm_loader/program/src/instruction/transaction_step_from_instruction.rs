@@ -1,16 +1,17 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder, FinalizedState};
-use crate::executor::Gasometer;
-use crate::transaction::{Transaction, recover_caller_address};
+use crate::gasometer::Gasometer;
+use crate::types::{Transaction};
 use crate::account_storage::ProgramAccountStorage;
+use crate::error::{Error, Result};
 use arrayref::{array_ref};
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
+    account_info::AccountInfo,
     pubkey::Pubkey,
 };
 use crate::instruction::transaction::{Accounts, do_begin, do_continue};
 
 
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
+pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> Result<()> {
     solana_program::msg!("Instruction: Begin or Continue Transaction from Instruction");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
@@ -41,7 +42,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     match crate::account::tag(program_id, storage_info)? {
         Holder::TAG | FinalizedState::TAG => {
             let trx = Transaction::from_rlp(message)?;
-            let caller = recover_caller_address(&trx)?;
+            let caller = trx.recover_caller_address()?;
 
             solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
 
@@ -69,6 +70,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
             do_continue(step_count, accounts, storage, &mut account_storage, gasometer)
         },
-        _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected Holder or State", storage_info.key)
+        tag => Err(Error::AccountInvalidTag(*storage_info.key, tag, Holder::TAG))
     }
 }

@@ -1,6 +1,7 @@
-use evm::{H160};
-
-use evm_loader::account::EthereumAccount;
+use evm_loader::{
+    account::EthereumAccount,
+    types::Address
+};
 
 use crate::{
     account_storage::{
@@ -13,7 +14,7 @@ use crate::{
 
 pub fn execute (
     config: &Config,
-    ether_address: &H160,
+    ether_address: &Address,
 ) -> NeonCliResult {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
         (solana_address, Some(mut acc)) => {

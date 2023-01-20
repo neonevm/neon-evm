@@ -4,12 +4,13 @@ use mpl_token_metadata::assertions::collection::assert_collection_update_is_vali
 use mpl_token_metadata::assertions::uses::assert_valid_use;
 use mpl_token_metadata::utils::{assert_initialized, assert_update_authority_is_correct, assert_data_valid, puff_out_data_fields};
 use solana_program::account_info::IntoAccountInfo;
+use solana_program::instruction::AccountMeta;
 use solana_program::program_option::COption;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 use spl_token::state::Mint;
 
-use crate::executor::{OwnedAccountInfo, AccountMeta};
+use crate::executor::{OwnedAccountInfo};
 use solana_program::{
     entrypoint::ProgramResult,
     pubkey::Pubkey, program_error::ProgramError,
@@ -34,13 +35,13 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
 
 
 fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>, args: &CreateMetadataAccountArgsV3) -> ProgramResult {
-    let metadata_account_key = &meta[0].key;
-    let mint_key = &meta[1].key;
-    // let _mint_authority_key = &meta[2].key;
-    // let _payer_account_key = &meta[3].key;
-    let update_authority_key = &meta[4].key;
-    // let _system_account_key = &meta[5].key;
-    // let _rent_key = &meta[6].key;
+    let metadata_account_key = &meta[0].pubkey;
+    let mint_key = &meta[1].pubkey;
+    // let _mint_authority_key = &meta[2].pubkey;
+    // let _payer_account_key = &meta[3].pubkey;
+    let update_authority_key = &meta[4].pubkey;
+    // let _system_account_key = &meta[5].pubkey;
+    // let _rent_key = &meta[6].pubkey;
 
 
     let mut metadata: Metadata = {
@@ -109,15 +110,15 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
 
 
 fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>, args: &CreateMasterEditionArgs) -> ProgramResult {
-    let edition_account_key  = &meta[0].key;
-    let mint_key             = &meta[1].key;
-    let update_authority_key = &meta[2].key;
-    // let _mint_authority_key   = &meta[3].key;
-    // let _payer_account_key    = &meta[4].key;
-    let metadata_account_key = &meta[5].key;
-    // let _token_program_key   = &meta[6].key;
-    // let _system_account_key  = &meta[7].key;
-    // let _rent_key            = &meta[8].key;
+    let edition_account_key  = &meta[0].pubkey;
+    let mint_key             = &meta[1].pubkey;
+    let update_authority_key = &meta[2].pubkey;
+    // let _mint_authority_key   = &meta[3].pubkey;
+    // let _payer_account_key    = &meta[4].pubkey;
+    let metadata_account_key = &meta[5].pubkey;
+    // let _token_program_key   = &meta[6].pubkey;
+    // let _system_account_key  = &meta[7].pubkey;
+    // let _rent_key            = &meta[8].pubkey;
 
     let mut metadata: Metadata = {
         let metadata_info = accounts.get_mut(metadata_account_key).unwrap().into_account_info();

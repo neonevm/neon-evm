@@ -14,6 +14,7 @@ use crate::{
     account_storage::account_info,
     Config,
     NeonCliResult,
+    commands::send_transaction,
 };
 
 
@@ -51,7 +52,7 @@ pub fn execute(
 
     let instructions = vec![cancel_with_nonce_instruction];
 
-    let signature = crate::send_transaction(config, &instructions)?;
+    let signature = send_transaction(config, &instructions)?;
 
     Ok(serde_json::json!({
         "transaction": signature

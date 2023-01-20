@@ -1,19 +1,18 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder, FinalizedState};
-use crate::error::EvmLoaderError;
-use crate::executor::Gasometer;
-use crate::transaction::{ Transaction, recover_caller_address};
+use crate::error::{Error, Result};
+use crate::gasometer::Gasometer;
+use crate::types::{Transaction};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
-use evm::U256;
-use solana_program::program_error::ProgramError;
+use ethnum::U256;
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult,
+    account_info::AccountInfo,
     pubkey::Pubkey,
 };
 use crate::instruction::transaction::{Accounts, do_begin, do_continue};
 
 
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
+pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> Result<()> {
     solana_program::msg!("Instruction: Begin or Continue Transaction from Account");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
@@ -48,7 +47,7 @@ pub fn execute<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     step_count: u64,
     gas_multiplier: Option<U256>,
-) -> ProgramResult {
+) -> Result<()> {
     match crate::account::tag(program_id, holder_or_storage_info)? {
         Holder::TAG => {
             let trx = {
@@ -65,7 +64,7 @@ pub fn execute<'a>(
 
             solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
 
-            let caller = recover_caller_address(&trx)?;
+            let caller = trx.recover_caller_address()?;
             let mut storage = State::new(program_id, holder_or_storage_info, &accounts, caller, &trx)?;
 
             if let Some(gas_multiplier) = gas_multiplier {
@@ -97,10 +96,10 @@ pub fn execute<'a>(
             do_continue(step_count, accounts, storage, account_storage, gasometer)
         }
         FinalizedState::TAG => {
-            Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
+            Err(Error::StorageAccountFinalized)
         }
-        _ => {
-            Err!(ProgramError::InvalidAccountData; "Account {} - expected Holder or State", holder_or_storage_info.key)
+        tag => {
+            Err(Error::AccountInvalidTag(*holder_or_storage_info.key, tag, Holder::TAG))
         }
     }
 }
