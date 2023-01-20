@@ -1929,7 +1929,7 @@ name = "neon-cli"
 version = "0.14.0-dev"
 dependencies = [
  "arrayref",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bs58",
  "chrono",
