@@ -19,7 +19,7 @@ impl ListenerVmTracer for VmTracer{
         }
 
         let pc = mes.position.expect("trace position");
-        println!("pc = {:?} opcode = {:?}", pc, mes.opcode);
+        // println!("pc = {:?} opcode = {:?}", pc, mes.opcode);
         let instruction = mes.opcode.0;
         let mem_written = mem_written(mes.opcode, mes.stack);
         let store_written = store_written(mes.opcode, mes.stack);
@@ -39,7 +39,7 @@ impl ListenerVmTracer for VmTracer{
     }
 
     fn step_result (&mut self, mes: &StepResultTrace){
-        println!("res");
+        // println!("res");
         match mes.result {
             Ok(_) => self.handle_step_result(mes.stack, mes.memory, self.pushed),
             Err(err) => {

@@ -16,23 +16,23 @@ impl EventListener for Tracer{
 
         match event {
             Event::Step(trace) =>  {
-                println!("Step: {:?}", trace);
+                // println!("Step: {:?}", trace);
                 self.step(&trace);
                 self.vm.step(&trace);
             },
 
             Event::StepResult(trace) =>  {
-                println!("StepResult: {:?}", trace);
+                // println!("StepResult: {:?}", trace);
                 self.vm.step_result(&trace);
             },
 
             Event::SLoad(trace) =>  {
-                println!("SLoad: {:?}", trace);
+                // println!("SLoad: {:?}", trace);
                 self.vm.sload(&trace);
             },
 
             Event::SStore(trace) => {
-                println!("SStore: {:?}", trace);
+                // println!("SStore: {:?}", trace);
                 self.vm.sstore(&trace);
             },
         };
