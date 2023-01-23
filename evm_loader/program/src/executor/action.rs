@@ -42,8 +42,7 @@ pub enum Action {
     },
     EvmSetCode {
         address: Address,
-        #[serde(with = "serde_bytes")]
-        code: Vec<u8>,
+        code: crate::evm::Buffer,
     },
     EvmSelfDestruct {
         address: Address,
