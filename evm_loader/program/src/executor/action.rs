@@ -35,6 +35,7 @@ pub enum Action {
         address: Address,
         #[serde(with = "ethnum::serde::bytes::le")]
         index: U256,
+        #[serde(with = "serde_bytes_32")]
         value: [u8; 32],
     },
     EvmIncrementNonce {
@@ -47,4 +48,40 @@ pub enum Action {
     EvmSelfDestruct {
         address: Address,
     },
+}
+
+mod serde_bytes_32 {
+    pub fn serialize<S>(value: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_bytes(value)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
+    where
+        D: serde::Deserializer<'de>
+    {
+        struct BytesVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for BytesVisitor
+        {
+            type Value = [u8; 32];
+        
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("[u8; 32]")
+            }
+        
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                value
+                    .try_into()
+                    .map_err(|_| serde::de::Error::invalid_length(value.len(), &self))
+            }
+        }
+
+        deserializer.deserialize_bytes(BytesVisitor)
+    }
 }
