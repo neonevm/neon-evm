@@ -34,6 +34,9 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn block_hash(&self, number: U256) -> [u8; 32] {
+        if self.clock.slot <= number.as_u64() {
+            return <[u8; 32]>::default();
+        }
         let slot = self.clock.slot - 1 - number.as_u64();
 
         let slot_hashes_account = self
