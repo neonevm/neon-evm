@@ -16,7 +16,7 @@ impl EventListener for Tracer{
 
         match event {
             Event::Step(trace) =>  {
-                // println!("Step: {:?}", trace);
+                 // println!("Step: {:?}", trace);
                 self.step(&trace);
                 self.vm.step(&trace);
             },
