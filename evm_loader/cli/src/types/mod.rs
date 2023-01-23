@@ -1,4 +1,4 @@
-pub mod ec;
-
+#[allow(clippy::all)]
+pub mod trace;
 
 type Bytes = Vec<u8>;

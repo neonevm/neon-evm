@@ -129,7 +129,7 @@ macro_rules! trx_params {
                 .arg(
                     Arg::with_name("gas_limit")
                         .short("G")
-                        .long("gas_slimit")
+                        .long("gas_limit")
                         .value_name("GAS_LIMIT")
                         .takes_value(true)
                         .required(false)
