@@ -1,5 +1,5 @@
 use std::{
-    alloc::{Layout, alloc_zeroed, realloc, dealloc},
+    alloc::{Layout, GlobalAlloc},
     cell::Cell,
 };
 use solana_program::program_memory::{sol_memset, sol_memcpy};
@@ -26,7 +26,7 @@ impl Memory {
     pub fn with_capacity(capacity: usize) -> Self {
         unsafe {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
-            let data = alloc_zeroed(layout);
+            let data = crate::allocator::EVM.alloc_zeroed(layout);
 
             Self { data, capacity, size: Cell::new(0) }
         }
@@ -56,7 +56,7 @@ impl Memory {
 
         self.data = unsafe {
             let old_layout = Layout::from_size_align_unchecked(self.capacity, MEMORY_ALIGN);
-            realloc(self.data, old_layout, size)
+            crate::allocator::EVM.realloc(self.data, old_layout, size)
         };
 
         let slice = unsafe { core::slice::from_raw_parts_mut(self.data, size) };
@@ -203,7 +203,7 @@ impl Drop for Memory {
     fn drop(&mut self) {
         unsafe {
             let layout = Layout::from_size_align_unchecked(self.capacity, MEMORY_ALIGN);
-            dealloc(self.data, layout);
+            crate::allocator::EVM.dealloc(self.data, layout);
         }
     }
 }

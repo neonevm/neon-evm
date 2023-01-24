@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     error::{Error, Result, build_revert_message}, 
-    types::Address,
+    types::Address, evm::Buffer,
 };
 
 #[derive(Eq, PartialEq)]
@@ -978,17 +978,17 @@ impl<B: Database> Machine<B> {
             value,
             code_address: None,
         };
-        let init_code = self.memory.read(offset, length)?.to_vec();
+        let init_code = Buffer::new(self.memory.read(offset, length)?);
 
         tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: init_code.clone()
+            context, code: init_code.to_vec()
         });
 
         self.fork(
             Reason::Create,
             context,
             init_code,
-            Vec::new(),
+            Buffer::empty(),
             None
         );
         
@@ -1014,7 +1014,7 @@ impl<B: Database> Machine<B> {
             self.stack.discard()?; // return_length
             self.stack.push_bool(false)?; // fail
 
-            self.return_data.clear();
+            self.return_data = Buffer::empty();
 
             return Ok(Action::Continue);
         }
@@ -1025,7 +1025,7 @@ impl<B: Database> Machine<B> {
             value,
             code_address: Some(address),
         };
-        let call_data = self.memory.read(args_offset, args_length)?.to_vec();
+        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
         let precompile_result = self.opcode_call_precompile_impl(
             backend, &context, &address, &call_data, false
@@ -1040,7 +1040,7 @@ impl<B: Database> Machine<B> {
         let execution_code = backend.code(&address)?;
 
         tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.clone()
+            context, code: execution_code.to_vec()
         });
 
         self.fork(
@@ -1069,7 +1069,7 @@ impl<B: Database> Machine<B> {
             self.stack.discard()?; // return_length
             self.stack.push_bool(false)?; // fail
 
-            self.return_data.clear();
+            self.return_data = Buffer::empty();
 
             return Ok(Action::Continue);
         }
@@ -1080,7 +1080,7 @@ impl<B: Database> Machine<B> {
             value,
             code_address: Some(address),
         };
-        let call_data = self.memory.read(args_offset, args_length)?.to_vec();
+        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
         
         let precompile_result = self.opcode_call_precompile_impl(
             backend, &context, &address, &call_data, false
@@ -1095,7 +1095,7 @@ impl<B: Database> Machine<B> {
         let execution_code = backend.code(&address)?;
 
         tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.clone()
+            context, code: execution_code.to_vec()
         });
 
         self.fork(
@@ -1120,7 +1120,7 @@ impl<B: Database> Machine<B> {
         // let return_length = self.stack.pop_usize()?;
 
         let context = self.context;
-        let call_data = self.memory.read(args_offset, args_length)?.to_vec();
+        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
         let precompile_result = self.opcode_call_precompile_impl(
             backend, &context, &address, &call_data, false
@@ -1134,7 +1134,7 @@ impl<B: Database> Machine<B> {
         let execution_code = backend.code(&address)?;
 
         tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.clone()
+            context, code: execution_code.to_vec()
         });
 
         self.fork(
@@ -1164,7 +1164,7 @@ impl<B: Database> Machine<B> {
             value: U256::ZERO,
             code_address: Some(address),
         };
-        let call_data = self.memory.read(args_offset, args_length)?.to_vec();
+        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
         let precompile_result = self.opcode_call_precompile_impl(
             backend, &context, &address, &call_data, false
@@ -1178,7 +1178,7 @@ impl<B: Database> Machine<B> {
         let execution_code = backend.code(&address)?;
 
         tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.clone()
+            context, code: execution_code.to_vec()
         });
 
         self.fork(
@@ -1216,7 +1216,7 @@ impl<B: Database> Machine<B> {
         });
 
         if let Some((result, status)) = result {
-            self.return_data = result;
+            self.return_data = Buffer::new(&result);
 
             let return_offset = self.stack.pop_usize()?;
             let return_length = self.stack.pop_usize()?;
@@ -1235,12 +1235,12 @@ impl<B: Database> Machine<B> {
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let return_data = self.memory.read(offset, length)?.to_vec();
+        let return_data = Buffer::new(self.memory.read(offset, length)?);
 
         if self.parent.is_none() {
             match self.reason {
                 Reason::Call => {
-                    return Ok(Action::Return(return_data))
+                    return Ok(Action::Return(return_data.to_vec()))
                 },
                 Reason::Create => {
                     backend.set_code(self.context.contract, return_data)?;
@@ -1253,7 +1253,7 @@ impl<B: Database> Machine<B> {
             gas_used: 0_u64
         });
         tracing_event!(super::tracing::Event::EndVM { 
-            status: super::ExitStatus::Return(return_data.clone())
+            status: super::ExitStatus::Return(return_data.to_vec())
         });
 
         let returned = self.join();
@@ -1286,19 +1286,19 @@ impl<B: Database> Machine<B> {
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let return_data = self.memory.read(offset, length)?.to_vec();
+        let return_data = Buffer::new(self.memory.read(offset, length)?);
 
         backend.revert_snapshot()?;
 
         if self.parent.is_none() {
-            return Ok(Action::Revert(return_data));
+            return Ok(Action::Revert(return_data.to_vec()));
         }
 
         tracing_event!(super::tracing::Event::EndStep {
             gas_used: 0_u64
         });
         tracing_event!(super::tracing::Event::EndVM { 
-            status: super::ExitStatus::Revert(return_data.clone())
+            status: super::ExitStatus::Revert(return_data.to_vec())
         });
 
         let returned = self.join();
@@ -1358,7 +1358,7 @@ impl<B: Database> Machine<B> {
                 self.memory.write_buffer(return_offset, return_length, &[], 0)?;
                 self.stack.push_bool(true)?; // success
 
-                self.return_data = vec![];
+                self.return_data = Buffer::empty();
             },
             Reason::Create => {
                 self.stack.push_zero()?;
@@ -1391,7 +1391,7 @@ impl<B: Database> Machine<B> {
             self.memory.write_buffer(return_offset, return_length, &[], 0)?;
             self.stack.push_bool(true)?; // success
 
-            self.return_data = vec![];
+            self.return_data = Buffer::empty();
         }
 
         backend.commit_snapshot()?;
