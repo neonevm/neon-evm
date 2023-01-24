@@ -3,6 +3,7 @@ use solana_sdk::{
     program_stubs::SyscallStubs, 
     sysvar::rent::Rent
 };
+use log::info;
 
 use crate::{errors::NeonCliError, Config,};
 
@@ -29,5 +30,23 @@ impl SyscallStubs for Stubs {
         }
 
         0
+    }
+
+    fn sol_log(&self, message: &str) {
+        info!("{}", message);
+    }
+
+    fn sol_log_data(&self, fields: &[&[u8]]) {
+        let mut messages: Vec<String> = Vec::new();
+
+        for f in fields {
+            if let Ok(str) = String::from_utf8(f.to_vec()) {
+                messages.push(str);
+            } else {
+                messages.push(hex::encode(f));
+            }
+        }
+
+        info!("Program Data: {}", messages.join(" "));
     }
 }

@@ -25,12 +25,6 @@ pub enum Action {
         #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
-    EvmLog {
-        address: Address,
-        topics: Vec<[u8; 32]>,
-        #[serde(with = "serde_bytes")]
-        data: Vec<u8>,
-    },
     EvmSetStorage {
         address: Address,
         #[serde(with = "ethnum::serde::bytes::le")]

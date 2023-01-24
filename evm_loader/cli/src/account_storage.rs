@@ -218,7 +218,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::NeonWithdraw { source, .. } => {
                     self.add_ethereum_account(&source, true);
                 },
-                Action::EvmLog { .. } => {},
                 Action::EvmSetStorage { address, index, value } => {
                     if index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
