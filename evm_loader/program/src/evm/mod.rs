@@ -97,26 +97,17 @@ pub struct Machine<B: Database> {
 }
 
 impl<B: Database> Machine<B> {
-    pub fn serialize_into<W>(mut self, writer: &mut W) -> Result<()> 
+    pub fn serialize_into<W>(self, writer: &mut W) -> Result<()> 
         where W: std::io::Write
     {
-        if self.context.code_address.is_some() {
-            // Execution code can be restored from the account
-            self.execution_code = Buffer::empty();
-        }
-
         bincode::serialize_into(writer, &self)
             .map_err(Error::from)
     }
 
-    pub fn deserialize_from(buffer: &mut &[u8], backend: &B) -> Result<Self> 
+    pub fn deserialize_from(buffer: &mut &[u8], _backend: &B) -> Result<Self> 
     {
-        let mut machine: Self = bincode::deserialize_from(buffer)?;
-        if let Some(code_address) = &machine.context.code_address {
-            machine.execution_code = backend.code(code_address)?;
-        }
-
-        Ok(machine)
+        bincode::deserialize_from(buffer)
+            .map_err(Error::from)
     }
 
 
