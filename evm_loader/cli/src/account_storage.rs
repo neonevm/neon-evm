@@ -19,7 +19,7 @@ use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
     config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
     executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
-    account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage},
+    account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, ether_storage::EthereumStorageAddress},
     account_storage::{AccountStorage}, evm::is_precompile_address,
     types::Address,
     gasometer::LAMPORTS_PER_SIGNATURE
@@ -223,8 +223,8 @@ impl<'a> EmulatorAccountStorage<'a> {
                     if index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
-                        let storage_account = EthereumStorage::solana_address(self, &address, &index);
-                        self.add_solana_account(storage_account, true);
+                        let storage_account = EthereumStorageAddress::new(self.program_id(), &address, &index);
+                        self.add_solana_account(*storage_account.pubkey(), true);
 
                         if self.storage(&address, &index) == [0_u8; 32] {
                             let metadata_size = EthereumStorage::SIZE;
@@ -448,7 +448,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let subindex = (index & 0xFF).as_u8();
             let index = index & !U256::new(0xFF);
             
-            let solana_address = EthereumStorage::solana_address(self, address, &index);
+            let solana_address = *EthereumStorageAddress::new(self.program_id(), address, &index).pubkey();
             debug!("read storage solana address {:?} - {:?}", address, solana_address);
 
             self.add_solana_account(solana_address, false);

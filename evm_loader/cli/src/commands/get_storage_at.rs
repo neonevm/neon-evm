@@ -1,11 +1,9 @@
 use std::convert::TryInto;
 
-use solana_sdk::{ pubkey::Pubkey };
-
 use ethnum::U256;
 
 use evm_loader::{
-    account::{EthereumStorage},
+    account::{EthereumStorage, ether_storage::EthereumStorageAddress},
     config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
     types::Address,
 };
@@ -35,14 +33,13 @@ pub fn execute(
                 let subindex = (*index & 0xFF).as_u8();
                 let index = *index & !U256::new(0xFF);
 
-                let seed = EthereumStorage::creation_seed(&index);
-                let address = Pubkey::create_with_seed(&solana_address, &seed, &config.evm_loader)?;
+                let address = EthereumStorageAddress::new(&config.evm_loader, &ether_address, &index);
 
-                if let Ok(mut account) = config.rpc_client.get_account(&address) {
+                if let Ok(mut account) = config.rpc_client.get_account(address.pubkey()) {
                     if solana_sdk::system_program::check_id(&account.owner) {
                         <[u8; 32]>::default()
                     } else {
-                        let account_info = account_info(&address, &mut account);
+                        let account_info = account_info(address.pubkey(), &mut account);
                         let storage = EthereumStorage::from_account(&config.evm_loader, &account_info)?;
                         if (storage.address != ether_address) || (storage.index != index) || (storage.generation != account_data.generation) {
                             <[u8; 32]>::default()
