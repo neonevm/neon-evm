@@ -7,6 +7,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
+use crate::account::ether_storage::EthereumStorageAddress;
 use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY, EthereumStorage};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::types::Address;
@@ -87,8 +88,8 @@ impl<'a> ProgramAccountStorage<'a> {
             return None;
         }
 
-        let solana_address = EthereumStorage::solana_address(self, &address, &index);
-        if let Some(&account) = self.solana_accounts.get(&solana_address) {
+        let storage_address = EthereumStorageAddress::new(self.program_id, &address, &index);
+        if let Some(&account) = self.solana_accounts.get(&storage_address.pubkey()) {
             assert!(solana_program::system_program::check_id(account.owner));
 
             empty_accounts.insert(key);
@@ -97,7 +98,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
         panic!(
             "Storage account {} {} (solana address {}) must be present in the transaction",
-            address, index, solana_address
+            address, index, storage_address.pubkey()
         );
     }
 
