@@ -34,10 +34,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn block_hash(&self, number: U256) -> [u8; 32] {
-        if self.clock.slot <= number.as_u64() {
+        let number = number.as_u64();
+
+        if (self.clock.slot - 1) <= number {
             return <[u8; 32]>::default();
         }
-        let slot = self.clock.slot - 1 - number.as_u64();
+        let slot = self.clock.slot - 1 - number;
 
         let slot_hashes_account = self
             .solana_accounts

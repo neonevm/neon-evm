@@ -379,15 +379,15 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_hash(&self, number: U256) -> [u8; 32] {
         info!("block_hash {}", number);
 
-        let number_u64 = number.as_u64();
+        let number = number.as_u64();
 
         self.add_solana_account(slot_hashes::ID, false);
 
-        if self.block_number <= number_u64 {
+        if (self.block_number - 1) <= number {
             return <[u8; 32]>::default();
         }
 
-        let slot = self.block_number - 1 - number_u64;
+        let slot = self.block_number - 1 - number;
         if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
             if let Ok(slot_hashes) = slot_hashes_account.deserialize_data::<SlotHashes>() {
                 return slot_hashes
