@@ -1,59 +1,154 @@
-#![allow(clippy::cast_possible_truncation)]
-
 use std::{
     alloc::Layout,
-    usize
+    ptr::NonNull, mem::{size_of, align_of}
 };
 
-use solana_program::entrypoint::HEAP_START_ADDRESS;
+use solana_program::{entrypoint::HEAP_START_ADDRESS};
+use static_assertions::const_assert_eq;
+use linked_list_allocator::Heap;
+
+const HEAP_SIZE: usize = 256 * 1024;
+
+#[allow(clippy::cast_possible_truncation)] // HEAP_START_ADDRESS < usize::max
+const BUMP_HEAP_START_ADDRESS: usize = HEAP_START_ADDRESS as usize;
+const BUMP_HEAP_SIZE: usize = 100 * 1024;
+const BUMP_HEAP_END_ADDRESS: usize = BUMP_HEAP_START_ADDRESS + BUMP_HEAP_SIZE;
+
+const EVM_HEAP_START_ADDRESS: usize = BUMP_HEAP_END_ADDRESS;
+const EVM_HEAP_SIZE: usize = HEAP_SIZE - BUMP_HEAP_SIZE;
+
+const_assert_eq!(EVM_HEAP_START_ADDRESS % align_of::<Heap>(), 0);
 
 
-pub struct BumpAllocator;
+#[inline]
+unsafe fn heap() -> &'static mut Heap {
+    const HEAP_PTR: *mut Heap = EVM_HEAP_START_ADDRESS as *mut Heap;
+    let heap = &mut *HEAP_PTR;
+
+    if heap.bottom().is_null() {
+        let start = (EVM_HEAP_START_ADDRESS + size_of::<Heap>()) as *mut u8;
+        let size = EVM_HEAP_SIZE - size_of::<Heap>();
+        heap.init(start, size);
+    }
+
+    heap
+}
+
+pub struct SolanaAllocator;
+
+unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        heap().allocate_first_fit(layout)
+            .map_or(core::ptr::null_mut(), NonNull::as_ptr)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        heap().deallocate(NonNull::new_unchecked(ptr), layout);
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        let ptr = self.alloc(layout);
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "solana")] {
+                solana_program::syscalls::sol_memset_(ptr, 0, layout.size() as u64);
+            } else {
+                std::ptr::write_bytes(ptr, 0, layout.size());
+            }
+        }
+
+        ptr
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+        let new_ptr = self.alloc(new_layout);
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "solana")] {
+                solana_program::syscalls::sol_memcpy_(new_ptr, ptr, std::cmp::min(layout.size(), new_size) as u64);
+            } else {
+                std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size))
+            }
+        }
+
+        self.dealloc(ptr, layout);
+
+        new_ptr
+    }
+}
+
+
+struct BumpAllocator;
 
 impl BumpAllocator {
+    const POSITION_PTR: *mut usize = BUMP_HEAP_START_ADDRESS as *mut usize;
+
     #[allow(dead_code)]
     pub fn occupied() -> usize {
-        const POSITION_PTR: *const usize = HEAP_START_ADDRESS as *const usize;
-
-        let position = unsafe { core::ptr::read(POSITION_PTR) };
+        let position = unsafe { core::ptr::read(Self::POSITION_PTR) };
         if position == 0 {
             0_usize
         } else {
-            position - (HEAP_START_ADDRESS as usize)
+            position - BUMP_HEAP_START_ADDRESS
         }
     }
 }
 
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
-    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        const POSITION_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
-
-        let mut position = core::ptr::read(POSITION_PTR);
+        let mut position = core::ptr::read(Self::POSITION_PTR);
         if position == 0 {
             // First time, set starting position
-            position = (HEAP_START_ADDRESS as usize) + core::mem::size_of::<usize>();
+            position = BUMP_HEAP_START_ADDRESS + core::mem::size_of::<usize>();
         }
 
         let alignment = layout.align() - 1; // layout.align() is power of 2
 
         // round up to multiple of alignment
-        position = position.saturating_add(alignment);
-        position &= !alignment;
+        position = (position + alignment) & !alignment;
 
         let top = position.saturating_add(layout.size());
-        core::ptr::write(POSITION_PTR, top);
-
-        position as *mut u8
+        if top < BUMP_HEAP_END_ADDRESS {
+            core::ptr::write(Self::POSITION_PTR, top);
+            position as *mut u8
+        } else {
+            std::ptr::null_mut()
+        }
     }
 
-    #[inline]
     unsafe fn dealloc(&self, _: *mut u8, _layout: Layout) {
         // I'm a bump allocator, I don't free
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        self.alloc(layout)
+
+        // Memory is zeroed by Solana
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+        let new_ptr = self.alloc(new_layout);
+
+        std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
+
+        new_ptr
     }
 }
 
 
-#[cfg(target_arch = "bpf")]
-#[global_allocator]
-static mut A: BumpAllocator = BumpAllocator;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "solana")] {
+        #[global_allocator]
+        static mut DEFAULT: BumpAllocator = BumpAllocator;
+        pub static mut EVM: SolanaAllocator = SolanaAllocator;
+    } else {
+        use std::alloc::System;
+
+        #[global_allocator]
+        static mut DEFAULT: System = System;
+        pub static mut EVM: System = System;
+    }
+}

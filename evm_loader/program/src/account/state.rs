@@ -1,7 +1,8 @@
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-use evm::{H160, U256};
+use ethnum::U256;
 use solana_program::pubkey::Pubkey;
 use super::Packable;
+use crate::types::Address;
 
 /// Storage data account to store execution metainfo between steps for iterative execution
 #[derive(Debug)]
@@ -9,7 +10,7 @@ pub struct Data {
     pub owner: Pubkey,
     pub transaction_hash: [u8; 32],
     /// Ethereum transaction caller address
-    pub caller: H160,
+    pub caller: Address,
     /// Ethereum transaction gas limit
     pub gas_limit: U256,
     /// Ethereum transaction gas price
@@ -57,10 +58,10 @@ impl Packable for Data {
         Self {
             owner: Pubkey::new_from_array(*owner),
             transaction_hash: *hash,
-            caller: H160::from(*caller),
-            gas_limit: U256::from_little_endian(gas_limit),
-            gas_price: U256::from_little_endian(gas_price),
-            gas_used: U256::from_little_endian(gas_used),
+            caller: Address::from(*caller),
+            gas_limit: U256::from_le_bytes(*gas_limit),
+            gas_price: U256::from_le_bytes(*gas_price),
+            gas_used: U256::from_le_bytes(*gas_used),
             operator: Pubkey::new_from_array(*operator),
             slot: u64::from_le_bytes(*slot),
             accounts_len: usize::from_le_bytes(*accounts_len),
@@ -85,10 +86,10 @@ impl Packable for Data {
 
         owner.copy_from_slice(self.owner.as_ref());
         hash.copy_from_slice(&self.transaction_hash);
-        *caller = self.caller.to_fixed_bytes();
-        self.gas_limit.to_little_endian(gas_limit);
-        self.gas_price.to_little_endian(gas_price);
-        self.gas_used.to_little_endian(gas_used);
+        *caller = self.caller.into();
+        *gas_limit = self.gas_limit.to_le_bytes();
+        *gas_price = self.gas_price.to_le_bytes();
+        *gas_used = self.gas_used.to_le_bytes();
         operator.copy_from_slice(self.operator.as_ref());
         *slot = self.slot.to_le_bytes();
         *accounts_len = self.accounts_len.to_le_bytes();

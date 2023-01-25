@@ -1,46 +1,87 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use evm::{H160, H256, U256};
-use solana_program::pubkey::Pubkey;
+use ethnum::U256;
+use serde::{Deserialize, Serialize};
+use solana_program::{instruction::AccountMeta, pubkey::Pubkey};
 
-use super::cache::AccountMeta;
+use crate::types::Address;
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum Action {
     ExternalInstruction {
         program_id: Pubkey,
-        instruction: Vec<u8>,
         accounts: Vec<AccountMeta>,
+        #[serde(with = "serde_bytes")]
+        data: Vec<u8>,
         seeds: Vec<Vec<u8>>,
-        allocate: usize
+        allocate: usize,
     },
     NeonTransfer {
-        source: H160,
-        target: H160,
+        source: Address,
+        target: Address,
+        #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
     NeonWithdraw {
-        source: H160,
+        source: Address,
+        #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
     EvmLog {
-        address: H160,
-        topics: Vec<H256>,
+        address: Address,
+        topics: Vec<[u8; 32]>,
+        #[serde(with = "serde_bytes")]
         data: Vec<u8>,
     },
     EvmSetStorage {
-        address: H160,
-        key: U256,
-        value: U256,
+        address: Address,
+        #[serde(with = "ethnum::serde::bytes::le")]
+        index: U256,
+        #[serde(with = "serde_bytes_32")]
+        value: [u8; 32],
     },
     EvmIncrementNonce {
-        address: H160,
+        address: Address,
     },
     EvmSetCode {
-        address: H160,
-        code: Vec<u8>,
-        valids: Vec<u8>,
+        address: Address,
+        code: crate::evm::Buffer,
     },
     EvmSelfDestruct {
-        address: H160,
+        address: Address,
     },
+}
+
+mod serde_bytes_32 {
+    pub fn serialize<S>(value: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_bytes(value)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
+    where
+        D: serde::Deserializer<'de>
+    {
+        struct BytesVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for BytesVisitor
+        {
+            type Value = [u8; 32];
+        
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("[u8; 32]")
+            }
+        
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                value
+                    .try_into()
+                    .map_err(|_| serde::de::Error::invalid_length(value.len(), &self))
+            }
+        }
+
+        deserializer.deserialize_bytes(BytesVisitor)
+    }
 }

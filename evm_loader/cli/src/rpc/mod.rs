@@ -1,22 +1,52 @@
-pub mod db;
+mod db_call_client;
+mod db_trx_client;
+mod validator_client;
 
 use solana_client::{
-    rpc_client::RpcClient,
-    client_error::{
-        Result as ClientResult,
-    },
+    client_error::{Result as ClientResult,},
     rpc_config::{RpcTransactionConfig, RpcSendTransactionConfig},
-    rpc_response::{RpcResult, Response, RpcResponseContext},
-    client_error::{ClientErrorKind, ClientError}
+    rpc_response::RpcResult,
 };
 use solana_sdk::{
     account::Account, pubkey::Pubkey, commitment_config::CommitmentConfig, clock::{UnixTimestamp, Slot},
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use crate::rpc::db::PostgresClient;
+use crate::commands::TxParams;
 use std::any::Any;
+use tokio::task::block_in_place;
 
+use tokio_postgres::{ connect, Client};
+use postgres::{ NoTls};
+use serde::{Serialize, Deserialize };
+
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct DbConfig{
+    pub tracer_host: String,
+    pub tracer_port: String,
+    pub tracer_database: String,
+    pub tracer_user: String,
+    pub tracer_password: String,
+    pub indexer_host: String,
+    pub indexer_port: String,
+    pub indexer_database: String,
+    pub indexer_user: String,
+    pub indexer_password: String,
+}
+
+#[derive(Debug)]
+pub struct CallDbClient {
+    pub slot: u64,
+    tracer_db: Client,
+}
+
+#[derive(Debug)]
+pub struct TrxDbClient {
+    pub hash: [u8; 32],
+    tracer_db: Client,
+    indexer_db: Client,
+}
 
 pub trait Rpc{
     fn commitment(&self) -> CommitmentConfig;
@@ -41,185 +71,66 @@ pub trait Rpc{
         config: RpcSendTransactionConfig
     ) -> ClientResult<Signature>;
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>;
+    fn get_transaction_data(&self) -> ClientResult<TxParams>;
     fn as_any(&self) -> &dyn Any;
-
 }
 
-impl Rpc for RpcClient{
-    fn commitment(&self) -> CommitmentConfig {
-        self.commitment()
+pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {
+    let authority= format!(
+        "host={} port={} dbname={} user={} password={}", host, port, db, user, pass
+    );
+
+    let mut attempt = 0;
+    let mut result = None;
+
+    while attempt < 3 {
+        result = block(|| async {
+            connect(&authority, NoTls).await
+        }).ok();
+        if result.is_some() {
+            break;
+        }
+        attempt += 1;
     }
 
-    fn confirm_transaction_with_spinner(&self, signature: &Signature, recent_blockhash: &Hash, commitment_config: CommitmentConfig) -> ClientResult<()>{
-        self.confirm_transaction_with_spinner(signature, recent_blockhash, commitment_config)
-    }
+    let (client, connection) = result.expect("error to set DB connection");
 
-    fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
-        self.get_account(key)
-    }
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {}", e);
+        }
+    });
+    client
+}
 
-    fn get_account_with_commitment(&self, key: &Pubkey, commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
-        self.get_account_with_commitment(key, commitment)
-    }
-
-    fn get_account_data(&self, key: &Pubkey)-> ClientResult<Vec<u8>>{
-        Ok(self.get_account(key)?.data)
-    }
-
-    fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>{
-        self.get_block(slot)
-    }
-
-    fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>{
-        self.get_block_time(slot)
-    }
-
-    fn get_latest_blockhash(&self) -> ClientResult<Hash>{
-        self.get_latest_blockhash()
-    }
-
-    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64>{
-        self.get_minimum_balance_for_rent_exemption(data_len)
-    }
-
-    fn get_slot(&self) -> ClientResult<Slot>{
-        self.get_slot()
-    }
-
-    fn get_signature_statuses(&self, signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>> {
-        self.get_signature_statuses(signatures)
-    }
-
-    fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>{
-        self.get_transaction_with_config(signature, config)
-    }
-
-    fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature>{
-        self.send_transaction(transaction)
-    }
-
-    fn send_and_confirm_transaction_with_spinner(&self, transaction: &Transaction) -> ClientResult<Signature>{
-        self.send_and_confirm_transaction_with_spinner(transaction)
-    }
-
-    fn send_and_confirm_transaction_with_spinner_and_commitment(&self, transaction: &Transaction, commitment: CommitmentConfig) -> ClientResult<Signature>{
-        self.send_and_confirm_transaction_with_spinner_and_commitment(transaction, commitment)
-    }
-
-    fn send_and_confirm_transaction_with_spinner_and_config(
-        &self,
-        transaction: &Transaction,
-        commitment: CommitmentConfig,
-        config: RpcSendTransactionConfig
-    ) -> ClientResult<Signature>{
-        self.send_and_confirm_transaction_with_spinner_and_config(transaction, commitment, config)
-    }
-
-    fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>{
-        self.get_latest_blockhash_with_commitment(commitment)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+pub fn block<F, Fu, R>(f: F) -> R
+    where
+        F: FnOnce() -> Fu,
+        Fu: std::future::Future<Output = R>,
+{
+    block_in_place(|| {
+        let handle = tokio::runtime::Handle::current();
+        handle.block_on(f())
+    })
 }
 
 
-impl Rpc for PostgresClient {
-    fn commitment(&self) -> CommitmentConfig {
-        CommitmentConfig::default()
-    }
-
-    fn confirm_transaction_with_spinner(&self, _signature: &Signature, _recent_blockhash: &Hash, _commitment_config: CommitmentConfig) -> ClientResult<()>{
-        Err(ClientErrorKind::Custom("confirm_transaction_with_spinner() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
-        self.get_account_at_slot(key)
-            .map_err(|_| ClientError::from(ClientErrorKind::Custom("load account error".to_string())) )?
-            .ok_or_else(|| ClientError::from(ClientErrorKind::Custom(format!("account not found {}", key))))
-    }
-
-    fn get_account_with_commitment(&self, key: &Pubkey, _commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
-        let account= self.get_account_at_slot(key)
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("load account error".to_string())))?;
-        let context = RpcResponseContext{slot: self.slot, api_version: None};
-        Ok(Response {context, value: account})
-    }
-
-    fn get_account_data(&self, key: &Pubkey)-> ClientResult<Vec<u8>>{
-        Ok(self.get_account(key)?.data)
-    }
-
-    fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>{
-        let hash = self.get_block_hash(slot)
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_block_hash error".to_string())))?;
-
-        Ok(EncodedConfirmedBlock{
-            previous_blockhash: String::default(),
-            blockhash: hash,
-            parent_slot: u64::default(),
-            transactions: vec![],
-            rewards: vec![],
-            block_time: None,
-            block_height: None,
-        })
-    }
-
-    fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>{
-        self.get_block_time(slot)
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_block_time error".to_string())))
-    }
-
-    fn get_latest_blockhash(&self) -> ClientResult<Hash>{
-        let blockhash =  self.get_latest_blockhash()
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash error".to_string())))?;
-        blockhash.parse::<Hash>()
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash parse error".to_string())))
-    }
-
-    fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64>{
-        Err(ClientErrorKind::Custom("get_minimum_balance_for_rent_exemption() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn get_slot(&self) -> ClientResult<Slot>{
-        Ok(self.slot)
-    }
-
-    fn get_signature_statuses(&self, _signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>> {
-        Err(ClientErrorKind::Custom("get_signature_statuses() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn get_transaction_with_config(&self, _signature: &Signature, _config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>{
-        Err(ClientErrorKind::Custom("get_transaction_with_config() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn send_transaction(&self, _transaction: &Transaction) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_transaction() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn send_and_confirm_transaction_with_spinner(&self, _transaction: &Transaction) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_and_confirm_transaction_with_spinner() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn send_and_confirm_transaction_with_spinner_and_commitment(&self, _transaction: &Transaction, _commitment: CommitmentConfig) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_and_confirm_transaction_with_spinner_and_commitment() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn send_and_confirm_transaction_with_spinner_and_config(
-        &self,
-        _transaction: &Transaction,
-        _commitment: CommitmentConfig,
-        _config: RpcSendTransactionConfig
-    ) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_and_confirm_transaction_with_spinner_and_config() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn get_latest_blockhash_with_commitment(&self, _commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>{
-        Err(ClientErrorKind::Custom("get_latest_blockhash_with_commitment() not implemented for rpc_db client".to_string()).into())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+macro_rules! e {
+    ($mes:expr) => {
+        ClientError::from(
+            ClientErrorKind::Custom(format!("{}", $mes))
+        )
+    };
+    ($mes:expr, $error:expr) => {
+        ClientError::from(
+            ClientErrorKind::Custom(format!("{}: {:?}", $mes, $error))
+        )
+    };
+    ($mes:expr, $error:expr, $arg:expr) => {
+        ClientError::from(
+            ClientErrorKind::Custom(format!("{}, {:?}: {:?}", $mes, $error, $arg))
+        )
+    };
 }
+pub(crate) use e;
+

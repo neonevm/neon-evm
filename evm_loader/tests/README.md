@@ -15,7 +15,7 @@ py.test ./ -s -v
 
 Moreover, we can use additional command line keys:
 
-1. --operator-key - path to operator key (by default ~/.config/solana/id.json)
+1. --operator-keys - path to 2 comma separated operator keys (by default ~/.config/solana/id.json,~/.config/solana/id2.json)
 
 Also we can configure some variables from environment variables:
 
@@ -102,4 +102,4 @@ func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uin
 data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
 ```
 
-uint8 parameters must be 64 bytes long.
+uint8 parameters must be 64 bytes long

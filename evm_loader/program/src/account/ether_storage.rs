@@ -1,14 +1,13 @@
-use crate::account_storage::AccountStorage;
-
-use super::{program, EthereumStorage, Operator, Packable};
+use crate::{types::Address};
+use super::{program, EthereumStorage, Operator, Packable, EthereumAccount};
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use evm::{U256, H160};
-use solana_program::{program_error::ProgramError, rent::Rent, sysvar::Sysvar, pubkey::Pubkey};
+use ethnum::U256;
+use solana_program::{program_error::ProgramError, rent::Rent, sysvar::Sysvar, pubkey::Pubkey, account_info::AccountInfo};
 
 /// Ethereum storage data account
 #[derive(Default, Debug)]
 pub struct Data {
-    pub address: H160,
+    pub address: Address,
     pub generation: u32,
     pub index: U256,
 }
@@ -26,9 +25,9 @@ impl Packable for Data {
         let (address, generation, index) = array_refs![data, 20, 4, 32];
 
         Self {
-            address: H160(*address),
+            address: Address(*address),
             generation: u32::from_le_bytes(*generation),
-            index: U256::from_little_endian(index),
+            index: U256::from_le_bytes(*index),
         }
     }
 
@@ -37,52 +36,72 @@ impl Packable for Data {
         let data = array_mut_ref![output, 0, Data::SIZE];
         let (address, generation, index) = mut_array_refs![data, 20, 4, 32];
         
-        *address = *self.address.as_fixed_bytes();
+        *address = *self.address.as_bytes();
         *generation = self.generation.to_le_bytes();
-        self.index.to_little_endian(index);
+        *index = self.index.to_le_bytes();
+    }
+}
+
+pub struct EthereumStorageAddress {
+    seed: [u8; 32],
+    pubkey: Pubkey,
+}
+
+impl EthereumStorageAddress {
+    #[must_use]
+    fn make_seed(index: &U256) -> [u8; 32] {
+        let mut buffer = [0_u8; 32];
+
+        let index_bytes = index.to_be_bytes();
+        let index_bytes = &index_bytes[3..31];
+
+        for i in 0..28 {
+            buffer[i] = index_bytes[i] & 0x7F;
+        }
+
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..7 {
+            buffer[28] |= (index_bytes[i] & 0x80) >> (1 + i);
+        }
+        for i in 0..7 {
+            buffer[29] |= (index_bytes[7 + i] & 0x80) >> (1 + i);
+        }
+        for i in 0..7 {
+            buffer[30] |= (index_bytes[14 + i] & 0x80) >> (1 + i);
+        }
+        for i in 0..7 {
+            buffer[31] |= (index_bytes[21 + i] & 0x80) >> (1 + i);
+        }
+
+        buffer
+    }
+
+    #[must_use]
+    pub fn new(program_id: &Pubkey, address: &Address, index: &U256) -> Self {
+        let (base, _) = address.find_solana_address(program_id);
+
+        let seed_buffer = Self::make_seed(index);
+        let seed = unsafe { std::str::from_utf8_unchecked(&seed_buffer) };
+
+        let pubkey = Pubkey::create_with_seed(&base, seed, program_id).unwrap();
+
+        Self { seed: seed_buffer, pubkey }
+    }
+
+    #[must_use]
+    pub fn seed(&self) -> &str {
+        unsafe { std::str::from_utf8_unchecked(&self.seed) }
+    }
+
+    #[must_use]
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.pubkey
     }
 }
 
 impl<'a> EthereumStorage<'a> {
     #[must_use]
-    pub fn creation_seed(index: &U256) -> String {
-        let mut index_bytes = [0_u8; 32];
-        index.to_big_endian(&mut index_bytes);
-
-        let index_bytes = &index_bytes[3..31];
-
-        let mut seed = vec![0_u8; 32];
-        for i in 0..28 {
-            seed[i] = index_bytes[i] & 0x7F;
-        }
-
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..7 {
-            seed[28] |= (index_bytes[i] & 0x80) >> (1 + i);
-        }
-        for i in 0..7 {
-            seed[29] |= (index_bytes[7 + i] & 0x80) >> (1 + i);
-        }
-        for i in 0..7 {
-            seed[30] |= (index_bytes[14 + i] & 0x80) >> (1 + i);
-        }
-        for i in 0..7 {
-            seed[31] |= (index_bytes[21 + i] & 0x80) >> (1 + i);
-        }
-
-        String::from_utf8(seed).unwrap()
-    }
-
-    #[must_use]
-    pub fn solana_address(backend: &dyn AccountStorage, address: &H160, index: &U256) -> Pubkey {
-        let (base, _) = backend.solana_address(address);
-        let seed = Self::creation_seed(index);
-
-        Pubkey::create_with_seed(&base, &seed, backend.program_id()).unwrap()
-    }
-
-    #[must_use]
-    pub fn get(&self, subindex: u8) -> U256 {
+    pub fn get(&self, subindex: u8) -> [u8; 32] {
         let data = self.info.data.borrow();
         let data = &data[Self::SIZE..];
 
@@ -91,17 +110,16 @@ impl<'a> EthereumStorage<'a> {
                 continue;
             }
 
-            let buffer = &chunk[1..];
-            return U256::from_big_endian_fast(buffer);
+            return chunk[1..].try_into().unwrap();
         }
 
-        U256::zero()
+        [0_u8; 32]
     }
 
     pub fn set(
         &mut self,
         subindex: u8,
-        value: U256,
+        value: &[u8; 32],
         operator: &Operator<'a>,
         system: &program::System<'a>,
     ) -> Result<(), ProgramError> {
@@ -114,8 +132,7 @@ impl<'a> EthereumStorage<'a> {
                     continue;
                 }
 
-                let buffer = &mut chunk[1..];
-                value.into_big_endian_fast(buffer);
+                chunk[1..].copy_from_slice(value);
 
                 return Ok(());
             }
@@ -137,9 +154,43 @@ impl<'a> EthereumStorage<'a> {
         let chunk = &mut data[chunk_start..];
 
         chunk[0] = subindex;
-        value.into_big_endian_fast(&mut chunk[1..]);
+        chunk[1..].copy_from_slice(value);
 
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create(
+        contract: &EthereumAccount<'a>,
+        storage_account: &'a AccountInfo<'a>,
+        storage_address: &EthereumStorageAddress,
+        index: U256,
+        subindex: u8,
+        value: &[u8; 32],
+        operator: &Operator<'a>,
+        system: &program::System<'a>,
+    ) -> Result<Self, ProgramError> {
+        let space = Self::SIZE + 1 + 32;
+
+        system.create_account_with_seed(
+            operator, contract, contract.info.owner, 
+            storage_account, storage_address.seed(), 
+            space
+        )?;
+
+        let storage = Self::init(storage_account, Data {
+            address: contract.address,
+            generation: contract.generation,
+            index,
+        })?;
+
+        let mut data = storage_account.data.borrow_mut();
+        let data = &mut data[Self::SIZE..];
+
+        data[0] = subindex;
+        data[1..].copy_from_slice(value);
+
+        Ok(storage)
     }
 
     pub fn clear(

@@ -1,7 +1,6 @@
 use std::cell::RefMut;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
-use evm::H160;
 
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
@@ -15,7 +14,6 @@ pub use crate::config::ACCOUNT_SEED_VERSION;
 pub use incinerator::Incinerator;
 pub use operator::Operator;
 pub use treasury::{MainTreasury, Treasury};
-use crate::account::program::System;
 
 mod treasury;
 mod operator;
@@ -143,63 +141,6 @@ where
         parts.remaining.fill(0);
 
         Ok(Self { dirty: false, data, info })
-    }
-
-    pub fn create_account(
-        system_program: &System<'a>,
-        program_id: &Pubkey,
-        operator: &Operator<'a>,
-        address: &H160,
-        info: &'a AccountInfo<'a>,
-        bump_seed: u8,
-        space: usize,
-    ) -> ProgramResult {
-        if space < EthereumAccount::SIZE {
-            return Err!(
-                ProgramError::AccountDataTooSmall;
-                "Account {} - account space must be not less than minimal size of {} bytes",
-                address,
-                EthereumAccount::SIZE
-            )
-        }
-
-        let program_seeds = &[
-            &[ACCOUNT_SEED_VERSION],
-            address.as_bytes(),
-            &[bump_seed],
-        ];
-        system_program.create_pda_account(
-            program_id,
-            operator,
-            info,
-            program_seeds,
-            space,
-        )?;
-
-        Ok(())
-    }
-
-    pub fn create_and_init_account(
-        system_program: &System<'a>,
-        program_id: &Pubkey,
-        operator: &Operator<'a>,
-        address: H160,
-        info: &'a AccountInfo<'a>,
-        bump_seed: u8,
-        space: usize,
-    ) -> ProgramResult {
-        Self::create_account(system_program, program_id, operator, &address, info, bump_seed, space)?;
-
-        EthereumAccount::init(
-            info,
-            ether_account::Data {
-                address,
-                bump_seed,
-                ..Default::default()
-            },
-        )?;
-
-        Ok(())
     }
 
     /// # Safety

@@ -16,7 +16,6 @@ use solana_program::{
 use crate::{
     instruction,
     instruction::EvmInstruction,
-    allocator::BumpAllocator,
 };
 
 
@@ -41,7 +40,7 @@ fn process_instruction<'a>(
     let (tag, instruction) = instruction_data.split_first()
         .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Invalid instruction - {:?}", instruction_data))?;
 
-    let result = match EvmInstruction::parse(tag)? {
+    match EvmInstruction::parse(tag)? {
         EvmInstruction::HolderCreate => {
             instruction::account_holder_create::process(program_id, accounts, instruction)
         }
@@ -59,15 +58,19 @@ fn process_instruction<'a>(
         }
         EvmInstruction::TransactionExecuteFromInstruction => {
             instruction::transaction_execute_from_instruction::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::TransactionStepFromInstruction => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::TransactionStepFromAccount => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::TransactionStepFromAccountNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::CreateAccountV03 => {
             instruction::account_create::process(program_id, accounts, instruction)
@@ -78,8 +81,5 @@ fn process_instruction<'a>(
         EvmInstruction::CreateMainTreasury => {
             instruction::create_main_treasury::process(program_id, accounts, instruction)
         }
-    };
-
-    solana_program::msg!("Total memory occupied: {}", BumpAllocator::occupied());
-    result
+    }
 }
