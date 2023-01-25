@@ -36,10 +36,9 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn block_hash(&self, number: U256) -> [u8; 32] {
         let number = number.as_u64();
 
-        if (self.clock.slot - 1) <= number {
+        if self.clock.slot <= number {
             return <[u8; 32]>::default();
         }
-        let slot = self.clock.slot - 1 - number;
 
         let slot_hashes_account = self
             .solana_accounts
@@ -55,11 +54,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         for i in 0..len {
             let offset = i * 40;
             let slot_bytes = &slot_hashes_data[offset..][..8];
-            if slot.to_le_bytes() == slot_bytes {
+            if number.to_le_bytes() == slot_bytes {
                 return slot_hashes_data[(offset + 8)..][..32].try_into().unwrap();
             }
         }
-        generate_fake_block_hash(slot)
+        generate_fake_block_hash(number)
     }
 
     fn exists(&self, address: &Address) -> bool {

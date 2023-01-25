@@ -387,21 +387,20 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             return <[u8; 32]>::default();
         }
 
-        let slot = self.block_number - 1 - number;
         if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
             if let Ok(slot_hashes) = slot_hashes_account.deserialize_data::<SlotHashes>() {
                 return slot_hashes
-                    .get(&slot)
-                    .map_or_else(|| generate_fake_block_hash(slot), |x| x.to_bytes());
+                    .get(&number)
+                    .map_or_else(|| generate_fake_block_hash(number), |x| x.to_bytes());
             }
         }
 
-        if let Ok(timestamp) = self.config.rpc_client.get_block(slot) {
+        if let Ok(timestamp) = self.config.rpc_client.get_block(number) {
             let hash = bs58::decode(timestamp.blockhash).into_vec().unwrap();
             hash.try_into().unwrap()
         } else {
             warn!("Got error trying to get block hash");
-            generate_fake_block_hash(slot)
+            generate_fake_block_hash(number)
         }
     }
 
