@@ -93,17 +93,6 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     account.balance -= value;
                 }
-                Action::EvmLog { address, topics, data } => {
-                    use solana_program::log::sol_log_data;
-                    match topics.len() {
-                        0 => sol_log_data(&[b"LOG0", address.as_bytes(), &[0], &data]),
-                        1 => sol_log_data(&[b"LOG1", address.as_bytes(), &[1], &topics[0], &data]),
-                        2 => sol_log_data(&[b"LOG2", address.as_bytes(), &[2], &topics[0], &topics[1], &data]),
-                        3 => sol_log_data(&[b"LOG3", address.as_bytes(), &[3], &topics[0], &topics[1], &topics[2], &data]),
-                        4 => sol_log_data(&[b"LOG4", address.as_bytes(), &[4], &topics[0], &topics[1], &topics[2], &topics[3], &data]),
-                        _ => unreachable!()
-                    }
-                }
                 Action::EvmSetStorage { address, index, value } => {
                     storage.entry(address)
                         .or_insert_with(|| Vec::with_capacity(64))

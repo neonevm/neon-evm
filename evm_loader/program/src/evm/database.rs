@@ -24,8 +24,6 @@ pub trait Database {
     fn block_number(&self) -> Result<U256>;
     fn block_timestamp(&self) -> Result<U256>;
 
-    fn log(&mut self, address: Address, topics: &[[u8; 32]], data: &[u8]) -> Result<()>;
-
     fn snapshot(&mut self) -> Result<()>;
     fn revert_snapshot(&mut self) -> Result<()>;
     fn commit_snapshot(&mut self) -> Result<()>;

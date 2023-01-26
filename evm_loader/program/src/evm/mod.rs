@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 
 use ethnum::U256;
 use serde::{Serialize, Deserialize};
+use solana_program::log::sol_log_data;
 
 use crate::{
     error::{Error, Result},
@@ -151,6 +152,7 @@ impl<B: Database> Machine<B> {
         assert!(trx.target.is_some());
 
         let target = trx.target.unwrap();
+        sol_log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
 
         backend.increment_nonce(origin)?;
         backend.snapshot()?;
@@ -190,6 +192,7 @@ impl<B: Database> Machine<B> {
         assert!(trx.target.is_none());
 
         let target = Address::from_create(&origin, trx.nonce);
+        sol_log_data(&[b"ENTER", b"CREATE", target.as_bytes()]);
 
         if (backend.nonce(&target)? != 0) || (backend.code_size(&target)? != 0) {
             return Err(Error::DeployToExistingAccount(target, origin));

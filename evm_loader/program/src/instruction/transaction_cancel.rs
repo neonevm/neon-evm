@@ -46,9 +46,6 @@ fn execute<'a>(
     accounts: Accounts<'a>,
     blocked_accounts: &BlockedAccounts,
 ) -> ProgramResult {
-    let used_gas = accounts.storage.gas_used;
-    solana_program::log::sol_log_data(&[b"CL_TX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
-
     for (info, blocked) in accounts.remaining_accounts.iter().zip(blocked_accounts) {
         if !blocked.exists {
             continue;
