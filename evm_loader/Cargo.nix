@@ -26,7 +26,7 @@ args@{
   ignoreLockHash,
 }:
 let
-  nixifiedLockHash = "a19463cb00bed5f446b41daa7d817d26b9713ee774a079ecdaa257320cd9dcf0";
+  nixifiedLockHash = "40d6aa7c6e504f2989968d6a495034c06ec16ce266e0aeb0ad46a0581ed7ecb8";
   workspaceSrc = if args.workspaceSrc == null then ./. else args.workspaceSrc;
   currentLockHash = builtins.hashFile "sha256" (workspaceSrc + /Cargo.lock);
   lockHashIgnored = if ignoreLockHash
@@ -2751,7 +2751,6 @@ in
     src = fetchCrateLocal (workspaceSrc + "/cli");
     dependencies = {
       arrayref = (rustPackages."registry+https://github.com/rust-lang/crates.io-index".arrayref."0.3.6" { inherit profileName; }).out;
-      base64 = (rustPackages."registry+https://github.com/rust-lang/crates.io-index".base64."0.13.1" { inherit profileName; }).out;
       bincode = (rustPackages."registry+https://github.com/rust-lang/crates.io-index".bincode."1.3.3" { inherit profileName; }).out;
       bs58 = (rustPackages."registry+https://github.com/rust-lang/crates.io-index".bs58."0.4.0" { inherit profileName; }).out;
       chrono = (rustPackages."registry+https://github.com/rust-lang/crates.io-index".chrono."0.4.23" { inherit profileName; }).out;
