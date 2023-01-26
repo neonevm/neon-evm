@@ -54,7 +54,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         for i in 0..len {
             let offset = i * 40;
             let slot_bytes = &slot_hashes_data[offset..][..8];
-            if number.to_le_bytes() == slot_bytes {
+            if number.to_be_bytes() == slot_bytes {
                 return slot_hashes_data[(offset + 8)..][..32].try_into().unwrap();
             }
         }
