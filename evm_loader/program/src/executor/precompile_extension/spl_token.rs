@@ -126,7 +126,7 @@ pub fn spl_token<B: AccountStorage>(
             let target = read_pubkey(&input[64..]);
             let amount = read_u64(&input[96..]);
 
-            transferFromSolana(context, state, auth, source, target, amount)
+            transfer_from_solana(context, state, auth, source, target, amount)
         }
         [0xa9, 0x05, 0x74, 0x01] => { // mintTo(bytes32 account, uint64 amount)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
@@ -417,7 +417,7 @@ fn transfer<B: AccountStorage>(
     Ok(vec![])
 }
 
-fn transferFromSolana<B: AccountStorage>(
+fn transfer_from_solana<B: AccountStorage>(
     context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     auth: Address,
