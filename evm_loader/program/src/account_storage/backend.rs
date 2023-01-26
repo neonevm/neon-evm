@@ -4,7 +4,10 @@ use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use crate::types::Address;
 use ethnum::U256;
-use solana_program::{pubkey::Pubkey, sysvar::slot_hashes};
+use solana_program::{
+    pubkey::Pubkey,
+    sysvar::slot_hashes::{self, SlotHashes},
+};
 use std::convert::TryInto;
 
 use super::generate_fake_block_hash;
@@ -49,16 +52,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     slot_hashes::ID
                 )
             });
-        let slot_hashes_data = slot_hashes_account.data.borrow();
-        let len = slot_hashes_data.len() / 40;
-        for i in 0..len {
-            let offset = i * 40;
-            let slot_bytes = &slot_hashes_data[offset..][..8];
-            if number.to_be_bytes() == slot_bytes {
-                return slot_hashes_data[(offset + 8)..][..32].try_into().unwrap();
-            }
-        }
-        generate_fake_block_hash(number)
+        slot_hashes_account
+            .deserialize_data::<SlotHashes>()
+            .unwrap()
+            .get(&number)
+            .map_or_else(|| generate_fake_block_hash(number), |x| x.to_bytes())
     }
 
     fn exists(&self, address: &Address) -> bool {
