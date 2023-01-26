@@ -383,7 +383,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         self.add_solana_account(slot_hashes::ID, false);
 
-        if (self.block_number - 1) <= number {
+        if self.block_number <= number {
             return <[u8; 32]>::default();
         }
 
