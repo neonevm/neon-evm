@@ -1,6 +1,5 @@
 use std::{
     alloc::{Layout, GlobalAlloc},
-    cell::Cell,
 };
 use solana_program::program_memory::{sol_memset, sol_memcpy};
 
@@ -13,7 +12,7 @@ const MEMORY_ALIGN: usize = 32;
 pub struct Memory {
     data: *mut u8,
     capacity: usize,
-    size: Cell<usize>,
+    size: usize,
 }
 
 impl Memory {
@@ -28,15 +27,29 @@ impl Memory {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
             let data = crate::allocator::EVM.alloc_zeroed(layout);
 
-            Self { data, capacity, size: Cell::new(0) }
+            Self { data, capacity, size: 0 }
         }
+    }
+
+    pub fn from_buffer(v: &[u8]) -> Self {
+        let capacity = v.len().next_power_of_two();
+
+        let data = unsafe {
+            let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
+            crate::allocator::EVM.alloc_zeroed(layout)
+        };
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(v.as_ptr(), data, v.len());
+        }
+            
+        Self { data, capacity, size: v.len() }
     }
 
     #[allow(dead_code)]
     pub fn to_vec(&self) -> Vec<u8> {
         let slice = unsafe {
-            let len = self.size.get();
-            std::slice::from_raw_parts(self.data, len)
+            std::slice::from_raw_parts(self.data, self.size)
         };
         slice.to_vec()
     }
@@ -68,47 +81,44 @@ impl Memory {
     }
 
     #[inline]
-    fn extend_size(&self, new_size: usize) {
-        let new_size = (new_size + 31_usize) & !31_usize; // next multiple of 32
-        if new_size > Cell::get(&self.size) {
-            Cell::set(&self.size, new_size);
+    fn extend_size(&mut self, offset: usize, length: usize) {
+        let new_size = ((offset + length) + 31_usize) & !31_usize; // next multiple of 32
+        if new_size > self.size {
+            self.size = new_size;
         }
     }
 
+    #[inline]
+    #[must_use]
     pub fn size(&self) -> usize {
-        Cell::get(&self.size)
+        self.size
     }
 
-    pub fn read(&self, offset: usize, length: usize) -> Result<&[u8], Error> {
+    pub fn read(&mut self, offset: usize, length: usize) -> Result<&[u8], Error> {
         if length == 0_usize {
             return Ok(&[])
         }
 
-        if offset.saturating_add(length) > self.capacity {
-            return Err(Error::MemoryAccessOutOfLimits(offset, length));
-        }
+        self.realloc(offset, length)?;
+        self.extend_size(offset, length);
 
         let slice = unsafe {
             let data = self.data.add(offset);
             core::slice::from_raw_parts(data, length) 
         };
 
-        self.extend_size(offset + length);
 
         Ok(slice)
     }
 
-    pub fn read_32(&self, offset: usize) -> Result<&[u8; 32], Error> {
-        if offset.saturating_add(32) > self.capacity {
-            return Err(Error::MemoryAccessOutOfLimits(offset, 32));
-        }
+    pub fn read_32(&mut self, offset: usize) -> Result<&[u8; 32], Error> {
+        self.realloc(offset, 32)?;
+        self.extend_size(offset, 32);
 
         let array: &[u8; 32] = unsafe {
             let data = self.data.add(offset);
             &*(data as *const [u8; 32])
         };
-
-        self.extend_size(offset + 32);
 
         Ok(array)
     }
@@ -119,13 +129,12 @@ impl Memory {
         });
 
         self.realloc(offset, 32)?;
+        self.extend_size(offset, 32);
 
         unsafe {
             let data = self.data.add(offset);
             core::ptr::copy_nonoverlapping(value.as_ptr(), data, 32);
         };
-
-        self.extend_size(offset + 32);
 
         Ok(())
     }
@@ -136,13 +145,12 @@ impl Memory {
         });
 
         self.realloc(offset, 1)?;
+        self.extend_size(offset, 1);
 
         unsafe {
             let data = self.data.add(offset);
             *data = value;
         };
-
-        self.extend_size(offset + 1);
 
         Ok(())
     }
@@ -153,6 +161,7 @@ impl Memory {
         }
 
         self.realloc(offset, length)?;
+        self.extend_size(offset, length);
 
         let data = unsafe {
             let data = self.data.add(offset);
@@ -192,8 +201,6 @@ impl Memory {
                 sol_memcpy(data, source, length);
             }
         }
-
-        self.extend_size(offset + length);
 
         Ok(())
     }
@@ -245,17 +252,7 @@ impl<'de> serde::Deserialize<'de> for Memory {
                     return Err(E::invalid_length(v.len(), &self));
                 }
 
-                let capacity = v.len().next_power_of_two();
-
-                let memory = Memory::with_capacity(capacity);
-                memory.size.set(v.len());
-
-                let data = unsafe {
-                    std::slice::from_raw_parts_mut(memory.data, memory.capacity)
-                };
-                data[..v.len()].copy_from_slice(v);
-        
-                Ok(memory)
+                Ok(Memory::from_buffer(v))
             }
         }
 
