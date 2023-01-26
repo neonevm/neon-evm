@@ -30,6 +30,7 @@ use crate::{
 // [0xb7, 0x5c, 0x7d, 0xc6] : "revoke(bytes32)",
 // [0xc2, 0x59, 0xdd, 0xfe] : "thaw(bytes32)",
 // [0x78, 0x42, 0x3b, 0xcf] : "transfer(bytes32,bytes32,uint64)"
+// [0x1d, 0x76, 0xc9, 0xd8] : "transferFromSolana(address,bytes32,bytes32,uint64)"
 
 #[allow(clippy::too_many_lines)]
 pub fn spl_token<B: AccountStorage>(
@@ -47,8 +48,8 @@ pub fn spl_token<B: AccountStorage>(
         return Err(Error::Custom("SplToken: callcode is not allowed".to_string()))
     }
 
-    if (&context.contract != address) && (state.call_depth() != 1) {
-        return Err(Error::Custom("SplToken: delegatecall is only allowed in top level contract".to_string()))
+    if &context.contract != address {
+        return Err(Error::Custom("SplToken: delegatecall is not allowed".to_string()))
     }
 
 
@@ -117,6 +118,16 @@ pub fn spl_token<B: AccountStorage>(
             let amount = read_u64(&input[64..]);
             transfer(context, state, source, target, amount)
         }
+        [0x1d, 0x76, 0xc9, 0xd8] => { // transferFromSolana(address,bytes32,bytes32,uint64)
+            if is_static { return Err(Error::StaticModeViolation(*address)); }
+
+            let auth: Address = read_address(input);
+            let source = read_pubkey(&input[32..]);
+            let target = read_pubkey(&input[64..]);
+            let amount = read_u64(&input[96..]);
+
+            transferFromSolana(context, state, auth, source, target, amount)
+        }
         [0xa9, 0x05, 0x74, 0x01] => { // mintTo(bytes32 account, uint64 amount)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
@@ -184,6 +195,11 @@ fn read_pubkey(input: &[u8]) -> Pubkey {
 #[inline]
 fn read_salt(input: &[u8]) -> &[u8; 32] {
     arrayref::array_ref![input, 0, 32]
+}
+
+#[inline]
+fn read_address(input: &[u8]) -> Address {
+    Address::from(*arrayref::array_ref![input, 0, 20])
 }
 
 
@@ -387,6 +403,33 @@ fn transfer<B: AccountStorage>(
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
     let seeds = vec![ vec![ACCOUNT_SEED_VERSION], signer.as_bytes().to_vec(), vec![bump_seed] ];
+
+    let transfer = spl_token::instruction::transfer(
+        &spl_token::ID,
+        &source,
+        &target,
+        &signer_pubkey,
+        &[],
+        amount
+    )?;
+    state.queue_external_instruction(transfer, seeds, 0);
+
+    Ok(vec![])
+}
+
+fn transferFromSolana<B: AccountStorage>(
+    context: &crate::evm::Context,
+    state: &mut ExecutorState<B>,
+    auth: Address,
+    source: Pubkey,
+    target: Pubkey,
+    amount: u64,
+) -> Result<Vec<u8>>
+{
+    let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"AUTH", context.caller.as_bytes(), auth.as_bytes()];
+    let (signer_pubkey, signer_seed) = Pubkey::find_program_address(seeds, state.backend.program_id());
+
+    let seeds = vec![ vec![ACCOUNT_SEED_VERSION], b"AUTH".to_vec(), context.caller.as_bytes().to_vec(), auth.as_bytes().to_vec(), vec![signer_seed] ];
 
     let transfer = spl_token::instruction::transfer(
         &spl_token::ID,

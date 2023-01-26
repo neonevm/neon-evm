@@ -96,10 +96,11 @@ contract ERC721ForMetaplex is IERC165, IERC721, IERC721Metadata {
 
         // spl-token transaction will be signed by tx.origin
         // this is only allowed in top level contract
-        (bool status, ) = address(_splToken).delegatecall(
-            abi.encodeWithSignature("transfer(bytes32,bytes32,uint64)", from, toSolana, amount)
-        );
-        require(status, "ERC721: claim failed");
+        // (bool status, ) = address(_splToken).delegatecall(
+        //     abi.encodeWithSignature("transfer(bytes32,bytes32,uint64)", from, toSolana, amount)
+        // );
+        // require(status, "ERC721: claim failed");
+        _splToken.transferFromSolana(msg.sender, from, toSolana, amount);
 
 
         uint256 tokenId = uint256(account.mint);
