@@ -50,12 +50,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                 )
             });
         let slot_hashes_data = slot_hashes_account.data.borrow();
-        let slot_hashes_len = slot_hashes_data.len() / 40;
+        let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[0..8].try_into().unwrap());
         for i in 0..slot_hashes_len {
-            let offset = i * 40;
-            let slot = &slot_hashes_data[(offset + 32)..][..8];
-            if number.to_be_bytes() == slot {
-                return slot_hashes_data[offset..][..32].try_into().unwrap();
+            let offset = (i * 40) + 8;
+            let slot = &slot_hashes_data[offset..][..8];
+            if number.to_le_bytes() == slot {
+                return slot_hashes_data[(offset + 8)..][..32].try_into().unwrap();
             }
         }
         generate_fake_block_hash(number)
