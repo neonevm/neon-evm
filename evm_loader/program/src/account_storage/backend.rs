@@ -76,10 +76,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             .to_bytes()
     }
 
-    fn code(&self, address: &Address) -> Vec<u8> {
+    fn code(&self, address: &Address) -> crate::evm::Buffer {
+        use crate::evm::Buffer;
+
         self.ethereum_account(address)
             .and_then(EthereumAccount::contract_data)
-            .map_or_else(Vec::new, |contract| contract.code().to_vec())
+            .map_or_else(Buffer::empty, |c| Buffer::new(&c.code()))
     }
 
     fn generation(&self, address: &Address) -> u32 {

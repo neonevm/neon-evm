@@ -21,8 +21,10 @@ mod opcode;
 mod opcode_table;
 mod stack;
 mod precompile;
+mod buffer;
 
 use self::{database::Database, memory::Memory, stack::Stack};
+pub use buffer::Buffer;
 pub use precompile::is_precompile_address;
 
 macro_rules! tracing_event {
@@ -78,12 +80,9 @@ pub struct Machine<B: Database> {
     #[serde(with="ethnum::serde::bytes::le")]
     gas_limit: U256,
     
-    #[serde(with="serde_bytes")]
-    execution_code: Vec<u8>,
-    #[serde(with="serde_bytes")]
-    call_data: Vec<u8>,
-    #[serde(with="serde_bytes")]
-    return_data: Vec<u8>,
+    execution_code: Buffer,
+    call_data: Buffer,
+    return_data: Buffer,
     
     stack: stack::Stack,
     memory: memory::Memory,
@@ -174,7 +173,7 @@ impl<B: Database> Machine<B> {
             gas_limit: trx.gas_limit,
             execution_code,
             call_data: trx.call_data,
-            return_data: Vec::new(),
+            return_data: Buffer::empty(),
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
@@ -214,14 +213,14 @@ impl<B: Database> Machine<B> {
             },
             gas_price: trx.gas_price,
             gas_limit: trx.gas_limit,
-            return_data: Vec::new(),
+            return_data: Buffer::empty(),
             stack: Stack::new(),
             memory: Memory::with_capacity(trx.call_data.len()),
             pc: 0_usize,
             is_static: false,
             reason: Reason::Create,
             execution_code: trx.call_data,
-            call_data: Vec::new(),
+            call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,
         })
@@ -231,7 +230,7 @@ impl<B: Database> Machine<B> {
         let mut step = 0_u64;
 
         tracing_event!(tracing::Event::BeginVM { 
-            context: self.context, code: self.execution_code.clone()
+            context: self.context, code: self.execution_code.to_vec()
         });
 
         let status = loop {
@@ -240,7 +239,7 @@ impl<B: Database> Machine<B> {
                 break ExitStatus::StepLimit;
             }
             
-            let opcode = *self.execution_code.get(self.pc).unwrap_or(&0_u8);
+            let opcode = self.execution_code.get_or_default(self.pc);
 
             tracing_event!(tracing::Event::BeginStep {
                 opcode, pc: self.pc, stack: self.stack.to_vec(), memory: self.memory.to_vec()
@@ -278,8 +277,8 @@ impl<B: Database> Machine<B> {
         &mut self,
         reason: Reason,
         context: Context,
-        execution_code: Vec<u8>,
-        call_data: Vec<u8>,
+        execution_code: Buffer,
+        call_data: Buffer,
         gas_limit: Option<U256>,
     ) {
         let mut other = Self {
@@ -289,7 +288,7 @@ impl<B: Database> Machine<B> {
             gas_limit: gas_limit.unwrap_or(self.gas_limit),
             execution_code,
             call_data,
-            return_data: Vec::new(),
+            return_data: Buffer::empty(),
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,

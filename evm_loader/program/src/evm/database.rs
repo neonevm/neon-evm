@@ -1,6 +1,6 @@
 use ethnum::U256;
 use crate::{error::Result, types::Address};
-use super::Context;
+use super::{Context, Buffer};
 
 pub trait Database {
     fn chain_id(&self) -> U256;
@@ -13,8 +13,8 @@ pub trait Database {
 
     fn code_size(&self, address: &Address) -> Result<usize>;
     fn code_hash(&self, address: &Address) -> Result<[u8; 32]>;
-    fn code(&self, address: &Address) -> Result<Vec<u8>>;
-    fn set_code(&mut self, address: Address, code: Vec<u8>) -> Result<()>;
+    fn code(&self, address: &Address) -> Result<Buffer>;
+    fn set_code(&mut self, address: Address, code: Buffer) -> Result<()>;
     fn selfdestruct(&mut self, address: Address) -> Result<()>;
 
     fn storage(&self, address: &Address, index: &U256) -> Result<[u8; 32]>;

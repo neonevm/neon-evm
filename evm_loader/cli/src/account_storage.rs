@@ -78,7 +78,7 @@ pub struct NeonAccount {
 impl NeonAccount {
     pub fn rpc_load(config: &Config, address: Address, writable: bool) -> Self {
         let (key, _) = make_solana_program_address(&address, &config.evm_loader);
-        info!("get_account_from_solana 0x{} => {}", address, key);
+        info!("get_account_from_solana {} => {}", address, key);
 
         if let Ok(account) = config.rpc_client.get_account(&key) {
             trace!("Account found");
@@ -150,7 +150,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
     pub fn get_account_from_solana(config: &'a Config, address: &Address) -> (Pubkey, Option<Account>) {
         let (solana_address, _solana_nonce) = make_solana_program_address(address, &config.evm_loader);
-        info!("get_account_from_solana 0x{} => {}", address, solana_address);
+        info!("get_account_from_solana {} => {}", address, solana_address);
 
         if let Ok(acc) = config.rpc_client.get_account(&solana_address) {
             trace!("Account found");
@@ -414,13 +414,15 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         )
     }
 
-    fn code(&self, address: &Address) -> Vec<u8> {
+    fn code(&self, address: &Address) -> evm_loader::evm::Buffer {
+        use evm_loader::evm::Buffer;
+
         info!("code {}", address);
 
         self.ethereum_contract_map_or(
             address,
-            Vec::new(),
-            |c| c.code().to_vec(),
+            Buffer::empty(),
+            |c| Buffer::new(&c.code()),
         )
     }
 
