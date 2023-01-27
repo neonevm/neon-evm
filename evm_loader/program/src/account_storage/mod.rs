@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use crate::account::{EthereumAccount, EthereumStorage};
 use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
 use crate::types::Address;
@@ -79,7 +79,7 @@ pub trait AccountStorage {
     /// Get code hash
     fn code_hash(&self, address: &Address) -> [u8; 32];
     /// Get code data
-    fn code(&self, address: &Address) -> Vec<u8>;
+    fn code(&self, address: &Address) -> crate::evm::Buffer;
     /// Get contract generation
     fn generation(&self, address: &Address) -> u32;
 
@@ -104,7 +104,7 @@ pub trait AccountStorage {
         &self,
         actions: &[Action],
     ) -> AccountsOperations {
-        let mut accounts = HashMap::new();
+        let mut accounts = BTreeMap::new();
         for action in actions {
             let (address, code_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0),

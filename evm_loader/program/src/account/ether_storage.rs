@@ -1,8 +1,8 @@
-use crate::{account_storage::AccountStorage, types::Address};
-use super::{program, EthereumStorage, Operator, Packable};
+use crate::{types::Address};
+use super::{program, EthereumStorage, Operator, Packable, EthereumAccount};
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use ethnum::U256;
-use solana_program::{program_error::ProgramError, rent::Rent, sysvar::Sysvar, pubkey::Pubkey};
+use solana_program::{program_error::ProgramError, rent::Rent, sysvar::Sysvar, pubkey::Pubkey, account_info::AccountInfo};
 
 /// Ethereum storage data account
 #[derive(Default, Debug)]
@@ -42,42 +42,64 @@ impl Packable for Data {
     }
 }
 
-impl<'a> EthereumStorage<'a> {
+pub struct EthereumStorageAddress {
+    seed: [u8; 32],
+    pubkey: Pubkey,
+}
+
+impl EthereumStorageAddress {
     #[must_use]
-    pub fn creation_seed(index: &U256) -> String {
+    fn make_seed(index: &U256) -> [u8; 32] {
+        let mut buffer = [0_u8; 32];
+
         let index_bytes = index.to_be_bytes();
         let index_bytes = &index_bytes[3..31];
 
-        let mut seed = vec![0_u8; 32];
         for i in 0..28 {
-            seed[i] = index_bytes[i] & 0x7F;
+            buffer[i] = index_bytes[i] & 0x7F;
         }
 
         #[allow(clippy::needless_range_loop)]
         for i in 0..7 {
-            seed[28] |= (index_bytes[i] & 0x80) >> (1 + i);
+            buffer[28] |= (index_bytes[i] & 0x80) >> (1 + i);
         }
         for i in 0..7 {
-            seed[29] |= (index_bytes[7 + i] & 0x80) >> (1 + i);
+            buffer[29] |= (index_bytes[7 + i] & 0x80) >> (1 + i);
         }
         for i in 0..7 {
-            seed[30] |= (index_bytes[14 + i] & 0x80) >> (1 + i);
+            buffer[30] |= (index_bytes[14 + i] & 0x80) >> (1 + i);
         }
         for i in 0..7 {
-            seed[31] |= (index_bytes[21 + i] & 0x80) >> (1 + i);
+            buffer[31] |= (index_bytes[21 + i] & 0x80) >> (1 + i);
         }
 
-        String::from_utf8(seed).unwrap()
+        buffer
     }
 
     #[must_use]
-    pub fn solana_address(backend: &dyn AccountStorage, address: &Address, index: &U256) -> Pubkey {
-        let (base, _) = address.find_solana_address(backend.program_id());
-        let seed = Self::creation_seed(index);
+    pub fn new(program_id: &Pubkey, address: &Address, index: &U256) -> Self {
+        let (base, _) = address.find_solana_address(program_id);
 
-        Pubkey::create_with_seed(&base, &seed, backend.program_id()).unwrap()
+        let seed_buffer = Self::make_seed(index);
+        let seed = unsafe { std::str::from_utf8_unchecked(&seed_buffer) };
+
+        let pubkey = Pubkey::create_with_seed(&base, seed, program_id).unwrap();
+
+        Self { seed: seed_buffer, pubkey }
     }
 
+    #[must_use]
+    pub fn seed(&self) -> &str {
+        unsafe { std::str::from_utf8_unchecked(&self.seed) }
+    }
+
+    #[must_use]
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.pubkey
+    }
+}
+
+impl<'a> EthereumStorage<'a> {
     #[must_use]
     pub fn get(&self, subindex: u8) -> [u8; 32] {
         let data = self.info.data.borrow();
@@ -135,6 +157,40 @@ impl<'a> EthereumStorage<'a> {
         chunk[1..].copy_from_slice(value);
 
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create(
+        contract: &EthereumAccount<'a>,
+        storage_account: &'a AccountInfo<'a>,
+        storage_address: &EthereumStorageAddress,
+        index: U256,
+        subindex: u8,
+        value: &[u8; 32],
+        operator: &Operator<'a>,
+        system: &program::System<'a>,
+    ) -> Result<Self, ProgramError> {
+        let space = Self::SIZE + 1 + 32;
+
+        system.create_account_with_seed(
+            operator, contract, contract.info.owner, 
+            storage_account, storage_address.seed(), 
+            space
+        )?;
+
+        let storage = Self::init(storage_account, Data {
+            address: contract.address,
+            generation: contract.generation,
+            index,
+        })?;
+
+        let mut data = storage_account.data.borrow_mut();
+        let data = &mut data[Self::SIZE..];
+
+        data[0] = subindex;
+        data[1..].copy_from_slice(value);
+
+        Ok(storage)
     }
 
     pub fn clear(
