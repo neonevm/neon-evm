@@ -16,7 +16,7 @@ from .utils.types import Caller, TreasuryPool
 
 EVM_STEPS_COUNT = 0xFFFFFFFF_FFFFFFFF
 ONE_TOKEN = 10 ** 9
-BIG_CONTRACT_FILENAME = "ERC20ForSplFactory.binary"
+BIG_CONTRACT_FILENAME = "big_contract.binary"
 MAX_PERMITTED_DATA_INCREASE = 10240
 
 
