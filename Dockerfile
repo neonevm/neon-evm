@@ -31,7 +31,7 @@ RUN cargo clippy --release && \
 FROM ethereum/solc:0.8.0 AS solc
 FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
-    DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
+    DEBIAN_FRONTEND=nontineractive apt-get -y install xxd jq && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/tests/contracts/*.sol /opt/
 COPY evm_loader/solidity/*.sol /opt/
