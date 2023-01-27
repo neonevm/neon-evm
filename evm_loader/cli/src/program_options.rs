@@ -318,18 +318,6 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("create-program-address")
-                .about("Generate a program address")
-                .arg(
-                    Arg::with_name("seed")
-                        .index(1)
-                        .value_name("SEED_STRING")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The seeds (a string containing seeds in hex form, separated by spaces)"),
-                )
-        )
-        .subcommand(
             SubCommand::with_name("deposit")
                 .about("Deposit NEONs to ether account")
                 .arg(
