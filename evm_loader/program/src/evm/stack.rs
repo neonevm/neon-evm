@@ -1,6 +1,6 @@
 #![allow(clippy::inline_always)]
 
-use std::{alloc::{Layout, alloc, dealloc}, convert::TryInto};
+use std::{alloc::{Layout, GlobalAlloc}, convert::TryInto};
 use ethnum::{U256, I256};
 use crate::{error::Error, types::Address};
 use super::tracing_event;
@@ -18,7 +18,7 @@ impl Stack {
     pub fn new() -> Self {
         let (begin, end) = unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
-            let begin = alloc(layout);
+            let begin = crate::allocator::EVM.alloc(layout);
             let end = begin.add(STACK_SIZE - ELEMENT_SIZE);
 
             (begin, end)
@@ -252,7 +252,7 @@ impl Drop for Stack {
     fn drop(&mut self) {
         unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
-            dealloc(self.begin, layout);
+            crate::allocator::EVM.dealloc(self.begin, layout);
         }
     }
 }

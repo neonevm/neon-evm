@@ -115,12 +115,12 @@ fn execute<'a>(
         return Err(Error::OutOfGas(gas_limit, used_gas));
     }
 
-    solana_program::log::sol_log_data(&[b"IX_GAS", &used_gas.as_u64().to_le_bytes()]);
+    solana_program::log::sol_log_data(&[b"GAS", &used_gas.to_le_bytes(), &used_gas.to_le_bytes()]);
 
     let gas_cost = used_gas.saturating_mul(gas_price);
     account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost)?;
 
-    log_return_value(&exit_reason, used_gas);
+    log_return_value(&exit_reason);
     
     Ok(())
 }

@@ -153,13 +153,13 @@ fn finalize<'a>(
     }
 
     let used_gas = gasometer.used_gas();
-    solana_program::log::sol_log_data(&[b"IX_GAS", &used_gas.as_u64().to_le_bytes()]);
+    solana_program::log::sol_log_data(&[b"GAS", &used_gas.to_le_bytes(), &total_used_gas.to_le_bytes()]);
 
     pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage)?;
 
 
     if let Some(exit_reason) = exit_reason_opt {
-        log_return_value(&exit_reason, total_used_gas);
+        log_return_value(&exit_reason);
 
         account_storage.block_accounts(false);
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
@@ -169,7 +169,7 @@ fn finalize<'a>(
 }
 
 
-pub fn log_return_value(status: &ExitStatus, gas_used: U256) {
+pub fn log_return_value(status: &ExitStatus) {
     use solana_program::log::sol_log_data;
 
     let code: u8 = match status {
@@ -185,9 +185,5 @@ pub fn log_return_value(status: &ExitStatus, gas_used: U256) {
         solana_program::msg!("Revert: {}", format_revert_message(msg));
     }
 
-    sol_log_data(&[
-        b"RETURN",
-        &[code],
-        &gas_used.as_u64().to_le_bytes(),
-    ]);
+    sol_log_data(&[b"RETURN", &[code]]);
 }
