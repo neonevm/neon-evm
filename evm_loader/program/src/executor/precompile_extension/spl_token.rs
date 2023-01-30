@@ -199,7 +199,7 @@ fn read_salt(input: &[u8]) -> &[u8; 32] {
 
 #[inline]
 fn read_address(input: &[u8]) -> Address {
-    Address::from(*arrayref::array_ref![input, 0, 20])
+    Address::from(*arrayref::array_ref![input, 12, 20])
 }
 
 
