@@ -253,7 +253,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(self.backend.code_hash(from_address))
     }
 
-    fn code(&self, from_address: &Address) -> Result<Vec<u8>> {
+    fn code(&self, from_address: &Address) -> Result<crate::evm::Buffer> {
         for action in &self.actions {
             if let Action::EvmSetCode { address, code } = action {
                 if from_address == address {
@@ -265,7 +265,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(self.backend.code(from_address))
     }
 
-    fn set_code(&mut self, address: Address, code: Vec<u8>) -> Result<()> {
+    fn set_code(&mut self, address: Address, code: crate::evm::Buffer) -> Result<()> {
         if code.starts_with(&[0xEF]) {
             // https://eips.ethereum.org/EIPS/eip-3541
             return Err(Error::EVMObjectFormatNotSupported(address));
@@ -327,17 +327,6 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     fn block_timestamp(&self) -> Result<U256> {
         let cache = self.cache.borrow();
         Ok(cache.block_timestamp)
-    }
-
-    fn log(&mut self, address: Address, topics: &[[u8; 32]], data: &[u8]) -> Result<()> {
-        let log = Action::EvmLog {
-            address,
-            topics: topics.to_vec(),
-            data: data.to_vec()
-        };
-        self.actions.push(log);
-
-        Ok(())
     }
 
     fn snapshot(&mut self) -> Result<()> {

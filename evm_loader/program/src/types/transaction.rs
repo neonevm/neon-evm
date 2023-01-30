@@ -11,7 +11,7 @@ pub struct Transaction {
     pub gas_limit: U256,
     pub target: Option<Address>,
     pub value: U256,
-    pub call_data: Vec<u8>,
+    pub call_data: crate::evm::Buffer,
     pub v: U256,
     pub r: [u8; 32],
     pub s: [u8; 32],
@@ -77,7 +77,7 @@ impl rlp::Decodable for Transaction {
             }
         };
         let value: U256 = u256(&rlp.at(4)?)?;
-        let call_data: Vec<u8> = rlp.val_at(5)?;
+        let call_data = crate::evm::Buffer::new(rlp.at(5)?.data()?);
         let v: U256 = u256(&rlp.at(6)?)?;
 
         let mut r: [u8; 32] = [0_u8; 32];
