@@ -53,23 +53,15 @@ def build_docker_image(github_sha):
     tag = f"{IMAGE_NAME}:{github_sha}"
     click.echo("start build")
     output = docker_client.build(tag=tag, buildargs=buildargs, path="./", decode=True)
-    for line in output:
-        if list(line.keys())[0] in ('stream', 'error', 'status'):
-            value = list(line.values())[0].strip()
-            if value:
-                if "progress" in line.keys():
-                    value += line['progress']
-            click.echo(value)
+    process_output(output)
 
 
 @cli.command(name="publish_image")
 @click.option('--github_sha')
 def publish_image(github_sha):
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
-    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
-    if "error" in out:
-        print(f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
-        sys.exit(1)
+    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}", decode=True, stream=True)
+    process_output(out)
 
 
 @cli.command(name="finalize_image")
@@ -89,17 +81,12 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
             tag = head_ref_branch.split('/')[-1]
 
         docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
-        out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}")
-        if "error" in out:
-            print(f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
-            sys.exit(1)
+        out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}", decode=True, stream=True)
+        process_output(out)
 
         docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
-        out = docker_client.push(f"{IMAGE_NAME}:{tag}")
-        if "error" in out:
-            print(f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
-            sys.exit(1)
-        click.echo(f"The image {IMAGE_NAME}:{tag} is published")
+        out = docker_client.push(f"{IMAGE_NAME}:{tag}", decode=True, stream=True)
+        process_output(out)
     else:
         click.echo("The image is not published, please create tag for publishing")
 
@@ -217,6 +204,49 @@ def send_notification(url, build_url):
         f"\n<{build_url}|View build details>"
     )
     requests.post(url=url, data=json.dumps(tpl))
+
+
+def process_output(output):
+    for line in output:
+        if line:
+            errors = set()
+            try:
+                if "status" in line:
+                    click.echo(line["status"])
+
+                elif "stream" in line:
+                    stream = re.sub("^\n", "", line["stream"])
+                    stream = re.sub("\n$", "", stream)
+                    stream = re.sub("\n(\x1B\[0m)$", "\\1", stream)
+                    if stream:
+                        click.echo(stream)
+
+                elif "aux" in line:
+                    if "Digest" in line["aux"]:
+                        click.echo("digest: {}".format(line["aux"]["Digest"]))
+
+                    if "ID" in line["aux"]:
+                        click.echo("ID: {}".format(line["aux"]["ID"]))
+
+                else:
+                    click.echo("not recognized (1): {}".format(line))
+
+                if "error" in line:
+                    errors.add(line["error"])
+
+                if "errorDetail" in line:
+                    errors.add(line["errorDetail"]["message"])
+
+                    if "code" in line:
+                        error_code = line["errorDetail"]["code"]
+                        errors.add("Error code: {}".format(error_code))
+
+            except ValueError as e:
+                click.echo("not recognized (2): {}".format(line))
+
+            if errors:
+                message = "problem executing Docker: {}".format(". ".join(errors))
+                raise SystemError(message)
 
 
 if __name__ == "__main__":
