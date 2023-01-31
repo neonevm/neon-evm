@@ -50,11 +50,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                 )
             });
         let slot_hashes_data = slot_hashes_account.data.borrow();
-        let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[0..8].try_into().unwrap());
+        let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[..8].try_into().unwrap());
         for i in 0..slot_hashes_len {
             let offset = usize::try_from((i * 40) + 8).unwrap();
-            let slot = &slot_hashes_data[offset..][..8];
-            if number.to_le_bytes() == slot {
+            let slot = u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
+            if number == slot {
                 return slot_hashes_data[(offset + 8)..][..32].try_into().unwrap();
             }
         }
