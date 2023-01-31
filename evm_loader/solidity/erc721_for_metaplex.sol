@@ -94,7 +94,7 @@ contract ERC721ForMetaplex is IERC165, IERC721, IERC721Metadata {
             _splToken.initializeAccount(seed, account.mint);
         }
 
-        _splToken.transferFromSolana(msg.sender, from, toSolana, amount);
+        _splToken.transferWithSeed(bytes20(msg.sender), from, toSolana, amount);
 
 
         uint256 tokenId = uint256(account.mint);

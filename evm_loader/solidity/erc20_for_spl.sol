@@ -137,7 +137,7 @@ contract ERC20ForSpl {
             _splToken.initializeAccount(_salt(to), tokenMint);
         }
 
-        _splToken.transferFromSolana(msg.sender, from, toSolana, amount);
+        _splToken.transferWithSeed(bytes20(msg.sender), from, toSolana, amount);
 
         emit Transfer(address(0), to, amount);
 
