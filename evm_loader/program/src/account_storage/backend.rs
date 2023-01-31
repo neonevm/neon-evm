@@ -4,6 +4,7 @@ use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use crate::types::Address;
 use ethnum::U256;
+use solana_program::sysvar::recent_blockhashes;
 use solana_program::{pubkey::Pubkey, sysvar::slot_hashes};
 use std::convert::TryInto;
 
@@ -49,13 +50,29 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     slot_hashes::ID
                 )
             });
+        let recent_blockhashes_account = self
+            .solana_accounts
+            .get(&recent_blockhashes::ID)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Trying to get slot hash info without providing sysvar account: {}",
+                    recent_blockhashes::ID
+                )
+            });
         let slot_hashes_data = slot_hashes_account.data.borrow();
         let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[..8].try_into().unwrap());
         for i in 0..slot_hashes_len {
             let offset = usize::try_from((i * 40) + 8).unwrap();
             let slot = u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
             if number == slot {
-                return slot_hashes_data[(offset + 8)..][..32].try_into().unwrap();
+                let recent_blockhashes_data = recent_blockhashes_account.data.borrow();
+                let blockhash_offset: usize = (i * 40 + 8).try_into().unwrap();
+                if blockhash_offset + 32 > recent_blockhashes_data.len() {
+                    break;
+                }
+                return recent_blockhashes_data[blockhash_offset..][..32]
+                    .try_into()
+                    .unwrap();
             }
         }
         generate_fake_block_hash(number)
