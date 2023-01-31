@@ -23,10 +23,7 @@ use solana_sdk::{
     pubkey,
     pubkey::Pubkey,
     rent::Rent,
-    sysvar::{
-        slot_hashes::{self, SlotHashes},
-        Sysvar,
-    },
+    sysvar::{recent_blockhashes, slot_hashes, Sysvar},
 };
 
 use crate::Config;
@@ -382,16 +379,30 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         let number = number.as_u64();
 
         self.add_solana_account(slot_hashes::ID, false);
+        self.add_solana_account(recent_blockhashes::ID, false);
 
         if self.block_number <= number {
             return <[u8; 32]>::default();
         }
 
         if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
-            if let Ok(slot_hashes) = slot_hashes_account.deserialize_data::<SlotHashes>() {
-                return slot_hashes
-                    .get(&number)
-                    .map_or_else(|| generate_fake_block_hash(number), |x| x.to_bytes());
+            if let Ok(recent_blockhashes_account) =
+                self.config.rpc_client.get_account(&recent_blockhashes::ID)
+            {
+                let slot_hashes_data = slot_hashes_account.data;
+                let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[..8].try_into().unwrap());
+                for i in 0..slot_hashes_len {
+                    let offset = usize::try_from((i * 40) + 8).unwrap();
+                    let slot =
+                        u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
+                    if number == slot {
+                        let recent_blockhashes_data = recent_blockhashes_account.data;
+                        if offset + 32 > recent_blockhashes_data.len() {
+                            break;
+                        }
+                        return recent_blockhashes_data[offset..][..32].try_into().unwrap();
+                    }
+                }
             }
         }
 
