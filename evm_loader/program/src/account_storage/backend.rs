@@ -66,13 +66,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             let slot = u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
             if number == slot {
                 let recent_blockhashes_data = recent_blockhashes_account.data.borrow();
-                let blockhash_offset: usize = (i * 40 + 8).try_into().unwrap();
-                if blockhash_offset + 32 > recent_blockhashes_data.len() {
+                if offset + 32 > recent_blockhashes_data.len() {
                     break;
                 }
-                return recent_blockhashes_data[blockhash_offset..][..32]
-                    .try_into()
-                    .unwrap();
+                return recent_blockhashes_data[offset..][..32].try_into().unwrap();
             }
         }
         generate_fake_block_hash(number)
