@@ -1,6 +1,8 @@
-mod db_call_client;
-mod db_trx_client;
+pub mod db_call_client;
+pub mod db_trx_client;
 mod validator_client;
+pub mod tracer_db;
+pub mod indexer_db;
 
 use solana_client::{
     client_error::{Result as ClientResult,},
@@ -35,18 +37,6 @@ pub struct DbConfig{
     pub indexer_password: String,
 }
 
-#[derive(Debug)]
-pub struct CallDbClient {
-    pub slot: u64,
-    tracer_db: Client,
-}
-
-#[derive(Debug)]
-pub struct TrxDbClient {
-    pub hash: [u8; 32],
-    tracer_db: Client,
-    indexer_db: Client,
-}
 
 pub trait Rpc{
     fn commitment(&self) -> CommitmentConfig;
@@ -134,3 +124,10 @@ macro_rules! e {
 }
 pub(crate) use e;
 
+
+macro_rules! f {
+    ($error:expr) => {
+        format!("{:?}", $error)
+    };
+}
+pub(crate) use f;

@@ -3,7 +3,7 @@ use solana_clap_utils::{
     input_validators::normalize_to_url_if_moniker,
     keypair::{signer_from_path, keypair_from_path},
 };
-use crate::{rpc, rpc::{CallDbClient, TrxDbClient}, NeonCliError, program_options::truncate};
+use crate::{rpc, rpc::{db_call_client::CallDbClient, db_trx_client::TrxDbClient}, NeonCliError, program_options::truncate};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
