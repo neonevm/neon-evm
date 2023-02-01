@@ -6,6 +6,7 @@ use crate::types::Address;
 use ethnum::U256;
 use solana_program::sysvar::recent_blockhashes;
 use solana_program::{pubkey::Pubkey, sysvar::slot_hashes};
+use std::cmp::Ordering;
 use std::convert::TryInto;
 
 use super::generate_fake_block_hash;
@@ -67,16 +68,20 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             let i = (min + max) / 2;
             let offset = i * 40 + 8;
             let slot = u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
-            if number == slot {
-                let recent_blockhashes_data = recent_blockhashes_account.data.borrow();
-                if offset + 32 > recent_blockhashes_data.len() {
-                    break;
+            match number.cmp(&slot) {
+                Ordering::Equal => {
+                    let recent_blockhashes_data = recent_blockhashes_account.data.borrow();
+                    if offset + 32 > recent_blockhashes_data.len() {
+                        break;
+                    }
+                    return recent_blockhashes_data[offset..][..32].try_into().unwrap();
                 }
-                return recent_blockhashes_data[offset..][..32].try_into().unwrap();
-            } else if number < slot {
-                max = i - 1;
-            } else {
-                min = i + 1;
+                Ordering::Less => {
+                    max = i - 1;
+                }
+                Ordering::Greater => {
+                    min = i + 1;
+                }
             }
         }
         generate_fake_block_hash(number)
