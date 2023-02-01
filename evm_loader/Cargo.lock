@@ -1082,7 +1082,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "evm-loader"
-version = "0.15.0-dev"
+version = "0.15.0"
 dependencies = [
  "arrayref",
  "bincode",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "neon-cli"
-version = "0.15.0-dev"
+version = "0.15.0"
 dependencies = [
  "arrayref",
  "bincode",
