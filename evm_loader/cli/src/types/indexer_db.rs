@@ -1,9 +1,8 @@
 use {
     std::{sync::Arc, convert::{TryFrom, TryInto}},
     tokio_postgres::{Client},
-    super::{do_connect, DbConfig, block, f},
+    super::{do_connect, DbConfig, block, f, TxParams},
     solana_sdk::clock::Slot,
-    crate::commands::TxParams,
     ethnum::U256,
     evm_loader::types::Address,
 };

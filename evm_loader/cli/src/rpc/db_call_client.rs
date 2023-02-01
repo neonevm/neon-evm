@@ -10,8 +10,8 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use std::any::Any;
-use super::{DbConfig, Rpc, e, tracer_db::TracerDb} ;
-use crate::commands::TxParams;
+use super::{Rpc, e};
+use crate::{types::{tracer_db::TracerDb, DbConfig, TxParams}};
 
 
 #[derive(Debug)]

@@ -83,7 +83,7 @@ impl TracerDb {
         let row = block(|| async {
             self.client.query_one(
                 "SELECT * FROM get_pre_accounts($1, $2)",
-                &[&sol_sig.as_slice(), &[&pubkey_bytes.as_slice()]]
+                &[&sol_sig.as_slice(), &[pubkey_bytes.as_slice()]]
             ).await
         }).map_err(|e| f!(e))?;
 
