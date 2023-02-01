@@ -38,3 +38,7 @@ postgres = { version = "0.19.2", features = ["with-chrono-0_4", "array-impls"] }
 tokio-postgres = {version="0.7.6", features=["with-uuid-0_8"]}
 lazy_static = "1.4"
 
+[lib]
+name = "neon_cli"
+path = "src/lib.rs"
+

@@ -2,7 +2,7 @@ use super::{
     tracer::Tracer,
 };
 use crate::{
-    types::ec::trace::{FullTraceData},
+    types::trace::{FullTraceData},
 };
 
 pub trait ListenerTracer {

@@ -560,14 +560,12 @@ impl<B: Database> Machine<B> {
 
     /// copy contract's bytecode
     pub fn opcode_extcodecopy(&mut self, backend: &mut B) -> Result<Action> {
+        let address = *self.stack.pop_address()?;
         let memory_offset = self.stack.pop_usize()?;
         let data_offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let code = {
-            let address = self.stack.pop_address()?;
-            backend.code(address)?
-        };
+        let code = backend.code(&address)?;
 
         if data_offset.saturating_add(length) > code.len() {
             return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length))
