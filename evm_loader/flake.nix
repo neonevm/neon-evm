@@ -7,55 +7,45 @@
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.inputs.flake-utils.follows = "flake-utils";
 
-    cargo2nix.url = "github:cargo2nix/cargo2nix/unstable";
-    cargo2nix.inputs.nixpkgs.follows = "nixpkgs";
-    cargo2nix.inputs.flake-utils.follows = "flake-utils";
-    cargo2nix.inputs.rust-overlay.follows = "rust-overlay";
+    naersk.url = "github:nix-community/naersk";
+    naersk.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, cargo2nix, flake-utils, nixpkgs, ... }:
+  outputs = { self, naersk, flake-utils, nixpkgs, rust-overlay, ... }:
   flake-utils.lib.eachDefaultSystem (system:
   let
     pkgs = import nixpkgs {
       inherit system;
-      overlays = [ cargo2nix.overlays.default ];
+      overlays = [ (import rust-overlay) ];
     };
 
-    rust-pkgs = pkgs.rustBuilder.makePackageSet {
-      rustVersion = "1.67.0";
-      packageFun = import ./Cargo.nix;
-
-      extraRustComponents = [
+    # To update the Rust toolchain, just run `nix flake update` to update the flake.lock file.
+    # If there's an update on the toolchain, the rust-overlay input should be updated.
+    toolchain = pkgs.rust-bin.stable.latest.default.override {
+      extensions = [
         "rustfmt" "rustc" "clippy" "llvm-tools-preview" "rust-src" "rust-analyzer"
       ];
-
-      packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
-        (pkgs.rustBuilder.rustLib.makeOverride {
-          name = "hidapi";
-          overrideAttrs = drv: {
-            propagatedBuildInputs = (drv.propagatedBuildInputs or []) ++ [
-              pkgs.udev
-            ];
-          };
-        })
-        (pkgs.rustBuilder.rustLib.makeOverride {
-          name = "evm-loader";
-          overrideAttrs = drv: {
-            NEON_REVISION = "1";
-          };
-        })
-        (pkgs.rustBuilder.rustLib.makeOverride {
-          name = "neon-cli";
-          overrideAttrs = drv: {
-            NEON_REVISION = "1";
-          };
-        })
-      ];
     };
 
-    package = rust-pkgs.workspace.neon-cli {};
+    naersk' = pkgs.callPackage naersk {
+      cargo = toolchain;
+      rustc = toolchain;
+    };
 
-    shell = rust-pkgs.workspaceShell {
+    package = naersk'.buildPackage {
+      src = ./.;
+      buildInputs = [
+        pkgs.udev
+        pkgs.openssl
+      ];
+
+      NEON_REVISION = "1";
+    };
+
+    shell = pkgs.mkShell {
+      inputsFrom = [ package ];
+
+      NEON_REVISION = "1";
     };
   in {
     packages.default = package;
