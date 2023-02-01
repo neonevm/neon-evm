@@ -1,6 +1,6 @@
 use ethnum::U256;
 use evm_loader::evm::{Context, ExitStatus};
-use crate::types::ec::trace::{VMTracer, StorageDiff, MemoryDiff};
+use crate::types::trace::{VMTracer, StorageDiff, MemoryDiff};
 use super::vm_tracer::{VmTracer};
 
 pub trait ListenerVmTracer {
