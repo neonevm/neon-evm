@@ -160,7 +160,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     match self.storage_accounts.entry((contract.address, index)) {
                         Entry::Vacant(entry) => {
-                            let storage_address = EthereumStorageAddress::new(self.program_id, &contract.address, &index);
+                            let storage_address = EthereumStorageAddress::new(self.program_id, contract.info.key, &index);
                             let storage_account = self.solana_accounts.get(&storage_address.pubkey())
                                 .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", storage_address.pubkey()))?;
                     

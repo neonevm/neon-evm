@@ -280,7 +280,11 @@ pub fn execute(
     let stats = executor.stats.take();
     info!("Stats: {:?}", stats);
     
-    let signatures = executor.signatures.take();
+    let signatures = executor.signatures.take()
+        .into_iter()
+        .map(|s| bs58::encode(s).into_string())
+        .collect::<Vec<String>>();
+
     let result = serde_json::json!({
         "transactions": signatures,
     });

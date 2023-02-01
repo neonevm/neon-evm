@@ -77,13 +77,11 @@ impl EthereumStorageAddress {
     }
 
     #[must_use]
-    pub fn new(program_id: &Pubkey, address: &Address, index: &U256) -> Self {
-        let (base, _) = address.find_solana_address(program_id);
-
+    pub fn new(program_id: &Pubkey, base: &Pubkey, index: &U256) -> Self {
         let seed_buffer = Self::make_seed(index);
         let seed = unsafe { std::str::from_utf8_unchecked(&seed_buffer) };
 
-        let pubkey = Pubkey::create_with_seed(&base, seed, program_id).unwrap();
+        let pubkey = Pubkey::create_with_seed(base, seed, program_id).unwrap();
 
         Self { seed: seed_buffer, pubkey }
     }
