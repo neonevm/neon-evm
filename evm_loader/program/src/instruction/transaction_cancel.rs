@@ -5,6 +5,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::state_account::{BlockedAccounts, Deposit};
+use ethnum::U256;
 
 struct Accounts<'a> {
     storage: State<'a>,
@@ -46,6 +47,10 @@ fn execute<'a>(
     accounts: Accounts<'a>,
     blocked_accounts: &BlockedAccounts,
 ) -> ProgramResult {
+    let used_gas = U256::ZERO;
+    let total_used_gas = accounts.storage.gas_used;
+    solana_program::log::sol_log_data(&[b"GAS", &used_gas.to_le_bytes(), &total_used_gas.to_le_bytes()]);
+
     for (info, blocked) in accounts.remaining_accounts.iter().zip(blocked_accounts) {
         if !blocked.exists {
             continue;
