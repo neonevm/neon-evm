@@ -6,7 +6,7 @@ mod account_storage;
 mod syscall_stubs;
 mod errors;
 mod logs;
-mod commands;
+pub mod commands;
 mod rpc;
 mod program_options;
 pub mod config;

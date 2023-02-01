@@ -15,7 +15,7 @@ use crate::{
     NeonCliResult,
     syscall_stubs::Stubs, errors::NeonCliError,
 };
-use super::TxParams;
+use crate::types::TxParams;
 use solana_sdk::pubkey::Pubkey;
 
 
