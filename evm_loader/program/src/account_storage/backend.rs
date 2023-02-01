@@ -77,10 +77,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     return recent_blockhashes_data[offset..][..32].try_into().unwrap();
                 }
                 Ordering::Less => {
-                    max = i - 1;
+                    min = i + 1;
                 }
                 Ordering::Greater => {
-                    min = i + 1;
+                    max = i - 1;
                 }
             }
         }
