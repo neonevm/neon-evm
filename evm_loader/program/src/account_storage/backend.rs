@@ -61,8 +61,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             });
         let slot_hashes_data = slot_hashes_account.data.borrow();
         let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[..8].try_into().unwrap());
-        for i in 0..slot_hashes_len {
-            let offset = usize::try_from((i * 40) + 8).unwrap();
+        let mut min: usize = 0;
+        let mut max = usize::try_from(slot_hashes_len).unwrap() - 1;
+        while min <= max {
+            let i = (min + max) / 2;
+            let offset = i * 40 + 8;
             let slot = u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
             if number == slot {
                 let recent_blockhashes_data = recent_blockhashes_account.data.borrow();
@@ -70,6 +73,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     break;
                 }
                 return recent_blockhashes_data[offset..][..32].try_into().unwrap();
+            } else if number < slot {
+                max = i - 1;
+            } else {
+                min = i + 1;
             }
         }
         generate_fake_block_hash(number)
