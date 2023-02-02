@@ -30,7 +30,8 @@ ERR_MSG_TPL = {
 DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
-SOLANA_REVISION = 'v1.11.10'
+SOLANA_NODE_VERSION = 'v1.13.6'
+SOLANA_BPF_VERSION = 'v1.14.13'
 
 VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
@@ -44,11 +45,11 @@ def cli():
 @cli.command(name="build_docker_image")
 @click.option('--github_sha')
 def build_docker_image(github_sha):
-    solana_image = f'solanalabs/solana:{SOLANA_REVISION}'
+    solana_image = f'solanalabs/solana:{SOLANA_NODE_VERSION}'
     docker_client.pull(solana_image)
     buildargs = {"REVISION": github_sha,
                  "SOLANA_IMAGE": solana_image,
-                 "SOLANA_REVISION": SOLANA_REVISION}
+                 "SOLANA_BPF_VERSION": SOLANA_BPF_VERSION}
 
     tag = f"{IMAGE_NAME}:{github_sha}"
     click.echo("start build")
