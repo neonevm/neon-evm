@@ -14,11 +14,6 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use crate::types::TxParams;
 use std::any::Any;
-// use tokio::task::block_in_place;
-
-// use tokio_postgres::{ connect, Client};
-// use postgres::{ NoTls};
-// use serde::{Serialize, Deserialize };
 
 pub trait Rpc{
     fn commitment(&self) -> CommitmentConfig;
