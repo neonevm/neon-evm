@@ -8,7 +8,7 @@ use {
 
 #[derive(Debug)]
 pub struct TracerDb {
-    client: Arc<Client>,
+    pub client: Arc<Client>,
 }
 
 impl TracerDb {

@@ -10,7 +10,7 @@ use {
 
 #[derive(Debug)]
 pub struct IndexerDb {
-    client: Arc<Client>,
+    pub client: Arc<Client>,
 }
 
 impl IndexerDb {
