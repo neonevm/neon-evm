@@ -21,6 +21,7 @@ RUN cargo clippy --release && \
     cargo build --release && \
     cargo build-sbf --arch bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-sbf --arch bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-sbf --arch bpf --features no-logs,shadow && cp target/deploy/evm_loader.so target/deploy/evm_loader-shadow.so && \
     cargo build-sbf --arch bpf --features no-logs,govertest && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
     cargo build-sbf --arch bpf --features no-logs,govertest,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
     cargo build-sbf --arch bpf --features no-logs,mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
