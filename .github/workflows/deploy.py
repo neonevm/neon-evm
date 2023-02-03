@@ -149,9 +149,12 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     if head_ref_branch in github.get_proxy_branches():
         proxy_branch = head_ref_branch
     elif m := re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
-        proxy_branch = m.group(1)
+        proxy_branch = m.group(1) + '.x'
     elif is_tag_creating:
-        proxy_branch = github_ref.replace("refs/tags/", "")
+        if m := re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/tags/", "")):
+            proxy_branch = m.group(1) + '.x'
+        else:
+            proxy_branch = github_ref.replace("refs/tags/", "")
     elif is_version_branch:
         proxy_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/heads/", "")).group(1) + '.x'
     else:
