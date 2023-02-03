@@ -6,7 +6,7 @@ use {
 };
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TracerDb {
     pub client: Arc<Client>,
 }

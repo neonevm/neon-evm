@@ -8,7 +8,7 @@ use {
 };
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IndexerDb {
     pub client: Arc<Client>,
 }
