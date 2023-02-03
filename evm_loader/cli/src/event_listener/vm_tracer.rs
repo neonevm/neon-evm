@@ -1,5 +1,5 @@
 use ethnum::U256;
-use crate::types::ec::trace::{ExecutiveVMTracer, MemoryDiff, StorageDiff};
+use crate::types::trace::{ExecutiveVMTracer, MemoryDiff, StorageDiff};
 
 #[derive(Debug, Default, Clone)]
 pub struct StepDiff {

@@ -218,12 +218,12 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::NeonWithdraw { source, .. } => {
                     self.add_ethereum_account(&source, true);
                 },
-                Action::EvmLog { .. } => {},
                 Action::EvmSetStorage { address, index, value } => {
                     if index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
-                        let storage_account = EthereumStorageAddress::new(self.program_id(), &address, &index);
+                        let (base, _) = address.find_solana_address(self.program_id());
+                        let storage_account = EthereumStorageAddress::new(self.program_id(), &base, &index);
                         self.add_solana_account(*storage_account.pubkey(), true);
 
                         if self.storage(&address, &index) == [0_u8; 32] {
@@ -450,7 +450,8 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let subindex = (index & 0xFF).as_u8();
             let index = index & !U256::new(0xFF);
             
-            let solana_address = *EthereumStorageAddress::new(self.program_id(), address, &index).pubkey();
+            let (base, _) = address.find_solana_address(self.program_id());
+            let solana_address = *EthereumStorageAddress::new(self.program_id(), &base, &index).pubkey();
             debug!("read storage solana address {:?} - {:?}", address, solana_address);
 
             self.add_solana_account(solana_address, false);
@@ -515,7 +516,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let mut account = self.config.rpc_client.get_account(address).unwrap_or_default();
             let info = account_info(address, &mut account);
     
-            OwnedAccountInfo::from_account_info(&info)
+            OwnedAccountInfo::from_account_info(self.program_id(), &info)
         }
     }
 

@@ -93,17 +93,6 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     account.balance -= value;
                 }
-                Action::EvmLog { address, topics, data } => {
-                    use solana_program::log::sol_log_data;
-                    match topics.len() {
-                        0 => sol_log_data(&[b"LOG0", address.as_bytes(), &[0], &data]),
-                        1 => sol_log_data(&[b"LOG1", address.as_bytes(), &[1], &topics[0], &data]),
-                        2 => sol_log_data(&[b"LOG2", address.as_bytes(), &[2], &topics[0], &topics[1], &data]),
-                        3 => sol_log_data(&[b"LOG3", address.as_bytes(), &[3], &topics[0], &topics[1], &topics[2], &data]),
-                        4 => sol_log_data(&[b"LOG4", address.as_bytes(), &[4], &topics[0], &topics[1], &topics[2], &topics[3], &data]),
-                        _ => unreachable!()
-                    }
-                }
                 Action::EvmSetStorage { address, index, value } => {
                     storage.entry(address)
                         .or_insert_with(|| Vec::with_capacity(64))
@@ -171,7 +160,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     match self.storage_accounts.entry((contract.address, index)) {
                         Entry::Vacant(entry) => {
-                            let storage_address = EthereumStorageAddress::new(self.program_id, &contract.address, &index);
+                            let storage_address = EthereumStorageAddress::new(self.program_id, contract.info.key, &index);
                             let storage_account = self.solana_accounts.get(&storage_address.pubkey())
                                 .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", storage_address.pubkey()))?;
                     

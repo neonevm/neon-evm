@@ -33,7 +33,7 @@ pub fn execute(
                 let subindex = (*index & 0xFF).as_u8();
                 let index = *index & !U256::new(0xFF);
 
-                let address = EthereumStorageAddress::new(&config.evm_loader, &ether_address, &index);
+                let address = EthereumStorageAddress::new(&config.evm_loader, account_data.info.key, &index);
 
                 if let Ok(mut account) = config.rpc_client.get_account(address.pubkey()) {
                     if solana_sdk::system_program::check_id(&account.owner) {

@@ -329,17 +329,6 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(cache.block_timestamp)
     }
 
-    fn log(&mut self, address: Address, topics: &[[u8; 32]], data: &[u8]) -> Result<()> {
-        let log = Action::EvmLog {
-            address,
-            topics: topics.to_vec(),
-            data: data.to_vec()
-        };
-        self.actions.push(log);
-
-        Ok(())
-    }
-
     fn snapshot(&mut self) -> Result<()> {
         self.stack.push(self.actions.len());
 

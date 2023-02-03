@@ -88,7 +88,7 @@ impl<'a> ProgramAccountStorage<'a> {
             return None;
         }
 
-        let storage_address = EthereumStorageAddress::new(self.program_id, &address, &index);
+        let storage_address = EthereumStorageAddress::new(self.program_id, &self.solana_address(&address).0, &index);
         if let Some(&account) = self.solana_accounts.get(&storage_address.pubkey()) {
             assert!(solana_program::system_program::check_id(account.owner));
 

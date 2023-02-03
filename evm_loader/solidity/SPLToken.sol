@@ -51,6 +51,10 @@ interface SPLToken {
 
     function transfer(bytes32 source, bytes32 target, uint64 amount) external;
 
+    // transfer funds from spl-token accounts owned by Solana user.
+    // This method uses PDA[ACCOUNT_SEED_VERSION, b"AUTH", msg.sender, seed] to authorize transfer
+    function transferWithSeed(bytes32 seed, bytes32 source, bytes32 target, uint64 amount) external;
+
     function freeze(bytes32 account) external;
     function thaw(bytes32 account) external;
 }
