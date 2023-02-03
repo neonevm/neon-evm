@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use borsh::{BorshDeserialize, BorshSerialize};
 use mpl_token_metadata::assertions::collection::assert_collection_update_is_valid;
 use mpl_token_metadata::assertions::uses::assert_valid_use;
-use mpl_token_metadata::utils::{assert_initialized, assert_update_authority_is_correct, assert_data_valid, puff_out_data_fields};
+use mpl_token_metadata::utils::{assert_initialized, assert_data_valid, puff_out_data_fields};
 use solana_program::account_info::IntoAccountInfo;
 use solana_program::instruction::AccountMeta;
 use solana_program::program_option::COption;
@@ -112,7 +112,7 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
 fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>, args: &CreateMasterEditionArgs) -> ProgramResult {
     let edition_account_key  = &meta[0].pubkey;
     let mint_key             = &meta[1].pubkey;
-    let update_authority_key = &meta[2].pubkey;
+    // let update_authority_key = &meta[2].pubkey;
     // let _mint_authority_key   = &meta[3].pubkey;
     // let _payer_account_key    = &meta[4].pubkey;
     let metadata_account_key = &meta[5].pubkey;
@@ -136,11 +136,6 @@ fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey
 
     if mint.decimals != 0 {
         return Err!(ProgramError::InvalidArgument; "Metaplex: mint decimals != 0");
-    }
-    
-    {
-        let update_authority_info = accounts.get_mut(update_authority_key).unwrap().into_account_info();
-        assert_update_authority_is_correct(&metadata, &update_authority_info)?;
     }
 
     if mint.supply != 1 {
