@@ -32,7 +32,7 @@ DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
 SOLANA_REVISION = 'v1.11.10'
 
-VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
+VERSION_BRANCH_TEMPLATE = r"([vt]{1}\d{1,2}\.\d{1,2}\.x).*"
 docker_client = docker.APIClient()
 
 
@@ -148,12 +148,12 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
 
     if head_ref_branch in github.get_proxy_branches():
         proxy_branch = head_ref_branch
-    elif re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
-        proxy_branch = base_ref_branch
+    elif m := re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
+        proxy_branch = m.group(1)
     elif is_tag_creating:
         proxy_branch = github_ref.replace("refs/tags/", "")
     elif is_version_branch:
-        proxy_branch = github_ref.replace("refs/heads/", "")
+        proxy_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/heads/", "")).group(1)
     else:
         proxy_branch = 'develop'
     click.echo(f"Proxy branch: {proxy_branch}")
