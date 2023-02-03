@@ -3,9 +3,9 @@ ARG SOLANA_IMAGE
 FROM solanalabs/rust:1.65.0 AS builder
 RUN cargo install rustfilt
 WORKDIR /opt
-ARG SOLANA_REVISION
+ARG SOLANA_BPF_VERSION
 # TODO: make connection insecure to solve with expired certificate
-RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
+RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_BPF_VERSION}"/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

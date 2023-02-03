@@ -60,6 +60,10 @@ fn process_instruction<'a>(
             instruction::transaction_execute_from_instruction::process(program_id, accounts, instruction)
                 .map_err(ProgramError::from)
         }
+        EvmInstruction::TransactionExecuteFromAccount => {
+            instruction::transaction_execute_from_account::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
+        }
         EvmInstruction::TransactionStepFromInstruction => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
                 .map_err(ProgramError::from)

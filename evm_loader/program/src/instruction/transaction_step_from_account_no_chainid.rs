@@ -7,7 +7,7 @@ use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
 };
-use crate::instruction::transaction::Accounts;
+use crate::instruction::transaction_step::Accounts;
 use ethnum::U256;
 
 

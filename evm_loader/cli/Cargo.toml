@@ -11,15 +11,15 @@ thiserror = "1.0"
 bincode = "1.3.1"
 clap = "2.33.3"
 evm-loader = { path = "../program", default_features = false, features = ["tracing"] }
-solana-sdk = "=1.11.10"
-solana-client = "=1.11.10"
-solana-clap-utils = "=1.11.10"
-solana-cli-config = "=1.11.10"
-solana-cli = "=1.11.10"
-solana-cli-output = "=1.11.10"
-solana-transaction-status = "=1.11.10"
-spl-token = { version = "=3.5.0", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "=1.1.1", default_features = false, features = ["no-entrypoint"] }
+solana-sdk = "1.14"
+solana-client = "1.14"
+solana-clap-utils = "1.14"
+solana-cli-config = "1.14"
+solana-cli = "1.14"
+solana-cli-output = "1.14"
+solana-transaction-status = "1.14"
+spl-token = { version = "3.5", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.1", default_features = false, features = ["no-entrypoint"] }
 bs58 = "0.4.0"
 hex = "0.4.2"
 sha3 = "0.10"
@@ -34,8 +34,8 @@ rand = "0.8"
 ethnum = { version = "1", default_features = false, features = [ "serde" ] }
 goblin = { version = "0.4.2" }
 tokio = { version = "1", features = ["full"] }
-postgres = { version = "0.19.2", features = ["with-chrono-0_4", "array-impls"] }
-tokio-postgres = {version="0.7.6", features=["with-uuid-0_8"]}
+postgres = { version = "0.19", features = ["with-chrono-0_4", "array-impls"] }
+tokio-postgres = {version="0.7", features=["with-uuid-0_8"]}
 lazy_static = "1.4"
 
 [lib]
