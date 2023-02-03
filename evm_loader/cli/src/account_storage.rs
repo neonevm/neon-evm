@@ -516,7 +516,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let mut account = self.config.rpc_client.get_account(address).unwrap_or_default();
             let info = account_info(address, &mut account);
     
-            OwnedAccountInfo::from_account_info(&info)
+            OwnedAccountInfo::from_account_info(self.program_id(), &info)
         }
     }
 

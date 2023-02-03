@@ -59,13 +59,19 @@ impl OwnedAccountInfoPartial {
 
 impl OwnedAccountInfo {
     #[must_use]
-    pub fn from_account_info(info: &AccountInfo) -> Self {
+    pub fn from_account_info(program_id: &Pubkey, info: &AccountInfo) -> Self {
         Self { 
             key: *info.key,
             is_signer: info.is_signer,
             is_writable: info.is_writable,
             lamports: info.lamports(),
-            data: info.data.borrow().to_vec(),
+            data: if info.executable || (info.owner == program_id) {
+                // This is only used to emulate external programs
+                // They don't use data in our accounts
+                vec![]
+            } else {
+                info.data.borrow().to_vec()
+            },
             owner: *info.owner,
             executable: info.executable,
             rent_epoch: info.rent_epoch,
