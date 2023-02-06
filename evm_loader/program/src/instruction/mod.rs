@@ -46,6 +46,9 @@ pub enum EvmInstruction {
     /// Execute Transaction from Instruction in single iteration
     TransactionExecuteFromInstruction,
 
+    /// Execute Transaction from Account in single iteration
+    TransactionExecuteFromAccount,
+
     /// Execute Iterative Transaction from Instruction
     TransactionStepFromInstruction,
 
@@ -88,6 +91,7 @@ impl EvmInstruction {
             0x27 => Self::DepositV03,                               // 39
             0x28 => Self::CreateAccountV03,                         // 40
             0x29 => Self::CreateMainTreasury,                       // 41
+            0x2A => Self::TransactionExecuteFromAccount,            // 42
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -102,9 +106,11 @@ pub mod account_holder_write;
 pub mod neon_tokens_deposit;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;
+pub mod transaction_execute_from_account;
+pub mod transaction_execute;
 pub mod transaction_step_from_instruction;
 pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
-pub mod transaction;
+pub mod transaction_step;
 pub mod collect_treasury;
 pub mod create_main_treasury;

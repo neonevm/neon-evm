@@ -41,7 +41,7 @@ impl<'a> State<'a> {
     pub fn new(
         program_id: &'a Pubkey,
         info: &'a AccountInfo<'a>,
-        accounts: &crate::instruction::transaction::Accounts<'a>,
+        accounts: &crate::instruction::transaction_step::Accounts<'a>,
         caller: Address,
         trx: &Transaction,
     ) -> Result<Self, ProgramError> {
