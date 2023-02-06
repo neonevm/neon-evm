@@ -149,8 +149,22 @@ pub fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
     let non_null_len = non_null_bytes.len();
     let mut hash = [255; 32];
     hash[32 - 1 - non_null_len] = 0;
-    for i in 0..non_null_len {
-        hash[32 - non_null_len + i] = non_null_bytes[i];
-    }
+    hash[(32 - non_null_len)..].copy_from_slice(&non_null_bytes);
     hash
+}
+
+#[test]
+fn test_generate_fake_block_hash() {
+    let slot = 70;
+    let mut expected: [u8; 32] = [255; 32];
+    expected[30] = 0;
+    expected[31] = 0x46;
+    assert_eq!(generate_fake_block_hash(slot), expected);
+
+    let slot = 1000;
+    let mut expected: [u8; 32] = [255; 32];
+    expected[29] = 0;
+    expected[30] = 0x03;
+    expected[31] = 0xe8;
+    assert_eq!(generate_fake_block_hash(slot), expected);
 }
