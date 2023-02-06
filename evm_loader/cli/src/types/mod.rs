@@ -3,12 +3,14 @@ pub mod trace;
 pub mod indexer_db;
 pub mod tracer_db;
 
-use tokio_postgres::{ connect, Client};
-use postgres::{ NoTls};
-use tokio::task::block_in_place;
-use ethnum::U256;
-use evm_loader::types::Address;
-
+use {
+    tokio_postgres::{ connect, Client},
+    postgres::NoTls,
+    tokio::task::block_in_place,
+    ethnum::U256,
+    evm_loader::types::Address,
+    thiserror::Error,
+};
 
 type Bytes = Vec<u8>;
 
@@ -73,9 +75,13 @@ pub fn block<F, Fu, R>(f: F) -> R
         handle.block_on(f())
     })
 }
-macro_rules! f {
-    ($error:expr) => {
-        format!("{:?}", $error)
-    };
+
+#[derive(Error, Debug)]
+pub enum DbError {
+    #[error("postgres: {}", .0)]
+    Db(#[from] tokio_postgres::Error),
+    #[error("Custom: {0}")]
+    Custom (String),
 }
-pub(crate) use f;
+
+pub type DbResult<T> = std::result::Result<T, DbError>;

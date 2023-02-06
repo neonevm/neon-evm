@@ -1,7 +1,8 @@
-use crate::types::Bytes;
-use ethnum::U256;
-use std::{collections::HashMap};
-
+use {
+    crate::types::Bytes,
+    ethnum::U256,
+    std::collections::HashMap,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some chunk of memory.
