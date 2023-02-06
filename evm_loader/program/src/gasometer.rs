@@ -63,7 +63,7 @@ impl Gasometer {
 
     pub fn record_write_to_holder(&mut self, trx: &Transaction) {
         let size: u64 = trx.rlp_len.try_into().expect("usize is 8 bytes");
-        let cost: u64 = (size + (HOLDER_MSG_SIZE - 1)) / HOLDER_MSG_SIZE
+        let cost: u64 = ((size + (HOLDER_MSG_SIZE - 1)) / HOLDER_MSG_SIZE)
             .saturating_mul(WRITE_TO_HOLDER_TRX_COST);
 
         self.gas = self.gas.saturating_add(cost);
