@@ -1,7 +1,11 @@
 #[allow(clippy::all)]
 pub mod trace;
-pub mod indexer_db;
-pub mod tracer_db;
+mod indexer_db;
+mod tracer_pg_db;
+mod tracer_ch_db;
+
+pub use indexer_db::IndexerDb;
+pub use tracer_pg_db::TracerDb;
 
 use {
     tokio_postgres::{ connect, Client},
@@ -77,11 +81,12 @@ pub fn block<F, Fu, R>(f: F) -> R
 }
 
 #[derive(Error, Debug)]
-pub enum DbError {
+pub enum PgError {
     #[error("postgres: {}", .0)]
     Db(#[from] tokio_postgres::Error),
     #[error("Custom: {0}")]
     Custom (String),
 }
 
-pub type DbResult<T> = std::result::Result<T, DbError>;
+pub type PgResult<T> = std::result::Result<T, PgError>;
+

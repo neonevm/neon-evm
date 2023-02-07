@@ -1,6 +1,9 @@
-pub mod db_call_client;
-pub mod db_trx_client;
+mod db_call_client;
+mod db_trx_client;
 mod validator_client;
+
+pub use db_trx_client::TrxDbClient;
+pub use db_call_client::CallDbClient;
 
 use solana_client::{
     client_error::{Result as ClientResult,},

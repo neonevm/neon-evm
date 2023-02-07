@@ -11,7 +11,7 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use std::any::Any;
 use super::{Rpc, e};
-use crate::{types::{tracer_db::TracerDb, DbConfig, TxParams}};
+use crate::{types::{TracerDb, DbConfig, TxParams}};
 
 
 #[derive(Debug)]
