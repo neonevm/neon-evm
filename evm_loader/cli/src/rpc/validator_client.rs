@@ -12,7 +12,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use super::{Rpc, e};
-use crate::commands::TxParams;
+use crate::types::TxParams;
 use std::any::Any;
 
 

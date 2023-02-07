@@ -32,16 +32,9 @@ use crate::{
     program_options::truncate,
     Config,
     commands::get_neon_elf::CachedElfParams,
+    types::TxParams,
 };
 
-#[derive(Clone)]
-pub struct TxParams {
-    pub from: Address,
-    pub to: Option<Address>,
-    pub data: Option<Vec<u8>>,
-    pub value: Option<U256>,
-    pub gas_limit: Option<U256>,
-}
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult {
     match (cmd, params) {
