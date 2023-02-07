@@ -5,8 +5,7 @@ mod tracer_pg_db;
 mod tracer_ch_db;
 
 pub use indexer_db::IndexerDb;
-// pub use tracer_pg_db::TracerDb;
-pub use tracer_ch_db::ClickHouseDb as TracerDb;
+pub use tracer_pg_db::TracerDb;
 
 use {
     tokio_postgres::{ connect, Client},
