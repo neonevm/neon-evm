@@ -70,8 +70,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     pub fn queue_external_instruction(
-        &mut self, 
-        instruction: Instruction, 
+        &mut self,
+        instruction: Instruction,
         seeds: Vec<Vec<u8>>,
         allocate: usize,
     ) {
@@ -82,7 +82,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             seeds,
             allocate
         };
-        
+
         self.actions.push(action);
     }
 
@@ -131,11 +131,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         if (len == 0) || (len > 8*1024) {
             return Err(Error::Custom("Account cache: invalid data len".into()));
         }
-        
+
         if let Some(account) = self.backend.clone_solana_account_partial(&address, offset, len) {
             let mut cache = self.cache.borrow_mut();
             cache.solana_accounts_partial.insert(address, account);
-    
+
             Ok(())
         } else {
             Err(Error::Custom("Account cache: invalid data offset".into()))
@@ -146,7 +146,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let cache = self.cache.borrow();
         cache.solana_accounts_partial.get(&address)
             .cloned()
-            .ok_or_else(|| Error::Custom(format!("Account cache: account {} is not cached", address)))
+            .ok_or_else(|| Error::Custom(format!("Account cache: account {address} is not cached")))
     }
 }
 
@@ -363,7 +363,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
 impl<'a> Serialize for ExecutorState<'_, ProgramAccountStorage<'a>> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
-        S: serde::Serializer 
+        S: serde::Serializer
     {
         use serde::ser::SerializeSeq;
 
@@ -382,7 +382,7 @@ impl<'de, 'a> DeserializeSeed<'de> for &'de ProgramAccountStorage<'a> {
 
     fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
     where
-        D: serde::Deserializer<'de> 
+        D: serde::Deserializer<'de>
     {
         struct SeqVisitor;
 
@@ -410,7 +410,7 @@ impl<'de, 'a> DeserializeSeed<'de> for &'de ProgramAccountStorage<'a> {
             }
         }
 
-        let (cache, actions, stack, exit_status) 
+        let (cache, actions, stack, exit_status)
             = deserializer.deserialize_seq(SeqVisitor)?;
 
         Ok(ExecutorState { backend: self, cache, actions, stack, exit_status })
@@ -418,7 +418,7 @@ impl<'de, 'a> DeserializeSeed<'de> for &'de ProgramAccountStorage<'a> {
 }
 
 impl<'de, 'a> ExecutorState<'de, ProgramAccountStorage<'a>> {
-    pub fn serialize_into<W>(&self, writer: &mut W) -> Result<()> 
+    pub fn serialize_into<W>(&self, writer: &mut W) -> Result<()>
         where W: std::io::Write
     {
         let bincode = bincode::DefaultOptions::new()
@@ -429,7 +429,7 @@ impl<'de, 'a> ExecutorState<'de, ProgramAccountStorage<'a>> {
             .map_err(Error::from)
     }
 
-    pub fn deserialize_from(buffer: &mut &[u8], backend: &'de ProgramAccountStorage<'a>) -> Result<Self> 
+    pub fn deserialize_from(buffer: &mut &[u8], backend: &'de ProgramAccountStorage<'a>) -> Result<Self>
     {
         let bincode = bincode::DefaultOptions::new()
             .with_fixint_encoding()

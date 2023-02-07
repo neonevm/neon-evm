@@ -62,8 +62,8 @@ fn is_amount<T, U>(amount: U) -> Result<(), String>
         Ok(())
     } else {
         Err(format!(
-            "Unable to parse argument as {}, provided: {}",
-            std::any::type_name::<T>(), amount
+            "Unable to parse argument as {}, provided: {amount}",
+            std::any::type_name::<T>()
         ))
     }
 }

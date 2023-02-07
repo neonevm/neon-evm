@@ -40,14 +40,14 @@ pub fn read_elf_parameters(
         {
             let end = program_data.len();
             let from: usize = usize::try_from(sym.st_value).unwrap_or_else(|_| panic!("Unable to cast usize from u64:{:?}", sym.st_value));
-            let to: usize = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| panic!("Unable to cast usize from u64:{:?}. Error: {}", sym.st_value + sym.st_size, err));
+            let to: usize = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| panic!("Unable to cast usize from u64:{:?}. Error: {err}", sym.st_value + sym.st_size));
             if to < end && from < end {
                 let buf = &program_data[from..to];
                 let value = std::str::from_utf8(buf).expect("read elf value error");
                 result.insert(name, String::from(value));
             }
             else {
-                panic!("{} is out of bounds", name);
+                panic!("{name} is out of bounds");
             }
         }
     });

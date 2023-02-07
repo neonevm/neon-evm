@@ -44,7 +44,7 @@ pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
             let mut context = CONTEXT.lock().unwrap();
             context.push(LogRecord {
                 message: record.args().to_string(),
-                source: format!("{}:{}", file, line),
+                source: format!("{file}:{line}"),
                 level: record.metadata().level().as_str()
             });
         }))
