@@ -20,7 +20,7 @@ impl Address {
     }
 
     #[must_use]
-    pub fn from_create(source: &Address, nonce: u64) -> Self {
+    pub fn from_create(source: &Self, nonce: u64) -> Self {
         use solana_program::keccak::{hash, Hash};
 
         let mut stream = rlp::RlpStream::new_list(2);
@@ -29,18 +29,18 @@ impl Address {
         let Hash(hash) = hash(&stream.out());
 
         let bytes = arrayref::array_ref![hash, 12, 20];
-        Address(*bytes)
+        Self(*bytes)
     }
 
     #[must_use]
-    pub fn from_create2(source: &Address, salt: &[u8; 32], initialization_code: &[u8]) -> Self {
+    pub fn from_create2(source: &Self, salt: &[u8; 32], initialization_code: &[u8]) -> Self {
         use solana_program::keccak::{hash, hashv, Hash};
 
         let Hash(code_hash) = hash(initialization_code);
         let Hash(hash) = hashv(&[ &[0xFF], source.as_bytes(), salt, &code_hash ]);
 
         let bytes = arrayref::array_ref![hash, 12, 20];
-        Address(*bytes)
+        Self(*bytes)
     }
 
     pub fn from_hex(mut s: &str) -> Result<Self, Error> {
@@ -49,7 +49,7 @@ impl Address {
         }
 
         let bytes = <[u8; 20]>::from_hex(s)?;
-        Ok(Address(bytes))
+        Ok(Self(bytes))
     }
 
     #[must_use]
@@ -91,7 +91,7 @@ impl Debug for Address {
 
 impl rlp::Encodable for Address {
     fn rlp_append(&self, stream: &mut rlp::RlpStream) {
-        let Address(bytes) = self;
+        let Self(bytes) = self;
         stream.encoder().encode_value(bytes);
     }
 }
@@ -100,7 +100,7 @@ impl rlp::Decodable for Address {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
         rlp.decoder().decode_value(|bytes| {
             let array: [u8; 20] = bytes.try_into().map_err(|_| rlp::DecoderError::RlpInvalidLength)?;
-            Ok(Address(array))
+            Ok(Self(array))
         })
     }
 }

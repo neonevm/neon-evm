@@ -1,6 +1,5 @@
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
-#![allow(clippy::cast_possible_wrap)]
 
 mod account_storage;
 mod syscall_stubs;
@@ -45,7 +44,7 @@ async fn main() {
             }), 0_i32)
         }
         Err(e) => {
-            let error_code = e.error_code() as i32;
+            let error_code = e.error_code();
             (serde_json::json!({
                 "result": "error",
                 "error": e.to_string(),

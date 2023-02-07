@@ -45,14 +45,11 @@ pub fn create(options: &ArgMatches) -> Config {
             .unwrap_or(&cli_config.json_rpc_url),
     );
 
-    let evm_loader =
-        if let Some(evm_loader) = pubkey_of(options, "evm_loader") {
-            evm_loader
-        } else {
-            let e = NeonCliError::EvmLoaderNotSpecified;
-            error!("{}", e);
-            exit(e.error_code() as i32);
-        };
+    let Some(evm_loader) = pubkey_of(options, "evm_loader") else {
+        let e = NeonCliError::EvmLoaderNotSpecified;
+        error!("{}", e);
+        exit(e.error_code());
+    };
 
     let mut wallet_manager = None;
 
@@ -67,7 +64,7 @@ pub fn create(options: &ArgMatches) -> Config {
         |_| {
             let e = NeonCliError::KeypairNotSpecified;
             error!("{}", e);
-            exit(e.error_code() as i32);
+            exit(e.error_code());
         }
     );
 

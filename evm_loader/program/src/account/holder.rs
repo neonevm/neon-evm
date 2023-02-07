@@ -1,3 +1,5 @@
+#![allow(clippy::use_self)] // Can't use generic parameter from outer function
+
 use std::cell::Ref;
 
 use arrayref::{mut_array_refs, array_refs};
@@ -38,7 +40,6 @@ impl Packable for Data {
 
     /// Serialize `Holder` struct into given destination
     fn pack(&self, dst: &mut [u8]) {
-        #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
         let (owner, hash) = mut_array_refs![data, 32, 32];
 

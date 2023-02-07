@@ -59,19 +59,21 @@ impl CallDbClient {
 
     fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
         let pubkey_bytes = pubkey.to_bytes();
+        let slot: i64 = self.slot.try_into().expect("slot < i64::MAX");
         let row = block(|| async {
             self.tracer_db.query_one(
                 "SELECT * FROM get_account_at_slot($1, $2)",
-                &[&pubkey_bytes.as_slice(), &(self.slot as i64)]
+                &[&pubkey_bytes.as_slice(), &slot]
             ).await
         })?;
 
+        let owner: &[u8] = row.try_get(1)?;
         let lamports: i64 = row.try_get(2)?;
         let rent_epoch: i64 = row.try_get(4)?;
         Ok(Some(Account {
             lamports: u64::try_from(lamports).expect("lamports cast error"),
             data: row.try_get(5)?,
-            owner: Pubkey::new(row.try_get(1)?),
+            owner: Pubkey::try_from(owner).expect("pubkey cast error"),
             executable: row.try_get(3)?,
             rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch cast error"),
         }))

@@ -53,12 +53,13 @@ impl TrxDbClient {
             ).await
         })?;
         let lamports: i64 = row.try_get(0)?;
+        let owner: &[u8] = row.try_get(2)?;
         let rent_epoch: i64 = row.try_get(4)?;
 
         let account = Account {
             lamports: u64::try_from(lamports).expect("lamports cast error"),
             data: row.try_get(1)?,
-            owner: Pubkey::new(row.try_get(2)?),
+            owner: Pubkey::try_from(owner).expect("owner cast error"),
             executable: row.try_get(3)?,
             rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch cast error"),
         };

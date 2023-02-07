@@ -116,18 +116,14 @@ impl<'a> ProgramAccountStorage<'a> {
         if let Some(account) = self.solana_accounts.get(&solana_address) {
             assert!(
                 self.is_account_empty(account),
-                "Empty ethereum account {} must belong to the system program or be uninitialized",
-                address
+                "Empty ethereum account {address} must belong to the system program or be uninitialized"
             );
 
             empty_accounts.insert(*address);
             return None;
         }
 
-        panic!(
-            "Ethereum account {} (solana address {}) must be present in the transaction",
-            address, solana_address
-        );
+        panic!("Ethereum account {address} (solana address {solana_address}) must be present in the transaction");
     }
 
     pub fn ethereum_account_mut(&mut self, address: &Address) -> &mut EthereumAccount<'a> {

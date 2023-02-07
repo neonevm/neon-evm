@@ -164,7 +164,7 @@ impl<'a> State<'a> {
             .map(|c| c.split_at(2))
             .map(|(meta, key)|
                 BlockedAccountMeta {
-                    key: Pubkey::new(key),
+                    key: Pubkey::try_from(key).expect("key is 32 bytes"),
                     exists: meta[1] != 0,
                     is_writable: meta[0] != 0,
                 }

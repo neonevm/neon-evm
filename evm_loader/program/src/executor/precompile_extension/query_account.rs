@@ -48,7 +48,7 @@ pub fn query_account<B: AccountStorage>(
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
     let (account_address, rest) = rest.split_at(32);
-    let account_address = Pubkey::new(account_address);
+    let account_address = Pubkey::try_from(account_address)?;
 
     match method_id {
         QUERY_ACCOUNT_METHOD_CACHE_ID => {
