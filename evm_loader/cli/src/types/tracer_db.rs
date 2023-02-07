@@ -26,7 +26,7 @@ impl TracerDb {
             ).await
         })?;
 
-        row.try_get(0).map_err(|e| e.into())
+        row.try_get(0).map_err(std::convert::Into::into)
     }
 
     pub fn get_block_time(&self, slot: u64) -> DbResult<i64> {
@@ -36,7 +36,7 @@ impl TracerDb {
             ).await
         })?;
 
-        row.try_get(0).map_err(|e| e.into())
+        row.try_get(0).map_err(std::convert::Into::into)
     }
 
     pub fn get_latest_block(&self) -> DbResult<u64>{
