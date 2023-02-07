@@ -145,11 +145,11 @@ pub trait AccountStorage {
 #[must_use]
 pub fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
     let slot_bytes: [u8; 8] = slot.to_be_bytes();
-    let non_null_bytes: Vec<_> = slot_bytes.into_iter().skip_while(|&n| n == 0).collect();
-    let non_null_len = non_null_bytes.len();
+    let slot_vec: Vec<_> = std::iter::once(0)
+        .chain(slot_bytes.into_iter().skip_while(|&n| n == 0))
+        .collect();
     let mut hash = [255; 32];
-    hash[32 - 1 - non_null_len] = 0;
-    hash[(32 - non_null_len)..].copy_from_slice(&non_null_bytes);
+    hash[(32 - slot_vec.len())..].copy_from_slice(&slot_vec);
     hash
 }
 
