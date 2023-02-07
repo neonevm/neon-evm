@@ -3,60 +3,62 @@
 
 [package]
 name = "evm-loader"
-version = "0.6.0-rc3"
-description = "Ethereum VM loader"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana-program-library"
-license = "Apache-2.0"
-edition = "2018"
-exclude = ["js/**"]
+version = "0.15.0-dev"
+description = "Neon EVM loader"
+authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
+edition = "2021"
+include = ["config/*.toml"]
 
 [features]
+#! The next feature defines configurations for deploys on different blockchains
+## Builds NeonEVM for testing with goverment system
+govertest = []
+## Builds NeonEVM for mainnet deployment
 mainnet = []
+## Builds NeonEVM for testnet deployment
 testnet = []
+## Builds NeonEVM for devnet deployment
 devnet = []
+
+## Builds NeonEVM program for `emergency` mode. In this mode, NeonEVM doesn't process
+## any transaction and return error `ProgramError::InvalidInstructionData` with comment
+## `Emergency image: all instructions are rejected`. This feature can be used with
+## the feature which defines configuration. In this case, the resulting image will
+## contain a configuration for appropriated deployment.
+emergency = []
+
+## Builds program without debug logs
 no-logs = []
+
+## Do not include entrypoint (for include in other application)
 no-entrypoint = []
 test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
-tracing = [ "environmental" ]
+tracing = ["environmental"]
 
 [dependencies]
-solana-program = { version = "1.8.12", default_features = false }
-spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
-#num-bigint = "0.4"
-num-derive = "0.3"
-num-traits = "0.2"
-remove_dir_all = "=0.5.0"
+linked_list_allocator = { version = "0.10", default_features = false }
+evm-loader-macro = { path = "../program-macro" }
+solana-program = { version = "1.14", default_features = false }
+spl-token = { version = "3.5", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.1", default_features = false, features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "=1.3.2", default_features = false, features = ["no-entrypoint"] }
 thiserror = "1.0"
 arrayref = "0.3.6"
-num_enum = "0.5.1"
 hex = "0.4.2"
-bs58 = "0.3.1"
-getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
-#k256 = { version = "0.4.0", default-features = false, features = ["ecdsa"] }
-#tbn = { version = "0.4.4", default-features = false }
-ripemd160 = "0.9.1"
-serde = "1.0.112"
-serde_bytes = "0.11"
-serde_derive = "1.0.103"
-impl-serde = "0.1"
+ripemd = "0.1"
 rlp = "0.5"
-bincode = "1.3.3"
-evm = { version = "0.18.0", path = "../rust-evm", default_features = false, features = ["with-serde"] }
-evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
+static_assertions = "1"
+borsh = "0.9"
+bincode = "1"
+serde_bytes = "0.11"
+serde = { version = "1", features = ["derive"] }
+ethnum = { version = "1", default_features = false, features = [ "serde" ] }
 const_format = { version = "0.2.21" }
-macros = { version = "0.1", path = "../macro" }
 cfg-if = { version = "1.0" }
-log = "0.4"
-environmental = { version = "1.1", optional = true, default-features = false }
-
-[dev-dependencies]
-rand = { version = "0.7.0"}
-solana-program-test = "1.8.12"
-solana-sdk = "1.8.12"
+log = { version = "0.4", default-features = false }
+environmental = { version = "1", default-features = false, optional = true}
 
 [lib]
 crate-type = ["cdylib", "lib"]

@@ -1,0 +1,24 @@
+version: 2
+updates:
+    - package-ecosystem: "cargo"
+      directory: "/evm_loader"
+      schedule:
+          interval: "daily"
+          time: "10:00"
+          timezone: "UTC"
+      target-branch: "develop"
+      open-pull-requests-limit: 1
+      assignees:
+        - "anton-lisanin"
+        - "s-medvedev"
+      ignore:
+        - dependency-name: "solana-program"
+        - dependency-name: "spl-token"
+        - dependency-name: "spl-associated-token-account"
+        - dependency-name: "mpl-token-metadata"
+        - dependency-name: "solana-sdk"
+        - dependency-name: "solana-client"
+        - dependency-name: "solana-clap-utils"
+        - dependency-name: "solana-cli"
+        - dependency-name: "solana-cli-output"
+        - dependency-name: "solana-transaction-status"

@@ -1,649 +1,563 @@
-#[allow(unused)]
-
 use std::{
-    borrow::BorrowMut,
     cell::RefCell,
     collections::HashMap,
-    convert::TryFrom,
-    error,
-    process::exit,
     rc::Rc,
-    thread::sleep,
-    time::Duration,
+    str::FromStr,
+    convert::TryInto,
 };
 
-use log::{error, info, trace};
-
-use evm::{H160, U256, Transfer};
-use evm::backend::Apply;
-use serde::{Deserialize, Serialize};
-
-#[allow(unused)]
-use solana_client::{
-    client_error,
-    client_error::reqwest::StatusCode,
-    rpc_client::RpcClient,
-    rpc_config::RpcSimulateTransactionConfig,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-};
-#[allow(unused)]
-use solana_program::{
-    instruction::AccountMeta,
-    instruction::Instruction,
-    message::Message,
-    native_token::lamports_to_sol,
-};
-#[allow(unused)]
+use log::{debug, info, trace, warn};
+use ethnum::U256;
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
-    commitment_config::CommitmentConfig,
-    entrypoint::ProgramResult,
-    program::invoke_signed,
-    program_error::ProgramError,
-    pubkey::Pubkey,
-    signature::Signature,
-    signer::keypair::Keypair,
-    signer::Signer,
-    transaction::Transaction,
-    transaction::TransactionError,
+    pubkey::{Pubkey},
+    pubkey,
+    sysvar::{recent_blockhashes, Sysvar}, rent::Rent,
 };
-
+use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
-    account_data::{ACCOUNT_SEED_VERSION, AccountData, Contract},
-    executor_state::{ERC20Approve, SplApprove, SplTransfer},
-    hamt::Hamt,
-    precompile_contracts::is_precompile_address,
-    solana_backend::{AccountStorage, AccountStorageInfo},
-    solidity_account::SolidityAccount,
+    config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
+    executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
+    account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, ether_storage::EthereumStorageAddress},
+    account_storage::{AccountStorage}, evm::is_precompile_address,
+    types::Address,
+    gasometer::LAMPORTS_PER_SIGNATURE
 };
+use evm_loader::account::ether_contract;
+use evm_loader::account_storage::{AccountOperation, AccountsOperations};
 
 use crate::Config;
-use crate::NeonCliResult;
-use crate::errors::NeonCliError;
 
-#[derive(Debug, Clone)]
-pub struct TokenAccount {
-    owner: Pubkey,
-    contract: Pubkey,
-    mint: Pubkey,
-    key: Pubkey,
-    new: bool
+const FAKE_OPERATOR: Pubkey = pubkey!("neonoperator1111111111111111111111111111111");
+
+fn serde_pubkey_bs58<S>(value: &Pubkey, s: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+    let bs58 = bs58::encode(value).into_string();
+    s.serialize_str(&bs58)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TokenAccountJSON {
-    owner: String,
-    contract: String,
-    mint: String,
-    key: String,
-    new: bool
-}
-impl From<TokenAccount> for TokenAccountJSON {
-    fn from(account: TokenAccount) -> Self {
-        Self {
-            owner: bs58::encode(&account.owner).into_string(),
-            contract: bs58::encode(&account.contract).into_string(),
-            mint: bs58::encode(&account.mint).into_string(),
-            key: bs58::encode(&account.key).into_string(),
-            new: account.new,
+#[allow(unused)]
+fn deserialize_pubkey_from_str<'de, D>(deserializer: D) -> Result<Pubkey, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+{
+    struct StringVisitor;
+    impl<'de> serde::de::Visitor<'de> for StringVisitor {
+        type Value = Pubkey;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string containing json data")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+        {
+            Pubkey::from_str(v).map_err(E::custom)
         }
     }
+    deserializer.deserialize_any(StringVisitor)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AccountJSON {
-    address: String,
-    account: String,
-    contract: Option<String>,
+
+#[derive(serde::Serialize, Clone)]
+pub struct NeonAccount {
+    address: Address,
+    #[serde(serialize_with = "serde_pubkey_bs58")]
+    #[serde(deserialize_with = "deserialize_pubkey_from_str")]
+    account: Pubkey,
     writable: bool,
     new: bool,
-    code_size: Option<usize>,
-    code_size_current: Option<usize>,
+    size: usize,
+    size_current: usize,
+    additional_resize_steps: usize,
+    #[serde(skip)]
+    data: Option<Account>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SolanaAccountJSON {
-    /// An account's public key
-    pub pubkey: String,
-    /// True if an Instruction requires a Transaction signature matching `pubkey`.
-    pub is_signer: bool,
-    /// True if the `pubkey` can be loaded as a read-write account.
-    pub is_writable: bool,
-}
-impl From<AccountMeta> for SolanaAccountJSON {
-    fn from(account_meta: AccountMeta) -> Self {
-        Self {
-            pubkey: bs58::encode(&account_meta.pubkey).into_string(),
-            is_signer: account_meta.is_signer,
-            is_writable: account_meta.is_writable,
+impl NeonAccount {
+    pub fn rpc_load(config: &Config, address: Address, writable: bool) -> Self {
+        let (key, _) = make_solana_program_address(&address, &config.evm_loader);
+        info!("get_account_from_solana {} => {}", address, key);
+
+        if let Ok(account) = config.rpc_client.get_account(&key) {
+            trace!("Account found");
+
+            Self {
+                address,
+                account: key,
+                writable,
+                new: false,
+                size: account.data.len(),
+                size_current: account.data.len(),
+                additional_resize_steps: 0,
+                data: Some(account)
+            }
+        }
+        else {
+            warn!("Account not found {}", address);
+
+            Self {
+                address, 
+                account: key, 
+                writable,
+                new: true,
+                size: 0,
+                size_current: 0,
+                additional_resize_steps: 0,
+                data: None
+            }
         }
     }
 }
 
-struct SolanaAccount {
-    account: Account,
-    code_account: Option<Account>,
-    key: Pubkey,
-    writable: bool,
-    code_size: Option<usize>,
-    code_size_current: Option<usize>,
+#[derive(serde::Serialize, Clone)]
+pub struct SolanaAccount {
+    #[serde(serialize_with = "serde_pubkey_bs58")]
+    pubkey: Pubkey,
+    is_writable: bool
 }
 
-struct SolanaNewAccount {
-    key: Pubkey,
-    writable: bool,
-    code_size: Option<usize>
-}
-
-impl SolanaAccount {
-    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
-        trace!("SolanaAccount::new");
-        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
-    }
-}
-
-impl SolanaNewAccount {
-    pub const fn new(key: Pubkey) -> Self {
-        Self{key, writable: false, code_size: None}
-    }
-}
 
 #[allow(clippy::module_name_repetitions)]
 pub struct EmulatorAccountStorage<'a> {
-    accounts: RefCell<HashMap<H160, SolanaAccount>>,
-    new_accounts: RefCell<HashMap<H160, SolanaNewAccount>>,
-    pub solana_accounts: RefCell<HashMap<Pubkey, AccountMeta>>,
-    pub token_accounts: RefCell<HashMap<Pubkey, TokenAccount>>,
+    pub accounts: RefCell<HashMap<Address, NeonAccount>>,
+    pub solana_accounts: RefCell<HashMap<Pubkey, SolanaAccount>>,
     config: &'a Config,
-    contract_id: H160,
-    caller_id: H160,
     block_number: u64,
     block_timestamp: i64,
-    token_mint: Pubkey
+    neon_token_mint: Pubkey,
+    chain_id: u64,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config, contract_id: H160, caller_id: H160, token_mint: Pubkey) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, token_mint: Pubkey, chain_id: u64) -> EmulatorAccountStorage {
         trace!("backend::new");
 
-        let slot = if let Ok(slot) = config.rpc_client.get_slot() {
-            trace!("Got slot");
-            trace!("Slot {}", slot);
-            slot
-        }
-        else {
-            error!("Get slot error");
-            0
-        };
-
-        let timestamp = if let Ok(timestamp) = config.rpc_client.get_block_time(slot) {
-            trace!("Got timestamp");
-            trace!("timestamp {}", timestamp);
-            timestamp
-        } else {
-            error!("Get timestamp error");
-            0
-        };
+        let slot = config.rpc_client.get_slot().unwrap_or_default();
+        let timestamp = config.rpc_client.get_block_time(slot).unwrap_or_default();
 
         Self {
             accounts: RefCell::new(HashMap::new()),
-            new_accounts: RefCell::new(HashMap::new()),
             solana_accounts: RefCell::new(HashMap::new()),
-            token_accounts: RefCell::new(HashMap::new()),
             config,
-            contract_id,
-            caller_id,
             block_number: slot,
             block_timestamp: timestamp,
-            token_mint
+            neon_token_mint: token_mint,
+            chain_id,
         }
     }
 
-    pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, u64, Option<Account>)> {
+    pub fn get_account_from_solana(config: &'a Config, address: &Address) -> (Pubkey, Option<Account>) {
         let (solana_address, _solana_nonce) = make_solana_program_address(address, &config.evm_loader);
-        info!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
+        info!("get_account_from_solana {} => {}", address, solana_address);
 
-        if let Some(acc) = config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::processed()).unwrap().value {
+        if let Ok(acc) = config.rpc_client.get_account(&solana_address) {
             trace!("Account found");
             trace!("Account data len {}", acc.data.len());
             trace!("Account owner {}", acc.owner);
 
-            let account_data = match AccountData::unpack(&acc.data) {
-                Ok(acc_data) => match acc_data {
-                    AccountData::Account(acc) => acc,
-                    _ => return None,
-                },
-                Err(_) => return None,
-            };
+            (solana_address, Some(acc))
+        } else {
+            warn!("Account not found {}", address);
 
-            let code_account = if account_data.code_account == Pubkey::new_from_array([0_u8; 32]) {
-                info!("code_account == Pubkey::new_from_array([0u8; 32])");
-                None
-            } else {
-                info!("code_account != Pubkey::new_from_array([0u8; 32])");
-                trace!("account key:  {}", &solana_address.to_string());
-                trace!("code account: {}", &account_data.code_account.to_string());
-
-                config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::processed()).unwrap().value
-            };
-            let token_amount = config.rpc_client.get_token_account_balance_with_commitment(&account_data.eth_token_account, CommitmentConfig::processed()).unwrap().value;
-            let balance = token_amount.amount.parse::<u64>().unwrap();
-
-            Some((acc, balance, code_account))
-        }
-        else {
-            error!("Account not found {}", &address.to_string());
-
-            None
+            (solana_address, None)
         }
     }
 
-    fn create_acc_if_not_exists(&self, address: &H160) -> bool {
+    fn add_ethereum_account(&self, address: &Address, writable: bool) -> bool {
+        if is_precompile_address(address) {
+            return true;
+        }
+
         let mut accounts = self.accounts.borrow_mut();
-        let mut new_accounts = self.new_accounts.borrow_mut();
-        if accounts.get(address).is_none() {
-            let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
-            if let Some((acc, _balance, code_account)) = Self::get_account_from_solana(self.config, address) {
-                accounts.insert(*address, SolanaAccount::new(acc, solana_address, code_account));
-                true
-            }
-            else {
-                if new_accounts.get(address).is_none() {
-                    error!("Account not found {}", &address.to_string());
-                    new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
+
+        if let Some(ref mut account) = accounts.get_mut(address) {
+            account.writable |= writable;
+
+            true
+        } else {
+            let account = NeonAccount::rpc_load(self.config, *address, writable);
+            accounts.insert(*address, account);
+
+            false
+        }
+    }
+
+    fn add_solana_account(&self, pubkey: Pubkey, is_writable: bool) {
+        if solana_sdk::system_program::check_id(&pubkey) {
+            return;
+        }
+
+        if pubkey == FAKE_OPERATOR {
+            return;
+        }
+
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        
+        let account = SolanaAccount { pubkey, is_writable };
+        if is_writable {
+            solana_accounts.insert(pubkey, account);
+        } else {
+            solana_accounts.entry(pubkey).or_insert(account);
+        }
+    }
+
+    #[must_use]
+    pub fn apply_actions(&self, actions: Vec<Action>) -> u64 {
+        let mut gas = 0_u64;
+        let rent = Rent::get().expect("Rent get error");
+
+        for action in actions {
+            #[allow(clippy::match_same_arms)]
+            match action {
+                Action::NeonTransfer { source, target, .. } => {
+                    self.add_ethereum_account(&source, true);
+                    self.add_ethereum_account(&target, true);
+                },
+                Action::NeonWithdraw { source, .. } => {
+                    self.add_ethereum_account(&source, true);
+                },
+                Action::EvmSetStorage { address, index, value } => {
+                    if index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
+                        self.add_ethereum_account(&address, true);
+                    } else {
+                        let (base, _) = address.find_solana_address(self.program_id());
+                        let storage_account = EthereumStorageAddress::new(self.program_id(), &base, &index);
+                        self.add_solana_account(*storage_account.pubkey(), true);
+
+                        if self.storage(&address, &index) == [0_u8; 32] {
+                            let metadata_size = EthereumStorage::SIZE;
+                            let element_size = 1 + std::mem::size_of_val(&value);
+
+                            let cost = rent.minimum_balance(metadata_size + element_size);
+                            gas = gas.saturating_add(cost);
+                        }
+                    }
+                },
+                Action::EvmIncrementNonce { address } => {
+                    self.add_ethereum_account(&address, true);
+                },
+                Action::EvmSetCode { address, .. } => {
+                    self.add_ethereum_account(&address, true);
+                },
+                Action::EvmSelfDestruct { address } => {
+                    self.add_ethereum_account(&address, true);
+                },
+                Action::ExternalInstruction { program_id, accounts, allocate, .. } => {
+                    self.add_solana_account(program_id, false);
+
+                    for account in accounts {
+                        self.add_solana_account(account.pubkey, account.is_writable);
+                    }
+
+                    if allocate > 0 {
+                        let cost = rent.minimum_balance(allocate);
+                        gas = gas.saturating_add(cost);
+                    }
                 }
-                false
+            }
+        }
+
+        gas
+    }
+
+    #[must_use]
+    pub fn apply_accounts_operations(&self, operations: AccountsOperations) -> u64 {
+        let mut gas = 0_u64;
+        let rent = Rent::get().expect("Rent get error");
+
+        let mut iterations = 0_usize;
+
+        let mut accounts = self.accounts.borrow_mut();
+        for (address, operation) in operations {
+            let new_size = match operation {
+                AccountOperation::Create { space } => space,
+                AccountOperation::Resize { to, .. } => to,
+            };
+            accounts.entry(address).and_modify(|a| {
+                a.size = new_size;
+                a.additional_resize_steps = new_size
+                    .saturating_sub(a.size_current)
+                    .saturating_sub(1)
+                    / MAX_PERMITTED_DATA_INCREASE;
+                iterations = iterations.max(a.additional_resize_steps);
+            });
+
+            let allocate_cost = rent.minimum_balance(new_size);
+            gas = gas.saturating_add(allocate_cost);
+        }
+
+        let iterations_cost = (iterations as u64) * LAMPORTS_PER_SIGNATURE;
+
+        gas.saturating_add(iterations_cost)
+    }
+
+    fn ethereum_account_map_or<F, R>(&self, address: &Address, default: R, f: F) -> R
+    where 
+        F: FnOnce(&EthereumAccount) -> R
+    {
+        self.add_ethereum_account(address, false);
+
+        let mut accounts = self.accounts.borrow_mut();
+        let solana_account = accounts.get_mut(address).expect("get account error");
+
+        if let Some(account_data) = &mut solana_account.data {
+            let info = account_info(&solana_account.account, account_data);
+            EthereumAccount::from_account(&self.config.evm_loader, &info)
+                .map_or(default, |a| f(&a))
+        } else {
+            default
+        }
+    }
+
+    fn ethereum_contract_map_or<F, R>(&self, address: &Address, default: R, f: F) -> R
+    where
+        F: FnOnce(ether_contract::ContractData) -> R
+    {
+        self.add_ethereum_account(address, false);
+
+        let mut accounts = self.accounts.borrow_mut();
+        let solana_account = accounts.get_mut(address).expect("get account error");
+
+        if let Some(account_data) = &mut solana_account.data {
+            let info = account_info(&solana_account.account, account_data);
+            let account = EthereumAccount::from_account(&self.config.evm_loader, &info);
+            match &account {
+                Ok(a) => a.contract_data().map_or(default, f),
+                Err(_) => default,
             }
         } else {
-            true
+            default
         }
-    }
-
-    // pub fn make_solidity_account<'a>(self, account:&'a SolanaAccount) -> SolidityAccount<'a> {
-    //     let mut data = account.account.data.clone();
-    //     let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-    //     SolidityAccount::new(&account.key, data_rc, account.account.lamports).unwrap()
-    // }
-
-    #[allow(clippy::too_many_lines)]
-    pub fn apply<A, I>(&self, values: A) -> NeonCliResult
-            where
-                A: IntoIterator<Item=Apply<I>>,
-                I: IntoIterator<Item=(U256, U256)>,
-    {
-        for apply in values {
-            match apply {
-                Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
-
-                    let code_begin;
-                    let code_size;
-                    let valids_size;
-
-                    let mut storage_iter = storage.into_iter().peekable();
-                    let exist_items: bool = matches!(storage_iter.peek(), Some(_));
-
-                    let hamt_size = |code_data : &Vec<u8>, hamt_begin : usize| -> usize {
-                        let mut empty_data: Vec<u8> = Vec::new();
-                        empty_data.resize(10_485_760, 0);
-                        empty_data[0..code_data.len()].copy_from_slice(code_data);
-
-                        let mut storage = Hamt::new(&mut empty_data[hamt_begin..], reset_storage).unwrap();
-                        for (key, value) in storage_iter {
-                            info!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                            storage.insert(key, value).unwrap();
-                        }
-                        storage.last_used() as usize
-                    };
-
-                    let mut accounts = self.accounts.borrow_mut();
-                    let mut new_accounts = self.new_accounts.borrow_mut();
-                    if let Some(acc) = accounts.get_mut(&address) {
-
-                        let account_data = AccountData::unpack(&acc.account.data).unwrap();
-                        if let AccountData::Account(acc_desc) = account_data {
-                            if let Some(ref mut code_account) = acc.code_account{
-
-                                let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
-                                let contract = AccountData::get_contract(&account_data_contract).unwrap();
-
-                                if let Some((code, valids)) = code_and_valids.clone() {
-                                    if contract.code_size != 0 {
-                                        return Err(NeonCliError::AccountAlreadyInitialized(acc.key,acc_desc.code_account));
-                                    }
-                                    code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
-                                    code_size = code.len();
-                                    valids_size = valids.len();
-                                }
-                                else{
-                                    if contract.code_size == 0 {
-                                        return Err(NeonCliError::AccountUninitialized(acc.key,acc_desc.code_account));
-                                    }
-                                    code_begin = account_data_contract.size();
-                                    code_size = contract.code_size as usize;
-                                    valids_size = (code_size / 8) + 1;
-                                }
-
-                                let hamt_begin = code_begin + code_size + valids_size;
-
-                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
-                                *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
-
-                                let trx_count: u64 =
-                                    match u64::try_from(nonce) {
-                                        Ok(u64_nonce)   => u64_nonce,
-                                        Err(_)          => return Err(NeonCliError::ConvertNonceError(nonce)),
-                                    };
-
-                                if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
-                                    *acc.writable.borrow_mut() = true;
-                                }
-                            }
-                            else if let Some((code, valids)) = code_and_valids.clone() {
-                                if acc_desc.trx_count != 0 {
-                                    return Err(NeonCliError::DeploymentToExistingAccount(address));
-                                }
-
-                                code_begin = Contract::SIZE + 1;
-                                code_size = code.len();
-                                valids_size = valids.len();
-
-                                let hamt_begin = code_begin + code_size + valids_size;
-                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
-                                *acc.code_size_current.borrow_mut() = Some(0);
-                                *acc.writable.borrow_mut() = true;
-                            }
-                            else{
-                                if reset_storage || exist_items {
-                                    return Err(NeonCliError::ContractAccountExpected(address));
-                                }
-                                *acc.writable.borrow_mut() = true;
-                            }
-
-                        }
-                        else{
-                            return Err(NeonCliError::IncorrectAccount(address));
-                        }
-                    }
-                    else if let Some(acc) = new_accounts.get_mut(&address) {
-                        if let Some((code, valids)) = code_and_valids.clone() {
-                            code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
-                            code_size = code.len();
-                            valids_size = valids.len();
-
-                            let hamt_begin = code_begin + code_size + valids_size;
-                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
-                        }
-                        else  if reset_storage || exist_items {
-                                return Err(NeonCliError::ContractAccountExpected(address));
-                            }
-
-                        *acc.writable.borrow_mut() = true;
-                    }
-                    else {
-                        error!("Account not found {}", &address.to_string());
-                    }
-                    info!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
-                },
-                Apply::Delete {address} => {
-                    info!("Delete: {}", address);
-
-                    self.create_acc_if_not_exists(&address);
-
-                    let mut accounts = self.accounts.borrow_mut();
-                    if let Some(account) = accounts.get_mut(&address) {
-                        account.writable = true;
-                    }
-
-                    let mut new_accounts = self.new_accounts.borrow_mut();
-                    if let Some(account) = new_accounts.get_mut(&address) {
-                        account.writable = true;
-                    }
-                },
-            }
-        };
-        Ok(())
-    }
-
-    pub fn apply_transfers(&self, transfers: Vec<Transfer>, token_mint: &Pubkey) {
-        let mut solana_accounts = self.solana_accounts.borrow_mut();
-
-        for transfer in transfers {
-            self.create_acc_if_not_exists(&transfer.source);
-            self.create_acc_if_not_exists(&transfer.target);
-
-            let (source, _) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
-            let source_token = spl_associated_token_account::get_associated_token_address(&source, token_mint);
-            solana_accounts.insert(source_token, AccountMeta::new(source_token, false));
-
-            let (target, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
-            let target_token = spl_associated_token_account::get_associated_token_address(&target, token_mint);
-            solana_accounts.insert(target_token, AccountMeta::new(target_token, false));
-        }
-    }
-
-    pub fn apply_spl_transfers(&self, transfers: Vec<SplTransfer>) {
-        let mut token_accounts = self.token_accounts.borrow_mut();
-        for transfer in transfers {
-            self.create_acc_if_not_exists(&transfer.source);
-            self.create_acc_if_not_exists(&transfer.target);
-
-            let (contract_solana_address, _) = make_solana_program_address(&transfer.contract, &self.config.evm_loader);
-
-            let (source_solana_address, _) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
-            token_accounts.entry(transfer.source_token).or_insert(
-                TokenAccount {
-                    owner: source_solana_address,
-                    contract: contract_solana_address,
-                    mint: transfer.mint,
-                    key: transfer.source_token,
-                    new: false
-                }
-            );
-
-            let ui_token_account = self.config.rpc_client.get_token_account_with_commitment(&transfer.target_token, CommitmentConfig::processed());
-            let target_token_exists = ui_token_account.map(|r| r.value.is_some()).unwrap_or(false);
-
-            let (target_solana_address, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
-            token_accounts.entry(transfer.target_token).or_insert(
-                TokenAccount {
-                    owner: target_solana_address,
-                    contract: contract_solana_address,
-                    mint: transfer.mint,
-                    key: transfer.target_token,
-                    new: !target_token_exists
-                }
-            );
-        }
-    }
-
-    pub fn apply_spl_approves(&self, approves: Vec<SplApprove>) {
-        let mut token_accounts = self.token_accounts.borrow_mut();
-
-        let mut solana_accounts = self.solana_accounts.borrow_mut();
-        for approve in approves {
-            self.create_acc_if_not_exists(&approve.owner);
-             solana_accounts.insert(approve.spender, AccountMeta::new(approve.spender, false));
-
-            let (contract_solana_address, _) = make_solana_program_address(&approve.contract, &self.config.evm_loader);
-            let (owner_solana_address, _) = make_solana_program_address(&approve.owner, &self.config.evm_loader);
-
-            let (token_address, _) = self.get_erc20_token_address(&approve.owner, &approve.contract, &approve.mint);
-            let ui_token_account = self.config.rpc_client.get_token_account_with_commitment(&token_address, CommitmentConfig::processed());
-            let token_exists = ui_token_account.map(|r| r.value.is_some()).unwrap_or(false);
-
-            token_accounts.entry(token_address).or_insert(
-                TokenAccount {
-                    owner: owner_solana_address,
-                    contract: contract_solana_address,
-                    mint: approve.mint,
-                    key: token_address,
-                    new: !token_exists
-                }
-            );
-        }
-    }
-
-    pub fn apply_erc20_approves(&self, approves: Vec<ERC20Approve>) {
-        let mut solana_accounts = self.solana_accounts.borrow_mut();
-
-        for approve in approves {
-            let (address, _) = self.get_erc20_allowance_address(
-                &approve.owner,
-                &approve.spender,
-                &approve.contract,
-                &approve.mint
-            );
-
-            solana_accounts.insert(address, AccountMeta::new(address, false));
-        }
-    }
-
-    pub fn get_used_accounts(&self) -> Vec<AccountJSON>
-    {
-        let mut arr = Vec::new();
-
-        let accounts = self.accounts.borrow();
-        for (address, acc) in accounts.iter() {
-            let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
-
-            let contract_address = {
-                let addr = AccountData::unpack(&acc.account.data).unwrap().get_account().unwrap().code_account;
-                if addr == Pubkey::new_from_array([0_u8; 32]) {
-                    None
-                } else {
-                    Some(addr)
-                }
-            };
-
-            if !is_precompile_address(address) {
-                arr.push(AccountJSON{
-                        address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                        writable: acc.writable,
-                        new: false,
-                        account: solana_address.to_string(),
-                        contract: contract_address.map(|v| v.to_string()),
-                        code_size: acc.code_size,
-                        code_size_current: acc.code_size_current
-                });
-            }
-        }
-
-        let new_accounts = self.new_accounts.borrow();
-        for (address, acc) in new_accounts.iter() {
-            if !is_precompile_address(address) {
-                arr.push(AccountJSON{
-                        address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                        writable: acc.writable,
-                        new: true,
-                        account: acc.key.to_string(),
-                        contract: None,
-                        code_size: acc.code_size,
-                        code_size_current : None
-                });
-            }
-        }
-
-        arr
     }
 }
 
-pub fn make_solana_program_address(
-    ether_address: &H160,
-    program_id: &Pubkey
-) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()], program_id)
-}
 
 impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
-    fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        self.create_acc_if_not_exists(address);
-        let accounts = self.accounts.borrow();
-        match accounts.get(address) {
-            None => d(),
-            Some(acc) => {
-                let account_data = match AccountData::unpack(&acc.account.data) {
-                    Ok(acc_data) => match acc_data {
-                        AccountData::Account(_) => acc_data,
-                        _ => return d(),
-                    },
-                    Err(_) => return d(),
-                };
-                if acc.code_account.is_some() {
-                    let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
-                    let contract_data = match AccountData::unpack(&code_data) {
-                        Ok(acc_data) => match acc_data {
-                            AccountData::Contract(_) => acc_data,
-                            _ => return d(),
-                        },
-                        Err(_) => return d(),
-                    };
-                    let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-                    let account = SolidityAccount::new(&acc.key, account_data, Some((contract_data, code_data)));
-                    f(&account)
-                } else {
-                    let account = SolidityAccount::new(&acc.key, account_data, None);
-                    f(&account)
-                }
-            },
-        }
+    fn neon_token_mint(&self) -> &Pubkey {
+        info!("neon_token_mint");
+        &self.neon_token_mint
     }
 
-    fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, d: D, f: F) -> U
-    where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
-          D: FnOnce() -> U
-    {
-        let mut solana_accounts = self.solana_accounts.borrow_mut();
-        solana_accounts.entry(*address).or_insert_with(|| AccountMeta::new_readonly(*address, false));
-
-        let account = self.config.rpc_client.get_account_with_commitment(address, CommitmentConfig::processed()).unwrap().value;
-        match account {
-            Some(mut account) => f(&account_storage_info(&mut account)),
-            None => d()
-        }
+    fn operator(&self) -> &Pubkey {
+        info!("operator");
+        &FAKE_OPERATOR
     }
 
-    fn program_id(&self) -> &Pubkey { &self.config.evm_loader }
+    fn program_id(&self) -> &Pubkey {
+        info!("program_id");
+        &self.config.evm_loader
+    }
 
-    fn contract(&self) -> H160 { self.contract_id }
+    fn block_number(&self) -> U256 {
+        info!("block_number");
+        self.block_number.into()
+    }
 
-    fn origin(&self) -> H160 { self.caller_id }
+    fn block_timestamp(&self) -> U256 {
+        info!("block_timestamp");
+        self.block_timestamp.try_into().unwrap()
+    }
 
-    fn balance(&self, address: &H160) -> U256 {
-        self.create_acc_if_not_exists(address);
+    fn block_hash(&self, number: U256) -> [u8; 32] { 
+        info!("block_hash {}", number);
 
-        let (account, _) = make_solana_program_address(address, &self.config.evm_loader);
-        let token_account = spl_associated_token_account::get_associated_token_address(&account, &self.token_mint);
+        self.add_solana_account(recent_blockhashes::ID, false);
 
-        let mut solana_accounts = self.solana_accounts.borrow_mut();
-        solana_accounts.entry(token_account).or_insert_with(|| AccountMeta::new_readonly(token_account, false));
+        if self.block_number <= number.as_u64() {
+            return <[u8; 32]>::default();
+        }
 
-        if let Some((_, balance, _)) = Self::get_account_from_solana(self.config, address) {
-            U256::from(balance) * evm_loader::token::eth::min_transfer_value()
+        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
+            let hash = bs58::decode(timestamp.blockhash).into_vec().unwrap();
+            hash.try_into().unwrap()
         } else {
-            U256::zero()
+            warn!("Got error trying to get block hash");
+            <[u8; 32]>::default()
         }
     }
 
-    fn block_number(&self) -> U256 { self.block_number.into() }
+    fn exists(&self, address: &Address) -> bool {
+        info!("exists {}", address);
 
-    fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
+        self.add_ethereum_account(address, false);
 
-    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
-        make_solana_program_address(address, &self.config.evm_loader).0
+        let accounts = self.accounts.borrow();
+        accounts.contains_key(address)
+    }
+
+    fn nonce(&self, address: &Address) -> u64 {
+        info!("nonce {}", address);
+
+        self.ethereum_account_map_or(address, 0_u64, |a| a.trx_count)
+    }
+
+    fn balance(&self, address: &Address) -> U256 {
+        info!("balance {}", address);
+
+        self.ethereum_account_map_or(address, U256::ZERO, |a| a.balance)
+    }
+
+    fn code_size(&self, address: &Address) -> usize {
+        info!("code_size {}", address);
+        self.ethereum_account_map_or(address, 0, |a| a.code_size as usize)
+    }
+
+    fn code_hash(&self, address: &Address) -> [u8; 32] {
+        use solana_sdk::keccak::hash;
+
+        info!("code_hash {}", address);
+
+        self.ethereum_contract_map_or(address,
+            <[u8; 32]>::default(), 
+            |c| hash(&c.code()).to_bytes()
+        )
+    }
+
+    fn code(&self, address: &Address) -> evm_loader::evm::Buffer {
+        use evm_loader::evm::Buffer;
+
+        info!("code {}", address);
+
+        self.ethereum_contract_map_or(
+            address,
+            Buffer::empty(),
+            |c| Buffer::new(&c.code()),
+        )
+    }
+
+    fn generation(&self, address: &Address) -> u32 {
+        let value = self.ethereum_account_map_or(
+            address,
+            0_u32, 
+            |c| c.generation,
+        );
+
+        info!("account generation {:?} - {:?}", address, value);
+        value
+    }
+
+    fn storage(&self, address: &Address, index: &U256) -> [u8; 32] {
+        let value = if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
+            let index: usize = index.as_usize() * 32;
+            self.ethereum_contract_map_or(
+                address,
+                <[u8; 32]>::default(),
+                |c| c.storage()[index..index+32].try_into().unwrap(),
+            )
+        } else {
+            let subindex = (index & 0xFF).as_u8();
+            let index = index & !U256::new(0xFF);
+            
+            let (base, _) = address.find_solana_address(self.program_id());
+            let solana_address = *EthereumStorageAddress::new(self.program_id(), &base, &index).pubkey();
+            debug!("read storage solana address {:?} - {:?}", address, solana_address);
+
+            self.add_solana_account(solana_address, false);
+
+            let rpc_response = self.config.rpc_client.get_account_with_commitment(
+                &solana_address,
+                self.config.rpc_client.commitment(),
+            ).expect("Error querying account from Solana");
+        
+            if let Some(mut account) = rpc_response.value {
+                if solana_sdk::system_program::check_id(&account.owner) {
+                    debug!("read storage system owned");
+                    <[u8; 32]>::default()
+                } else {
+                    let account_info = account_info(&solana_address, &mut account);
+                    let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).expect("EthereumAccount ctor error");
+                    if (storage.address != *address) || (storage.index != index) || (storage.generation != self.generation(address)) {
+                        debug!("storage collision");
+                        <[u8; 32]>::default()
+                    } else {
+                        storage.get(subindex)
+                    }
+                }
+            } else {
+                debug!("storage account doesn't exist");
+                <[u8; 32]>::default()
+            }
+        };
+
+        debug!("Storage read {:?} -> {} = {}", address, index, hex::encode(value));
+
+        value
+    }
+
+    fn solana_account_space(&self, address: &Address) -> Option<usize> {
+        self.ethereum_account_map_or(address, None, |account| Some(account.info.data_len()))
+    }
+
+    fn chain_id(&self) -> u64 {
+        info!("chain_id");
+
+        self.chain_id
+    }
+
+    fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo {
+        info!("clone_solana_account {}", address);
+
+        if address == &FAKE_OPERATOR {
+            OwnedAccountInfo {
+                key: FAKE_OPERATOR,
+                is_signer: true,
+                is_writable: false,
+                lamports: 100 * 1_000_000_000,
+                data: vec![],
+                owner: solana_sdk::system_program::ID,
+                executable: false,
+                rent_epoch: 0,
+            }
+        } else {
+            self.add_solana_account(*address, false);
+
+            let mut account = self.config.rpc_client.get_account(address).unwrap_or_default();
+            let info = account_info(address, &mut account);
+    
+            OwnedAccountInfo::from_account_info(self.program_id(), &info)
+        }
+    }
+
+    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
+        info!("clone_solana_account_partial {}", address);
+
+        let account = self.clone_solana_account(address);
+
+        Some(OwnedAccountInfoPartial {
+            key: account.key,
+            is_signer: account.is_signer,
+            is_writable: account.is_writable,
+            lamports: account.lamports,
+            data: account.data.get(offset .. offset + len).map(<[u8]>::to_vec)?,
+            data_offset: offset,
+            data_total_len: account.data.len(),
+            owner: account.owner,
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
+        })
     }
 }
 
-/// Creates new instance of `AccountStorageInfo` from `Account`.
-fn account_storage_info(account: &mut Account) -> AccountStorageInfo {
-    AccountStorageInfo {
-        lamports: account.lamports,
+
+/// Creates new instance of `AccountInfo` from `Account`.
+pub fn account_info<'a>(key: &'a Pubkey, account: &'a mut Account) -> AccountInfo<'a> {
+    AccountInfo {
+        key,
+        is_signer: false,
+        is_writable: false,
+        lamports: Rc::new(RefCell::new(&mut account.lamports)),
         data: Rc::new(RefCell::new(&mut account.data)),
         owner: &account.owner,
         executable: account.executable,
         rent_epoch: account.rent_epoch,
     }
+}
+
+pub fn make_solana_program_address(
+    ether_address: &Address,
+    program_id: &Pubkey
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()], program_id)
 }

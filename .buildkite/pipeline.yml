@@ -1,30 +1,7 @@
 steps:
-  - label: ":docker: build docker image"
-    command:
-      - ".buildkite/steps/build-image.sh"
-      - ".buildkite/steps/upload-image.sh"
 
-  - wait
-
-  - label: ":cop::skin-tone-2: deploy check"
-    command: ".buildkite/steps/deploy-test.sh"
-    timeout: 60
+  - label: "Dummy workflow"
+    commands:
+      - echo "Dummy step"
     agents:
       queue: "testing"
-    artifact_paths:
-      - "solana.log"
-
-  - label: ":docker: build proxy docker image"
-    trigger: "neon-proxy"
-    build:
-       branch: "v0.6.x"
-       env:
-          EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
-          EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
-          SOLANA_REVISION: "v1.8.12-testnet"
-
-  - wait
-
-  - label: ":floppy_disk: publish image"
-    command: ".buildkite/steps/publish-image.sh"
-    branches: "master develop ci-* v*.*.*"

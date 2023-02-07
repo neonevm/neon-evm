@@ -1,10 +1,7 @@
 [workspace]
+resolver = "2"
 members = [
     'cli',
-    'faucet',
     'program',
-    'performance/sender'
-]
-exclude = [
-    'rust-evm'
+    'program-macro'
 ]

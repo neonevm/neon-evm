@@ -1,0 +1,12 @@
+pytest==7.1.2
+typing-extensions==4.2.0
+ecdsa==0.17.0
+pysha3==1.0.2
+eth-keys==0.4.0
+rlp==2.0.1
+web3==5.29.1
+solana==0.28.0
+solders==0.10.0
+pytest-xdist==2.5.0
+construct~=2.10.67
+base58~=2.1.1

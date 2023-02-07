@@ -1,52 +1,64 @@
-use std::{
-    cell::RefCell,
-    rc::Rc
-};
+use std::convert::TryInto;
 
-use log::{ trace };
-
-use evm::{H160, U256};
+use ethnum::U256;
 
 use evm_loader::{
-    account_data::AccountData,
-    solidity_account::SolidityAccount,
+    account::{EthereumStorage, ether_storage::EthereumStorageAddress},
+    config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
+    types::Address,
 };
+use evm_loader::account::EthereumAccount;
 
 use crate::{
-    account_storage::{
-        make_solana_program_address,
-        EmulatorAccountStorage,
-    },
-    errors::NeonCliError,
-    Config,
-    NeonCliResult,
+    account_storage::{EmulatorAccountStorage, account_info },
+    Config, NeonCliResult,
 };
+
+
 
 pub fn execute(
     config: &Config,
-    ether_address: H160,
+    ether_address: Address,
     index: &U256
 ) -> NeonCliResult {
-    trace!("Enter execution for address {:?}", ether_address);
-    match EmulatorAccountStorage::get_account_from_solana(config, &ether_address) {
-        Some((acc, _balance, code_account)) => {
-            let account_data = AccountData::unpack(&acc.data)?;
-            let mut code_data = match code_account.as_ref() {
-                Some(code) => code.data.clone(),
-                None => return Err(NeonCliError::CodeAccountRequired(ether_address)),
-            };
-            let contract_data = AccountData::unpack(&code_data)?;
-            let (solana_address, _solana_nonce) = make_solana_program_address(&ether_address, &config.evm_loader);
-            let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-            let solidity_account = SolidityAccount::new(&solana_address, account_data,
-                                                        Some((contract_data, code_data)));
-            let value = solidity_account.get_storage(index);
-            print!("{:#x}", value);
-            Ok(())
-        },
-        None => {
-            Err(NeonCliError::AccountNotFoundAtAddress(ether_address))
-        }
-    }
-}
+    let value = if let (solana_address, Some(mut account)) = EmulatorAccountStorage::get_account_from_solana(config, &ether_address) {
+        let info = account_info(&solana_address, &mut account);
 
+        let account_data = EthereumAccount::from_account(&config.evm_loader, &info)?;
+        if let Some(contract) = account_data.contract_data() {
+            if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
+                let index: usize = index.as_usize() * 32;
+                contract.storage()[index..index + 32].try_into().unwrap()
+            } else {
+                let subindex = (*index & 0xFF).as_u8();
+                let index = *index & !U256::new(0xFF);
+
+                let address = EthereumStorageAddress::new(&config.evm_loader, account_data.info.key, &index);
+
+                if let Ok(mut account) = config.rpc_client.get_account(address.pubkey()) {
+                    if solana_sdk::system_program::check_id(&account.owner) {
+                        <[u8; 32]>::default()
+                    } else {
+                        let account_info = account_info(address.pubkey(), &mut account);
+                        let storage = EthereumStorage::from_account(&config.evm_loader, &account_info)?;
+                        if (storage.address != ether_address) || (storage.index != index) || (storage.generation != account_data.generation) {
+                            <[u8; 32]>::default()
+                        } else {
+                            storage.get(subindex)
+                        }
+                    }
+                } else {
+                    <[u8; 32]>::default()
+                }
+            }
+        } else {
+            <[u8; 32]>::default()
+        }
+    } else {
+        <[u8; 32]>::default()
+    };
+
+    Ok(serde_json::json!(
+        hex::encode(value)
+    ))
+}

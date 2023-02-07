@@ -2,87 +2,92 @@
 #![allow(clippy::use_self)]
 #![allow(clippy::cast_possible_wrap)]
 
+use evm_loader::types::Address;
 use log::{ error };
 
-use evm::{ H160, U256 };
+use ethnum::U256;
 
 use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey::{Pubkey,PubkeyError as SolanaPubkeyError};
 use solana_sdk::signer::SignerError as SolanaSignerError;
-use solana_program::{decode_error::DecodeError};
-use solana_program::program_error::ProgramError as SolanaProgramError;
+use solana_sdk::{decode_error::DecodeError};
+use solana_sdk::program_error::ProgramError as SolanaProgramError;
 use solana_client::client_error::ClientError as SolanaClientError;
 use solana_client::tpu_client::TpuSenderError as SolanaTpuSenderError;
 use solana_cli::cli::CliError as SolanaCliError;
 use thiserror::Error;
 
-use evm_loader::{
-    account_data::AccountData,
-};
+use crate::commands::init_environment::EnvironmentError;
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
 pub enum NeonCliError {
     /// Std IO Error
     #[error("Std I/O error. {0:?}")]
-    StdIoError(std::io::Error),
+    StdIoError(#[from] std::io::Error),
     /// Solana Client Error
     #[error("Solana program error. {0:?}")]
-    ProgramError(SolanaProgramError),
+    ProgramError(#[from] SolanaProgramError),
     /// Solana Client Error
     #[error("Solana client error. {0:?}")]
-    ClientError(SolanaClientError),
+    ClientError(#[from] SolanaClientError),
     /// Solana Signer Error
     #[error("Solana signer error. {0:?}")]
-    SignerError(SolanaSignerError),
+    SignerError(#[from] SolanaSignerError),
     /// Solana Cli Error
     #[error("Solana CLI error. {0:?}")]
-    CliError(SolanaCliError),
+    CliError(#[from] SolanaCliError),
     /// TPU Sender Error
     #[error("TPU sender error. {0:?}")]
-    TpuSenderError(SolanaTpuSenderError),
+    TpuSenderError(#[from] SolanaTpuSenderError),
+    /// Pubkey Error
+    #[error("Pubkey Error. {0:?}")]
+    PubkeyError(#[from] SolanaPubkeyError),
+    /// EVM Loader Error
+    #[error("EVM Error. {0}")]
+    EvmError(#[from] evm_loader::error::Error),
     /// Need specify evm_loader
     #[error("EVM loader must be specified.")]
     EvmLoaderNotSpecified,
     /// Need specify fee payer
-    #[error("Fee payer must be specified.")]
-    FeePayerNotSpecified,
+    #[error("Keypair must be specified.")]
+    KeypairNotSpecified,
+    /// Incorrect program
+    #[error("Incorrect program {0:?}")]
+    IncorrectProgram(Pubkey),
     /// Account not found at address
     #[error("Account not found at address {0:?}.")]
-    AccountNotFoundAtAddress(H160),
+    AccountNotFoundAtAddress(Address),
     /// Code account not found
     #[error("Code account not found at address {0:?}.")]
-    CodeAccountNotFound(H160),
+    CodeAccountNotFound(Address),
     /// Code account not found
     #[error("Code account required at address {0:?}.")]
-    CodeAccountRequired(H160),
+    CodeAccountRequired(Address),
     /// Changes of incorrect account were found
     #[error("Incorrect account at address {0:?}.")]
-    IncorrectAccount(H160),
+    IncorrectAccount(Address),
     /// Account already exists
     #[error("Account already exists. {0:?}")]
     AccountAlreadyExists(Account),
-    /// Account is uninitialized.
-    #[error("Uninitialized account.  account={0:?}, code_account={1:?}")]
-    AccountUninitialized(Pubkey,Pubkey),
     /// Account is already initialized.
     #[error("Account is already initialized.  account={0:?}, code_account={1:?}")]
     AccountAlreadyInitialized(Pubkey,Pubkey),
     /// Changes to the storage can only be applied to the contract account
     #[error("Contract account expected at address {0:?}.")]
-    ContractAccountExpected(H160),
+    ContractAccountExpected(Address),
     /// Deploy to existing account.
     #[error("Attempt to deploy to existing account at address {0:?}.")]
-    DeploymentToExistingAccount(H160),
+    DeploymentToExistingAccount(Address),
     /// Invalid storage account owner
     #[error("Invalid storage account owner {0:?}.")]
     InvalidStorageAccountOwner(Pubkey),
     /// Storage account required
     #[error("Storage account required. {0:?}")]
-    StorageAccountRequired(AccountData),
+    StorageAccountRequired(Account),
     /// Account incorrect type
     #[error("Account incorrect type. {0:?}")]
-    AccountIncorrectType(AccountData),
+    AccountIncorrectType(Account),
     /// Account data too small
     #[error("Account data too small. account_data.len()={0:?} < end={1:?}")]
     AccountDataTooSmall(usize,usize),
@@ -110,29 +115,53 @@ pub enum NeonCliError {
     /// Transaction failed
     #[error("Transaction failed.")]
     TransactionFailed,
+    /// too many steps
+    #[error("Too many steps")]
+    TooManySteps,
+    // Account nonce exceeds u64::max
+    #[error("Transaction count overflow")]
+    TrxCountOverflow,
+
+    /// Environment Error
+    #[error("Environment error {0:?}")]
+    EnvironmentError(EnvironmentError),
+
+    /// Environment incomplete and should be corrected (some item missed or can be fixed)
+    #[error("Incomplete environment")]
+    IncompleteEnvironment,
+
+    /// Environment in wrong state (some item in wrong state)
+    #[error("Wrong environment")]
+    WrongEnvironment,
+
     /// Unknown Error.
     #[error("Unknown error.")]
-    UnknownError,
+    UnknownError
 }
 
 impl NeonCliError {
     pub fn error_code(&self) -> u32 {
         match self {
+            NeonCliError::IncompleteEnvironment             =>  50,
+            NeonCliError::WrongEnvironment                  =>  51,
+            NeonCliError::EnvironmentError(_)               =>  52,
             NeonCliError::StdIoError(_)                     => 102, // => 1002,
             NeonCliError::ProgramError(_)                   => 111, // => 1011,
             NeonCliError::SignerError(_)                    => 112, // => 1012,
             NeonCliError::ClientError(_)                    => 113, // => 1013,
             NeonCliError::CliError(_)                       => 114, // => 1014,
             NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
+            NeonCliError::PubkeyError(_)                    => 116,
+            NeonCliError::EvmError(_)                       => 117,
             NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
-            NeonCliError::FeePayerNotSpecified              => 202, // => 4002,
+            NeonCliError::KeypairNotSpecified               => 202, // => 4002,
+            NeonCliError::IncorrectProgram(_)               => 203,
             NeonCliError::AccountNotFound(_)                => 205, // => 4005,
             NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,
             NeonCliError::CodeAccountNotFound(_)            => 207, // => 4007,
             NeonCliError::CodeAccountRequired(_)            => 208, // => 4008,
             NeonCliError::IncorrectAccount(_)               => 209, // => 4009,
             NeonCliError::AccountAlreadyExists(_)           => 210, // => 4010,
-            NeonCliError::AccountUninitialized(_,_)         => 212, // => 4012,
             NeonCliError::AccountAlreadyInitialized(_,_)    => 213, // => 4013,
             NeonCliError::ContractAccountExpected(_)        => 215, // => 4015,
             NeonCliError::DeploymentToExistingAccount(_)    => 221, // => 4021,
@@ -147,44 +176,17 @@ impl NeonCliError {
             NeonCliError::InvalidAssociatedPda(_,_)         => 242, // => 4042,
             NeonCliError::InvalidVerbosityMessage           => 243, // => 4100,
             NeonCliError::TransactionFailed                 => 244, // => 4200,
+            NeonCliError::TooManySteps                      => 245,
+            NeonCliError::TrxCountOverflow                  => 246,
             NeonCliError::UnknownError                      => 249, // => 4900,
         }
     }
 }
 
-impl From<std::io::Error> for NeonCliError {
-    fn from(e: std::io::Error) -> NeonCliError {
-        NeonCliError::StdIoError(e)
-    }
-}
 
-impl From<SolanaClientError> for NeonCliError {
-    fn from(e: SolanaClientError) -> NeonCliError {
-        NeonCliError::ClientError(e)
-    }
-}
-
-impl From<SolanaProgramError> for NeonCliError {
-    fn from(e: SolanaProgramError) -> NeonCliError {
-        NeonCliError::ProgramError(e)
-    }
-}
-
-impl From<SolanaSignerError> for NeonCliError {
-    fn from(e: SolanaSignerError) -> NeonCliError {
-        NeonCliError::SignerError(e)
-    }
-}
-
-impl From<SolanaCliError> for NeonCliError {
-    fn from(e: SolanaCliError) -> NeonCliError {
-        NeonCliError::CliError(e)
-    }
-}
-
-impl From<SolanaTpuSenderError> for NeonCliError {
-    fn from(e: SolanaTpuSenderError) -> NeonCliError {
-        NeonCliError::TpuSenderError(e)
+impl From<EnvironmentError> for NeonCliError {
+    fn from(e: EnvironmentError) -> NeonCliError {
+        NeonCliError::EnvironmentError(e)
     }
 }
 
