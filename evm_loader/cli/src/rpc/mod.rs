@@ -1,7 +1,9 @@
 mod db_call_client;
 mod db_trx_client;
-mod db_clickhouse;
 mod validator_client;
+
+pub use db_trx_client::TrxDbClient;
+pub use db_call_client::CallDbClient;
 
 use solana_client::{
     client_error::{Result as ClientResult,},
@@ -13,41 +15,8 @@ use solana_sdk::{
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use crate::commands::TxParams;
+use crate::types::TxParams;
 use std::any::Any;
-use tokio::task::block_in_place;
-
-use tokio_postgres::{ connect, Client};
-use postgres::{ NoTls};
-use serde::{Serialize, Deserialize };
-
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct DbConfig{
-    pub tracer_host: String,
-    pub tracer_port: String,
-    pub tracer_database: String,
-    pub tracer_user: String,
-    pub tracer_password: String,
-    pub indexer_host: String,
-    pub indexer_port: String,
-    pub indexer_database: String,
-    pub indexer_user: String,
-    pub indexer_password: String,
-}
-
-#[derive(Debug)]
-pub struct CallDbClient {
-    pub slot: u64,
-    tracer_db: Client,
-}
-
-#[derive(Debug)]
-pub struct TrxDbClient {
-    pub hash: [u8; 32],
-    tracer_db: Client,
-    indexer_db: Client,
-}
 
 pub trait Rpc{
     fn commitment(&self) -> CommitmentConfig;
@@ -76,45 +45,6 @@ pub trait Rpc{
     fn as_any(&self) -> &dyn Any;
 }
 
-pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {
-    let authority= format!(
-        "host={host} port={port} dbname={db} user={user} password={pass}");
-
-    let mut attempt = 0;
-    let mut result = None;
-
-    while attempt < 3 {
-        result = block(|| async {
-            connect(&authority, NoTls).await
-        }).ok();
-        if result.is_some() {
-            break;
-        }
-        attempt += 1;
-    }
-
-    let (client, connection) = result.expect("error to set DB connection");
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {e}");
-        }
-    });
-    client
-}
-
-pub fn block<F, Fu, R>(f: F) -> R
-    where
-        F: FnOnce() -> Fu,
-        Fu: std::future::Future<Output = R>,
-{
-    block_in_place(|| {
-        let handle = tokio::runtime::Handle::current();
-        handle.block_on(f())
-    })
-}
-
-
 macro_rules! e {
     ($mes:expr) => {
         ClientError::from(
@@ -133,4 +63,5 @@ macro_rules! e {
     };
 }
 pub(crate) use e;
+
 

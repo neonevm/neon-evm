@@ -1,5 +1,5 @@
-use crate::{Config, NeonCliResult, event_listener::tracer::Tracer, commands::{emulate, TxParams},
-            types::trace::TracedCall,
+use crate::{Config, NeonCliResult, event_listener::tracer::Tracer, commands::emulate,
+            types::{trace::TracedCall, TxParams},
 };
 use solana_sdk::pubkey::Pubkey;
 

@@ -9,110 +9,25 @@ use solana_sdk::{
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use tokio_postgres::Error;
-use evm_loader::types::Address;
-use ethnum::U256;
-use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl, e,};
-use crate::commands::TxParams;
-use std::{convert::{TryInto, TryFrom}, any::Any};
+use super::{Rpc, e,};
+use crate::{types::{TracerDb, IndexerDb, DbConfig, TxParams}};
+use std::any::Any;
 
+#[derive(Debug)]
+pub struct TrxDbClient {
+    pub hash: [u8; 32],
+    tracer_db: TracerDb,
+    indexer_db: IndexerDb,
+}
 
 impl TrxDbClient {
     pub fn new(config: &DbConfig, hash: [u8; 32]) -> Self {
-        let tracer = do_connect(
-            &config.tracer_host, &config.tracer_port, &config.tracer_database, &config.tracer_user, &config.tracer_password
-        );
-        let indexer = do_connect(
-            &config.indexer_host, &config.indexer_port, &config.indexer_database, &config.indexer_user, &config.indexer_password
-        );
-        Self {hash, tracer_db: tracer, indexer_db: indexer}
+        let tracer_db = TracerDb::new(config);
+        let indexer_db = IndexerDb::new(config);
+
+        Self { hash, tracer_db, indexer_db }
     }
-
-    fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
-
-        let hex = format!("0x{}", hex::encode(self.hash));
-        let row = block(|| async {
-            self.indexer_db.query_one(
-                "SELECT S.sol_sig from solana_neon_transactions S, solana_blocks B \
-                where S.block_slot = B.block_slot \
-                and B.is_active =  true \
-                and S.neon_sig = $1",
-                &[&hex]
-            ).await
-        })?;
-        let sol_sig_b58: &str = row.try_get(0)?;
-        let sol_sig_b58 = sol_sig_b58.to_string();
-        let sol_sig = bs58::decode(sol_sig_b58).into_vec().expect("sol_sig base58 decode error");
-        let sol_sig: [u8; 64] = sol_sig.as_slice().try_into().unwrap();
-
-        let pubkey_bytes = pubkey.to_bytes();
-        let row = block(|| async {
-            self.tracer_db.query_one(
-                "SELECT * FROM get_pre_accounts($1, $2)",
-                &[&sol_sig.as_slice(), &[&pubkey_bytes.as_slice()]]
-            ).await
-        })?;
-        let lamports: i64 = row.try_get(0)?;
-        let rent_epoch: i64 = row.try_get(4)?;
-
-        let account = Account {
-            lamports: u64::try_from(lamports).expect("lamports cast error"),
-            data: row.try_get(1)?,
-            owner: Pubkey::new(row.try_get(2)?),
-            executable: row.try_get(3)?,
-            rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch cast error"),
-        };
-
-        Ok(Some(account))
-    }
-
-    pub fn get_slot_(&self) -> Result<Slot, Error>{
-        let hex = format!("0x{}", hex::encode(self.hash));
-        let row = block(|| async {
-            self.indexer_db.query_one(
-                "SELECT min(S.block_slot) from solana_neon_transactions S, solana_blocks B \
-                where S.block_slot = B.block_slot \
-                and B.is_active =  true \
-                and S.neon_sig = $1",
-                &[&hex]
-            ).await
-        })?;
-        let slot: i64 = row.try_get(0)?;
-        Ok(u64::try_from(slot).expect("slot cast error"))
-    }
-
-    pub fn get_transaction_data_(&self) -> Result<TxParams, Error> {
-        let hex = format!("0x{}", hex::encode(self.hash));
-        let row = block(|| async {
-            self.indexer_db.query_one(
-                "select distinct t.from_addr, \
-                COALESCE(t.to_addr, t.contract), t.calldata, t.value, t.gas_limit \
-                 from neon_transactions as t, solana_blocks as b \
-                    where t.block_slot = b.block_slot \
-                    and b.is_active =  true \
-                    and t.neon_sig = $1",
-                &[&hex]
-            ).await
-        })?;
-
-        let from: String = row.try_get(0)?;
-        let to: String = row.try_get(1)?;
-        let data: String = row.try_get(2)?;
-        let value: String = row.try_get(3)?;
-        let gas_limit: String = row.try_get(4)?;
-
-        let from = Address::from_hex(&from.as_str()[2..]).expect("parse error from");
-        let to = Address::from_hex(&to.as_str()[2..]).expect("parse error to");
-        let data =  hex::decode(&data.as_str()[2..]).expect("data hex::decore error");
-        let value: U256 = U256::from_str_hex(&value).expect("value parse error");
-        let gas_limit: U256 = U256::from_str_hex(&gas_limit).expect("gas_limit parse error");
-
-        Ok(TxParams {from, to: Some(to), data: Some(data), value: Some(value), gas_limit: Some(gas_limit)})
-    }
-
-    db_client_impl!();
 }
-
 
 impl Rpc for TrxDbClient {
     fn commitment(&self) -> CommitmentConfig {
@@ -124,17 +39,21 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
-        self.get_account_at_(key)
+        let sol_sig = self.indexer_db.get_sol_sig(&self.hash)
+            .map_err(|e| e!("get_sol_sig error", e))?;
+
+        self.tracer_db.get_account_by_sol_sig(key, &sol_sig)
             .map_err(|e| e!("load account error", key, e) )?
             .ok_or_else(|| e!("account not found", key))
     }
 
     fn get_account_with_commitment(&self, key: &Pubkey, _commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
-        let account= self.get_account_at_(key)
-            .map_err(|e| e!("load account error", key, e))?;
-        let slot = self.get_slot()?;
+        let account= self.get_account(key)?;
+        let slot = self.indexer_db.get_slot(&self.hash)
+            .map_err(|e| e!("get_slot error", e))?;
+
         let context = RpcResponseContext{slot, api_version: None};
-        Ok(Response {context, value: account})
+        Ok(Response {context, value: Some(account)})
     }
 
     fn get_account_data(&self, key: &Pubkey)-> ClientResult<Vec<u8>>{
@@ -142,7 +61,7 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>{
-        let hash = self.get_block_hash_(slot)
+        let hash = self.tracer_db.get_block_hash(slot)
             .map_err(|e| e!("get_block error", slot, e))?;
 
         Ok(EncodedConfirmedBlock{
@@ -157,12 +76,12 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>{
-        self.get_block_time_(slot)
+        self.tracer_db.get_block_time(slot)
             .map_err(|e| e!("get_block_time error", slot, e))
     }
 
     fn get_latest_blockhash(&self) -> ClientResult<Hash>{
-        let hash =  self.get_latest_blockhash_().map_err(|e| e!("get_latest_blockhash error", e))?;
+        let hash = self.tracer_db.get_latest_blockhash().map_err(|e| e!("get_latest_blockhash error", e))?;
         hash.parse::<Hash>().map_err(|e| e!("get_latest_blockhash parse error", e))
     }
 
@@ -171,7 +90,7 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_slot(&self) -> ClientResult<Slot>{
-        self.get_slot_().map_err(|e| e!("get_slot error", e))
+        self.indexer_db.get_slot(&self.hash).map_err(|e| e!("get_slot error", e))
     }
 
     fn get_signature_statuses(&self, _signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>> {
@@ -208,7 +127,7 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_transaction_data(&self) -> ClientResult<TxParams> {
-        self.get_transaction_data_().map_err(|e| e!("load transaction error", self.hash, e))
+        self.indexer_db.get_transaction_data(&self.hash).map_err(|e| e!("load transaction error", self.hash, e))
     }
 
     fn as_any(&self) -> &dyn Any {
