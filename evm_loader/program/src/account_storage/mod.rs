@@ -155,13 +155,13 @@ pub fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
 
 #[test]
 fn test_generate_fake_block_hash() {
-    let slot = 70;
+    let slot = 0x46;
     let mut expected: [u8; 32] = [255; 32];
     expected[30] = 0;
     expected[31] = 0x46;
     assert_eq!(generate_fake_block_hash(slot), expected);
 
-    let slot = 1000;
+    let slot = 0x3e8;
     let mut expected: [u8; 32] = [255; 32];
     expected[29] = 0;
     expected[30] = 0x03;
