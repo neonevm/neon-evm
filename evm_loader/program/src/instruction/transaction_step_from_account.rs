@@ -9,7 +9,7 @@ use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
 };
-use crate::instruction::transaction::{Accounts, do_begin, do_continue};
+use crate::instruction::transaction_step::{Accounts, do_begin, do_continue};
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> Result<()> {

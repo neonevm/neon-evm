@@ -107,7 +107,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
     fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo {
         let info = self.solana_accounts[address];
-        OwnedAccountInfo::from_account_info(info)
+        OwnedAccountInfo::from_account_info(self.program_id, info)
     }
 
     fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
