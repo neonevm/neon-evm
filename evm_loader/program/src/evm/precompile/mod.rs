@@ -1,34 +1,51 @@
-use crate::types::Address;
 use crate::evm::{database::Database, Machine};
+use crate::types::Address;
 
-mod ecrecover;
-mod sha256;
-mod ripemd160;
-mod datacopy;
 mod big_mod_exp;
-mod bn256;
 mod blake2_f;
+mod bn256;
+mod datacopy;
+mod ecrecover;
+mod ripemd160;
+mod sha256;
 
 // const _SYSTEM_ACCOUNT_ERC20_WRAPPER: Address    = Address([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 // const SYSTEM_ACCOUNT_QUERY: Address             = Address([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 // const SYSTEM_ACCOUNT_NEON_TOKEN: Address        = Address([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 // const SYSTEM_ACCOUNT_SPL_TOKEN: Address         = Address([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
 // const SYSTEM_ACCOUNT_METAPLEX: Address          = Address([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
-const SYSTEM_ACCOUNT_ECRECOVER: Address         = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
-const SYSTEM_ACCOUNT_SHA_256: Address           = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_RIPEMD160: Address         = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
-const SYSTEM_ACCOUNT_DATACOPY: Address          = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
-const SYSTEM_ACCOUNT_BIGMODEXP: Address         = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
-const SYSTEM_ACCOUNT_BN256_ADD: Address         = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06]);
-const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: Address  = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
-const SYSTEM_ACCOUNT_BN256_PAIRING: Address     = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
-const SYSTEM_ACCOUNT_BLAKE2F: Address           = Address([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
-
+const SYSTEM_ACCOUNT_ECRECOVER: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01,
+]);
+const SYSTEM_ACCOUNT_SHA_256: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02,
+]);
+const SYSTEM_ACCOUNT_RIPEMD160: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03,
+]);
+const SYSTEM_ACCOUNT_DATACOPY: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04,
+]);
+const SYSTEM_ACCOUNT_BIGMODEXP: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05,
+]);
+const SYSTEM_ACCOUNT_BN256_ADD: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06,
+]);
+const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07,
+]);
+const SYSTEM_ACCOUNT_BN256_PAIRING: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08,
+]);
+const SYSTEM_ACCOUNT_BLAKE2F: Address = Address([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09,
+]);
 
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &Address) -> bool {
-        *address == SYSTEM_ACCOUNT_ECRECOVER
+    *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
         || *address == SYSTEM_ACCOUNT_DATACOPY
@@ -54,5 +71,5 @@ impl<B: Database> Machine<B> {
             SYSTEM_ACCOUNT_BLAKE2F => Some(blake2_f::blake2_f(data)),
             _ => None,
         }
-    } 
+    }
 }

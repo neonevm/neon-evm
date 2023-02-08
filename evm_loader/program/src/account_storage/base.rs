@@ -1,5 +1,7 @@
-use std::cell::{RefCell};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::account::ether_storage::EthereumStorageAddress;
+use crate::account::{program, EthereumAccount, EthereumStorage, Operator, TAG_EMPTY};
+use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::types::Address;
 use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
@@ -7,22 +9,20 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::ether_storage::EthereumStorageAddress;
-use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY, EthereumStorage};
-use crate::account_storage::{AccountStorage, ProgramAccountStorage};
-use crate::types::Address;
-
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn new(
         program_id: &'a Pubkey,
         operator: &Operator<'a>,
         system_program: Option<&program::System<'a>>,
-        accounts: &'a [AccountInfo<'a>]
+        accounts: &'a [AccountInfo<'a>],
     ) -> Result<Self, ProgramError> {
         debug_print!("ProgramAccountStorage::new");
 
-        let mut solana_accounts = accounts.iter()
+        let mut solana_accounts = accounts
+            .iter()
             .map(|a| (a.key, a))
             .collect::<BTreeMap<_, _>>();
 
@@ -30,7 +30,6 @@ impl<'a> ProgramAccountStorage<'a> {
         if let Some(system) = system_program {
             solana_accounts.insert(system.key, system.into());
         }
-
 
         let mut ethereum_accounts = BTreeMap::new();
         let mut storage_accounts = BTreeMap::new();
@@ -44,12 +43,12 @@ impl<'a> ProgramAccountStorage<'a> {
                 Ok(EthereumAccount::TAG) => {
                     let account = EthereumAccount::from_account(program_id, account_info)?;
                     ethereum_accounts.insert(account.address, account);
-                },
+                }
                 Ok(EthereumStorage::TAG) => {
                     let account = EthereumStorage::from_account(program_id, account_info)?;
                     storage_accounts.insert((account.address, account.index), account);
                 }
-                Ok(_) | Err(_) => continue
+                Ok(_) | Err(_) => continue,
             }
         }
 
@@ -88,7 +87,8 @@ impl<'a> ProgramAccountStorage<'a> {
             return None;
         }
 
-        let storage_address = EthereumStorageAddress::new(self.program_id, &self.solana_address(&address).0, &index);
+        let storage_address =
+            EthereumStorageAddress::new(self.program_id, &self.solana_address(&address).0, &index);
         if let Some(&account) = self.solana_accounts.get(&storage_address.pubkey()) {
             assert!(solana_program::system_program::check_id(account.owner));
 
@@ -98,7 +98,9 @@ impl<'a> ProgramAccountStorage<'a> {
 
         panic!(
             "Storage account {} {} (solana address {}) must be present in the transaction",
-            address, index, storage_address.pubkey()
+            address,
+            index,
+            storage_address.pubkey()
         );
     }
 
@@ -145,8 +147,8 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
     pub fn is_account_empty(&self, account: &AccountInfo) -> bool {
-        system_program::check_id(account.owner) ||
-            (account.owner == self.program_id() &&
-                (account.data_is_empty() || account.data.borrow()[0] == TAG_EMPTY))
+        system_program::check_id(account.owner)
+            || (account.owner == self.program_id()
+                && (account.data_is_empty() || account.data.borrow()[0] == TAG_EMPTY))
     }
 }

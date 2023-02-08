@@ -1,6 +1,6 @@
-use ethnum::U256;
+use super::{Buffer, Context};
 use crate::{error::Result, types::Address};
-use super::{Context, Buffer};
+use ethnum::U256;
 
 pub trait Database {
     fn chain_id(&self) -> U256;

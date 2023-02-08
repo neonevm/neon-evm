@@ -1,9 +1,12 @@
 #![allow(clippy::inline_always)]
 
-use std::{alloc::{Layout, GlobalAlloc}, convert::TryInto};
-use ethnum::{U256, I256};
-use crate::{error::Error, types::Address};
 use super::tracing_event;
+use crate::{error::Error, types::Address};
+use ethnum::{I256, U256};
+use std::{
+    alloc::{GlobalAlloc, Layout},
+    convert::TryInto,
+};
 
 const ELEMENT_SIZE: usize = 32;
 const STACK_SIZE: usize = ELEMENT_SIZE * 128;
@@ -24,7 +27,11 @@ impl Stack {
             (begin, end)
         };
 
-        Self { begin, end, top: begin }
+        Self {
+            begin,
+            end,
+            top: begin,
+        }
     }
 
     #[allow(dead_code)]
@@ -247,7 +254,6 @@ impl Stack {
     }
 }
 
-
 impl Drop for Stack {
     fn drop(&mut self) {
         unsafe {
@@ -257,12 +263,12 @@ impl Drop for Stack {
     }
 }
 
-
 impl serde::Serialize for Stack {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer 
-    {   unsafe {
+        S: serde::Serializer,
+    {
+        unsafe {
             let data = std::slice::from_raw_parts(self.begin, STACK_SIZE);
             let offset: usize = self.top.offset_from(self.begin).try_into().unwrap();
 
@@ -274,18 +280,17 @@ impl serde::Serialize for Stack {
 impl<'de> serde::Deserialize<'de> for Stack {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de> 
+        D: serde::Deserializer<'de>,
     {
         struct BytesVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor
-        {
+        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
             type Value = Stack;
-        
+
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("EVM Stack")
             }
-        
+
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -301,7 +306,7 @@ impl<'de> serde::Deserialize<'de> for Stack {
                     let slice = std::slice::from_raw_parts_mut(stack.begin, v.len());
                     slice.copy_from_slice(v);
                 }
-        
+
                 Ok(stack)
             }
         }

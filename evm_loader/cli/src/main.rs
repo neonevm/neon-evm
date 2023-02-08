@@ -2,20 +2,20 @@
 #![deny(clippy::all, clippy::pedantic)]
 
 mod account_storage;
-mod syscall_stubs;
-mod errors;
-mod logs;
 mod commands;
-mod rpc;
-mod program_options;
 pub mod config;
+mod errors;
 mod event_listener;
+mod logs;
+mod program_options;
+mod rpc;
+mod syscall_stubs;
 mod types;
 
 pub use config::Config;
 
-use std::process::exit;
 use crate::errors::NeonCliError;
+use std::process::exit;
 
 type NeonCliResult = Result<serde_json::Value, NeonCliError>;
 
@@ -36,20 +36,24 @@ async fn main() {
     };
 
     let (result, exit_code) = match result {
-        Ok(result) => {
-            (serde_json::json!({
+        Ok(result) => (
+            serde_json::json!({
                 "result": "success",
                 "value": result,
                 "logs": logs
-            }), 0_i32)
-        }
+            }),
+            0_i32,
+        ),
         Err(e) => {
             let error_code = e.error_code();
-            (serde_json::json!({
-                "result": "error",
-                "error": e.to_string(),
-                "logs": logs
-            }), error_code)
+            (
+                serde_json::json!({
+                    "result": "error",
+                    "error": e.to_string(),
+                    "logs": logs
+                }),
+                error_code,
+            )
         }
     };
 

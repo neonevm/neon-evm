@@ -1,13 +1,12 @@
 //! Error types
 #![allow(clippy::use_self)]
 
-use std::{num::TryFromIntError, array::TryFromSliceError};
+use std::{array::TryFromSliceError, num::TryFromIntError};
 
-use solana_program::{
-    program_error::ProgramError, 
-    secp256k1_recover::Secp256k1RecoverError, pubkey::Pubkey
-};
 use ethnum::U256;
+use solana_program::{
+    program_error::ProgramError, pubkey::Pubkey, secp256k1_recover::Secp256k1RecoverError,
+};
 use thiserror::Error;
 
 use crate::types::Address;
@@ -131,7 +130,7 @@ impl From<Error> for ProgramError {
         solana_program::msg!("{}", e);
         match e {
             Error::ProgramError(e) => e,
-            _ => Self::Custom(0)
+            _ => Self::Custom(0),
         }
     }
 }
@@ -159,7 +158,6 @@ macro_rules! Err {
     });
 }
 
-
 /// Macro to log a `ProgramError` in the current transaction log.
 /// with the source file position like: file.rc:777
 /// and additional info if needed
@@ -185,7 +183,8 @@ macro_rules! E {
 
 #[must_use]
 pub fn format_revert_message(msg: &[u8]) -> &str {
-    if msg.starts_with(&[ 0x08, 0xc3, 0x79, 0xa0 ]) { // Error(string) function selector
+    if msg.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
+        // Error(string) function selector
         let msg = &msg[4..];
 
         let offset = U256::from_be_bytes(*arrayref::array_ref![msg, 0, 32]);

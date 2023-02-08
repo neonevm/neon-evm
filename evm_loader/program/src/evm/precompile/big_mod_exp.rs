@@ -1,8 +1,5 @@
-
 #[must_use]
-pub fn big_mod_exp(
-    _input: &[u8]
-) -> Vec<u8> {
+pub fn big_mod_exp(_input: &[u8]) -> Vec<u8> {
     // Should be implemented via Solana syscall
     Vec::new()
 

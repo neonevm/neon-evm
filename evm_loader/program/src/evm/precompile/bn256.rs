@@ -1,4 +1,3 @@
-
 /* Should be implemented via Solana syscall
 #[must_use]
 #[allow(clippy::unused_self)]
@@ -48,9 +47,7 @@ fn get_g1(
 /// Call inner `bn256Add`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_add(
-    _input: &[u8],
-) -> Vec<u8> {
+pub fn bn256_add(_input: &[u8]) -> Vec<u8> {
     // Should be implemented via Solana syscall
     Vec::new()
 
@@ -108,9 +105,7 @@ pub fn bn256_add(
 /// Call inner `bn256ScalarMul`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_scalar_mul(
-    _input: &[u8],
-) -> Vec<u8> {
+pub fn bn256_scalar_mul(_input: &[u8]) -> Vec<u8> {
     // Should be implemented via Solana syscall
     Vec::new()
 
@@ -169,12 +164,10 @@ pub fn bn256_scalar_mul(
 /// Call inner `bn256Pairing`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_pairing(
-    _input: &[u8],
-) -> Vec<u8> {
+pub fn bn256_pairing(_input: &[u8]) -> Vec<u8> {
     // Should be implemented via Solana syscall
     Vec::new()
-    
+
     /*
     use tbn::{AffineG1, AffineG2, Fq, Fq2, pairing_batch, G1, G2, Gt, Group, GroupError};
     debug_print!("bn256Pairing");

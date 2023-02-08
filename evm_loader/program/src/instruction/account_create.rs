@@ -4,7 +4,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
-use crate::account::{EthereumAccount, Operator, program};
+use crate::account::{program, EthereumAccount, Operator};
 use crate::types::Address;
 
 struct Accounts<'a> {
@@ -13,7 +13,11 @@ struct Accounts<'a> {
     ether_account: &'a AccountInfo<'a>,
 }
 
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
+pub fn process<'a>(
+    program_id: &'a Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    instruction: &[u8],
+) -> ProgramResult {
     solana_program::msg!("Instruction: Create Account");
 
     let parsed_accounts = Accounts {
@@ -30,7 +34,11 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     execute(program_id, &parsed_accounts, address, bump_seed)
 }
 
-fn validate(program_id: &Pubkey, accounts: &Accounts, address: &Address) -> Result<u8, ProgramError> {
+fn validate(
+    program_id: &Pubkey,
+    accounts: &Accounts,
+    address: &Address,
+) -> Result<u8, ProgramError> {
     if !solana_program::system_program::check_id(accounts.ether_account.owner) {
         return Err!(ProgramError::InvalidArgument; "Account {} - expected system owned", accounts.ether_account.key);
     }
@@ -43,7 +51,12 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, address: &Address) -> Resu
     Ok(bump_seed)
 }
 
-fn execute(program_id: &Pubkey, accounts: &Accounts, address: Address, bump_seed: u8) -> ProgramResult {
+fn execute(
+    program_id: &Pubkey,
+    accounts: &Accounts,
+    address: Address,
+    bump_seed: u8,
+) -> ProgramResult {
     EthereumAccount::create_and_init_account(
         &accounts.system_program,
         program_id,

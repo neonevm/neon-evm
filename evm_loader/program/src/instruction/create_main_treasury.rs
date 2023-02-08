@@ -1,18 +1,16 @@
 use crate::{
-    account::{MainTreasury, program::System, program::Token, Operator},
+    account::{program::System, program::Token, MainTreasury, Operator},
     config::TREASURY_POOL_SEED,
 };
 use solana_program::{
+    account_info::AccountInfo,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    entrypoint::ProgramResult,
     msg,
-    account_info::AccountInfo, entrypoint::ProgramResult,
-    pubkey::Pubkey,
-    program_pack::Pack,
     program_error::ProgramError,
+    program_pack::Pack,
+    pubkey::Pubkey,
     system_program,
-    bpf_loader_upgradeable::{
-        self,
-        UpgradeableLoaderState,
-    }
 };
 
 struct Accounts<'a> {
@@ -34,38 +32,44 @@ impl<'a> Accounts<'a> {
             token_program: Token::from_account(&accounts[3])?,
             system_program: System::from_account(&accounts[4])?,
             mint: &accounts[5],
-            payer: unsafe { Operator::from_account_not_whitelisted(&accounts[6])}?,
+            payer: unsafe { Operator::from_account_not_whitelisted(&accounts[6]) }?,
         })
     }
 }
 
-fn get_program_upgrade_authority<'a>(program_id: &'a Pubkey, program_data: &'a AccountInfo<'a>) -> Result<Pubkey, ProgramError> {
-    let (expected_program_data_key, _) = Pubkey::find_program_address(
-        &[program_id.as_ref()], 
-        &bpf_loader_upgradeable::id()
-    );
+fn get_program_upgrade_authority<'a>(
+    program_id: &'a Pubkey,
+    program_data: &'a AccountInfo<'a>,
+) -> Result<Pubkey, ProgramError> {
+    let (expected_program_data_key, _) =
+        Pubkey::find_program_address(&[program_id.as_ref()], &bpf_loader_upgradeable::id());
 
     if *program_data.key != expected_program_data_key {
         return Err!(ProgramError::InvalidArgument; "Account {} - invalid current program data account", program_data.key);
     }
 
-    let unpacked_program_data: UpgradeableLoaderState =
-        bincode::deserialize(&program_data.data.borrow()).map_err(
-            |_| E!(ProgramError::InvalidAccountData; "Unable to deserialize program data")
-        )?;
-    
-    let upgrade_authority: Pubkey = 
-        match unpacked_program_data {
-            UpgradeableLoaderState::ProgramData { slot: _, upgrade_authority_address } => 
-                upgrade_authority_address.ok_or_else(|| E!(ProgramError::InvalidAccountData; "Not upgradeable program" ))?,
-            _ => 
-                return Err!(ProgramError::InvalidAccountData; "Not ProgramData"),
-        };
-    
+    let unpacked_program_data: UpgradeableLoaderState = bincode::deserialize(
+        &program_data.data.borrow(),
+    )
+    .map_err(|_| E!(ProgramError::InvalidAccountData; "Unable to deserialize program data"))?;
+
+    let upgrade_authority: Pubkey = match unpacked_program_data {
+        UpgradeableLoaderState::ProgramData {
+            slot: _,
+            upgrade_authority_address,
+        } => upgrade_authority_address
+            .ok_or_else(|| E!(ProgramError::InvalidAccountData; "Not upgradeable program" ))?,
+        _ => return Err!(ProgramError::InvalidAccountData; "Not ProgramData"),
+    };
+
     Ok(upgrade_authority)
 }
 
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _instruction: &[u8]) -> ProgramResult {
+pub fn process<'a>(
+    program_id: &'a Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    _instruction: &[u8],
+) -> ProgramResult {
     msg!("Instruction: Create Main Treasury");
 
     let accounts = Accounts::from_slice(accounts)?;
@@ -87,7 +91,8 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         return Err!(ProgramError::InvalidArgument; "Account {} - not spl-token program", accounts.token_program.key);
     }
 
-    let expected_upgrade_auth_key = get_program_upgrade_authority(program_id, accounts.program_data)?;
+    let expected_upgrade_auth_key =
+        get_program_upgrade_authority(program_id, accounts.program_data)?;
     if *accounts.program_upgrade_auth.key != expected_upgrade_auth_key {
         return Err!(ProgramError::InvalidArgument; "Account {} - invalid program upgrade authority", accounts.program_upgrade_auth.key);
     }

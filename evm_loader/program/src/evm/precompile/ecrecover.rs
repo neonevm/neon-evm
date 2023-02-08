@@ -1,13 +1,10 @@
 use arrayref::{array_ref, array_refs};
-use solana_program::secp256k1_recover::secp256k1_recover;
-use solana_program::keccak;
 use ethnum::U256;
-
+use solana_program::keccak;
+use solana_program::secp256k1_recover::secp256k1_recover;
 
 #[must_use]
-pub fn ecrecover(
-    input: &[u8]
-) -> Vec<u8> {
+pub fn ecrecover(input: &[u8]) -> Vec<u8> {
     debug_print!("ecrecover");
 
     let input = if input.len() >= 128 {
@@ -17,7 +14,6 @@ pub fn ecrecover(
         buffer[..input.len()].copy_from_slice(input);
         buffer
     };
-
 
     let data = array_ref![input, 0, 128];
     let (msg, v, sig) = array_refs![data, 32, 32, 64];

@@ -1,17 +1,17 @@
-use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder, FinalizedState};
-use crate::gasometer::Gasometer;
-use crate::types::{Transaction};
+use crate::account::{program, EthereumAccount, FinalizedState, Holder, Operator, State, Treasury};
 use crate::account_storage::ProgramAccountStorage;
 use crate::error::{Error, Result};
-use arrayref::{array_ref};
-use solana_program::{
-    account_info::AccountInfo,
-    pubkey::Pubkey,
-};
-use crate::instruction::transaction_step::{Accounts, do_begin, do_continue};
+use crate::gasometer::Gasometer;
+use crate::instruction::transaction_step::{do_begin, do_continue, Accounts};
+use crate::types::Transaction;
+use arrayref::array_ref;
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
-
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> Result<()> {
+pub fn process<'a>(
+    program_id: &'a Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    instruction: &[u8],
+) -> Result<()> {
     solana_program::msg!("Instruction: Begin or Continue Transaction from Instruction");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
@@ -28,7 +28,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         system_program: program::System::from_account(&accounts[4])?,
         neon_program: program::Neon::from_account(program_id, &accounts[5])?,
         remaining_accounts: &accounts[6..],
-        all_accounts: accounts
+        all_accounts: accounts,
     };
 
     let mut account_storage = ProgramAccountStorage::new(
@@ -37,7 +37,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         Some(&accounts.system_program),
         accounts.remaining_accounts,
     )?;
-
 
     match crate::account::tag(program_id, storage_info)? {
         Holder::TAG | FinalizedState::TAG => {
@@ -53,8 +52,15 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
             gasometer.record_address_lookup_table(accounts.all_accounts);
             gasometer.record_iterative_overhead();
 
-            do_begin(accounts, storage, &mut account_storage, gasometer, trx, caller)
-        },
+            do_begin(
+                accounts,
+                storage,
+                &mut account_storage,
+                gasometer,
+                trx,
+                caller,
+            )
+        }
         State::TAG => {
             let (storage, _blocked_accounts) = State::restore(
                 program_id,
@@ -68,8 +74,18 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
             let mut gasometer = Gasometer::new(Some(storage.gas_used), &accounts.operator)?;
             gasometer.record_solana_transaction_cost();
 
-            do_continue(step_count, accounts, storage, &mut account_storage, gasometer)
-        },
-        tag => Err(Error::AccountInvalidTag(*storage_info.key, tag, Holder::TAG))
+            do_continue(
+                step_count,
+                accounts,
+                storage,
+                &mut account_storage,
+                gasometer,
+            )
+        }
+        tag => Err(Error::AccountInvalidTag(
+            *storage_info.key,
+            tag,
+            Holder::TAG,
+        )),
     }
 }

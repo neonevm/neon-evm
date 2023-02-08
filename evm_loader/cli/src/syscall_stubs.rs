@@ -1,11 +1,7 @@
-use solana_sdk::{
-    program_error::ProgramError, 
-    program_stubs::SyscallStubs, 
-    sysvar::rent::Rent
-};
 use log::info;
+use solana_sdk::{program_error::ProgramError, program_stubs::SyscallStubs, sysvar::rent::Rent};
 
-use crate::{errors::NeonCliError, Config,};
+use crate::{errors::NeonCliError, Config};
 
 pub struct Stubs {
     rent: Rent,
