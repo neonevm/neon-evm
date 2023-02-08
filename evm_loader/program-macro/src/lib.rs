@@ -1,3 +1,6 @@
+#![deny(warnings)]
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+
 mod config_parser;
 
 use config_parser::{CommonConfig, ElfParams, NetSpecificConfig, TokenMint};
@@ -29,7 +32,7 @@ pub fn operators_whitelist(tokens: TokenStream) -> TokenStream {
         .list
         .iter()
         .map(LitStr::value)
-        .map(|key| bs58::decode(key).into_vec().unwrap())
+        .map(|key| bs58::decode(key).into_vec().expect("Pubkey is base64 encoded"))
         .collect();
 
     operators.sort_unstable();

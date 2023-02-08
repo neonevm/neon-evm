@@ -1,3 +1,5 @@
+#![allow(clippy::use_self)] // Can't use generic parameter from outer function
+
 use std::mem::size_of;
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};

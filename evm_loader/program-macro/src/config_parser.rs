@@ -71,7 +71,7 @@ impl Parse for CommonConfig {
             .map(move |(name, value)| {
                 let uppercased_name = name.to_uppercase();
                 let ident_name: Ident = parse_str(&uppercased_name)?;
-                let neon_ident_name: Ident = parse_str(&format!("NEON_{}", uppercased_name))?;
+                let neon_ident_name: Ident = parse_str(&format!("NEON_{uppercased_name}"))?;
                 match value {
                     toml::Value::Float(v) => {
                         let v: LitFloat = parse_str(&v.to_string())?;
@@ -114,12 +114,12 @@ impl Parse for CommonConfig {
                         }
                         _ => Err(syn::Error::new(
                             input.span(),
-                            format!("Unsupported TOML value {:?}", value),
+                            format!("Unsupported TOML value {value:?}"),
                         )),
                     },
                     _ => Err(syn::Error::new(
                         input.span(),
-                        format!("Unsupported TOML value {:?}", value),
+                        format!("Unsupported TOML value {value:?}"),
                     )),
                 }
             })
@@ -180,7 +180,7 @@ impl Parse for ElfParams {
             .flatten_ok()
             .try_collect::<_, Vec<_>, syn::Error>()?;
 
-        Ok(ElfParams {
+        Ok(Self {
             token_stream: quote! {
                 #(#env_tokens)*
                 #(#formatcp_tokens)*

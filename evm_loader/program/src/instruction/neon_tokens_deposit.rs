@@ -111,8 +111,8 @@ fn validate(
     Ok(ethereum_bump_seed)
 }
 
-fn execute<'a>(
-    program_id: &'a Pubkey,
+fn execute(
+    program_id: &Pubkey,
     accounts: &Accounts,
     ethereum_address: Address,
     ethereum_bump_seed: u8,
