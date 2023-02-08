@@ -226,13 +226,13 @@ impl<'a> EmulatorAccountStorage<'a> {
                 } => {
                     info!("neon transfer {value} from {source} to {target}");
 
-                    self.add_ethereum_account(&source, true);
-                    self.add_ethereum_account(&target, true);
+                    self.add_ethereum_account(source, true);
+                    self.add_ethereum_account(target, true);
                 }
                 Action::NeonWithdraw { source, value } => {
                     info!("neon withdraw {value} from {source}");
 
-                    self.add_ethereum_account(&source, true);
+                    self.add_ethereum_account(source, true);
                 }
                 Action::EvmSetStorage {
                     address,
@@ -242,16 +242,16 @@ impl<'a> EmulatorAccountStorage<'a> {
                     info!("set storage {address} -> {index} = {}", hex::encode(value));
 
                     if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
-                        self.add_ethereum_account(&address, true);
+                        self.add_ethereum_account(address, true);
                     } else {
                         let (base, _) = address.find_solana_address(self.program_id());
                         let storage_account =
-                            EthereumStorageAddress::new(self.program_id(), &base, &index);
+                            EthereumStorageAddress::new(self.program_id(), &base, index);
                         self.add_solana_account(*storage_account.pubkey(), true);
 
-                        if self.storage(&address, &index) == [0_u8; 32] {
+                        if self.storage(address, index) == [0_u8; 32] {
                             let metadata_size = EthereumStorage::SIZE;
-                            let element_size = 1 + std::mem::size_of_val(&value);
+                            let element_size = 1 + std::mem::size_of_val(value);
 
                             let cost = rent.minimum_balance(metadata_size + element_size);
                             gas = gas.saturating_add(cost);
@@ -261,17 +261,17 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::EvmIncrementNonce { address } => {
                     info!("nonce increment {address}");
 
-                    self.add_ethereum_account(&address, true);
+                    self.add_ethereum_account(address, true);
                 }
                 Action::EvmSetCode { address, code } => {
                     info!("set code {address} -> {} bytes", code.len());
 
-                    self.add_ethereum_account(&address, true);
+                    self.add_ethereum_account(address, true);
                 }
                 Action::EvmSelfDestruct { address } => {
                     info!("selfdestruct {address}");
 
-                    self.add_ethereum_account(&address, true);
+                    self.add_ethereum_account(address, true);
                 }
                 Action::ExternalInstruction {
                     program_id,
