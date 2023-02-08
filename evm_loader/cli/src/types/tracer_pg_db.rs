@@ -22,7 +22,7 @@ impl TracerDb {
     pub fn get_block_hash(&self, slot: u64) -> PgResult<String>{
         let row = block(|| async {
             self.client.query_one(
-                "SELECT blockhash FROM public.block WHERE slot = $1", &[&(slot as i64)],
+                "SELECT blockhash FROM neon_history.block WHERE slot = $1", &[&(slot as i64)],
             ).await
         })?;
 
@@ -32,7 +32,7 @@ impl TracerDb {
     pub fn get_block_time(&self, slot: u64) -> PgResult<i64> {
         let row = block(|| async {
             self.client.query_one(
-                "SELECT block_time FROM public.block WHERE slot = $1", &[&(slot as i64)],
+                "SELECT block_time FROM neon_history.block WHERE slot = $1", &[&(slot as i64)],
             ).await
         })?;
 
@@ -41,7 +41,7 @@ impl TracerDb {
 
     pub fn get_latest_block(&self) -> PgResult<u64>{
         let row = block(|| async {
-            self.client.query_one("SELECT MAX(slot) FROM public.slot", &[]).await
+            self.client.query_one("SELECT MAX(slot) FROM neon_history.slot", &[]).await
         })?;
 
         let slot: i64 = row.try_get(0)?;
