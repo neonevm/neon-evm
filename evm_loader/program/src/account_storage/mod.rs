@@ -1,27 +1,22 @@
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
 use crate::account::{EthereumAccount, EthereumStorage};
 use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
 use crate::types::Address;
 use ethnum::U256;
-use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
+use solana_program::pubkey::Pubkey;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 
-mod base;
 mod apply;
 mod backend;
+mod base;
 
 #[derive(Debug)]
 pub enum AccountOperation {
-    Create {
-        space: usize,
-    },
+    Create { space: usize },
 
-    Resize {
-        from: usize,
-        to: usize,
-    },
+    Resize { from: usize, to: usize },
 }
 
 pub type AccountsOperations = Vec<(Address, AccountOperation)>;
@@ -42,8 +37,8 @@ pub struct ProgramAccountStorage<'a> {
     ethereum_accounts: BTreeMap<Address, EthereumAccount<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<Address>>,
 
-    storage_accounts: BTreeMap<(Address,U256), EthereumStorage<'a>>,
-    empty_storage_accounts: RefCell<BTreeSet<(Address,U256)>>,
+    storage_accounts: BTreeMap<(Address, U256), EthereumStorage<'a>>,
+    empty_storage_accounts: RefCell<BTreeSet<(Address, U256)>>,
 }
 
 /// Account storage
@@ -90,7 +85,12 @@ pub trait AccountStorage {
     fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo;
 
     /// Clone part of existing solana account
-    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial>;
+    fn clone_solana_account_partial(
+        &self,
+        address: &Pubkey,
+        offset: usize,
+        len: usize,
+    ) -> Option<OwnedAccountInfoPartial>;
 
     /// Resolve account solana address and bump seed
     fn solana_address(&self, address: &Address) -> (Pubkey, u8) {
@@ -100,10 +100,7 @@ pub trait AccountStorage {
     /// Solana account data len
     fn solana_account_space(&self, address: &Address) -> Option<usize>;
 
-    fn calc_accounts_operations(
-        &self,
-        actions: &[Action],
-    ) -> AccountsOperations {
+    fn calc_accounts_operations(&self, actions: &[Action]) -> AccountsOperations {
         let mut accounts = BTreeMap::new();
         for action in actions {
             let (address, code_size) = match action {
@@ -120,14 +117,26 @@ pub trait AccountStorage {
             accounts.insert(address, space_needed);
         }
 
-        accounts.into_iter()
-            .filter_map(|(address, space_needed)|
-                match self.solana_account_space(address) {
-                    None => Some((*address, AccountOperation::Create { space: space_needed })),
-                    Some(space_current) if space_current < space_needed =>
-                        Some((*address, AccountOperation::Resize { from: space_current, to: space_needed })),
+        accounts
+            .into_iter()
+            .filter_map(
+                |(address, space_needed)| match self.solana_account_space(address) {
+                    None => Some((
+                        *address,
+                        AccountOperation::Create {
+                            space: space_needed,
+                        },
+                    )),
+                    Some(space_current) if space_current < space_needed => Some((
+                        *address,
+                        AccountOperation::Resize {
+                            from: space_current,
+                            to: space_needed,
+                        },
+                    )),
                     _ => None,
-                }
-            ).collect()
+                },
+            )
+            .collect()
     }
 }

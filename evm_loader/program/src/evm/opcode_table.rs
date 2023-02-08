@@ -2,16 +2,12 @@
 
 use crate::error::Result;
 
-use super::{
-    Machine, 
-    opcode::Action, 
-    database::Database
-};
-
+use super::{database::Database, opcode::Action, Machine};
 
 impl<B: Database> Machine<B> {
     pub const OPCODES: [fn(&mut Self, &mut B) -> Result<Action>; 256] = {
-        let mut opcodes: [fn(&mut Self, &mut B) -> Result<Action>; 256] = [Self::opcode_unknown; 256];
+        let mut opcodes: [fn(&mut Self, &mut B) -> Result<Action>; 256] =
+            [Self::opcode_unknown; 256];
 
         opcodes[0x00] = Self::opcode_stop;
         opcodes[0x01] = Self::opcode_add;

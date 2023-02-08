@@ -1,8 +1,8 @@
+use super::Packable;
+use crate::types::Address;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use ethnum::U256;
 use solana_program::pubkey::Pubkey;
-use super::Packable;
-use crate::types::Address;
 
 /// Storage data account to store execution metainfo between steps for iterative execution
 #[derive(Debug)]
@@ -43,17 +43,8 @@ impl Packable for Data {
     fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Data::SIZE];
-        let (
-            owner,
-            hash,
-            caller,
-            gas_limit,
-            gas_price,
-            gas_used,
-            operator,
-            slot,
-            accounts_len,
-        ) = array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
+        let (owner, hash, caller, gas_limit, gas_price, gas_used, operator, slot, accounts_len) =
+            array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
 
         Self {
             owner: Pubkey::new_from_array(*owner),
@@ -72,17 +63,8 @@ impl Packable for Data {
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
-        let (
-            owner,
-            hash,
-            caller,
-            gas_limit,
-            gas_price,
-            gas_used,
-            operator,
-            slot,
-            accounts_len,
-        ) = mut_array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
+        let (owner, hash, caller, gas_limit, gas_price, gas_used, operator, slot, accounts_len) =
+            mut_array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
 
         owner.copy_from_slice(self.owner.as_ref());
         hash.copy_from_slice(&self.transaction_hash);
@@ -111,7 +93,7 @@ impl Packable for FinalizedData {
 
         Self {
             owner: Pubkey::new_from_array(*owner),
-            transaction_hash: *hash
+            transaction_hash: *hash,
         }
     }
 

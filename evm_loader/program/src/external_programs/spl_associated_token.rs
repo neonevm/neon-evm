@@ -1,23 +1,25 @@
 use std::collections::BTreeMap;
 
-use crate::executor::{OwnedAccountInfo};
+use crate::executor::OwnedAccountInfo;
 use borsh::BorshDeserialize;
 use solana_program::{
-    entrypoint::ProgramResult,
-    pubkey::Pubkey,
-    program_error::ProgramError, rent::Rent, sysvar::Sysvar, program_pack::Pack, instruction::AccountMeta
+    entrypoint::ProgramResult, instruction::AccountMeta, program_error::ProgramError,
+    program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
 };
 use spl_associated_token_account::instruction::AssociatedTokenAccountInstruction;
 
-
-pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>) -> ProgramResult {
+pub fn emulate(
+    instruction: &[u8],
+    meta: &[AccountMeta],
+    accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+) -> ProgramResult {
     let instruction = if instruction.is_empty() {
         AssociatedTokenAccountInstruction::Create
     } else {
         AssociatedTokenAccountInstruction::try_from_slice(instruction)
             .map_err(|_| ProgramError::InvalidInstructionData)?
     };
-    
+
     if instruction != AssociatedTokenAccountInstruction::Create {
         return Err!(ProgramError::InvalidInstructionData; "Unknown spl_associated_token instruction");
     }
@@ -46,18 +48,19 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
 
         funder.lamports -= required_lamports;
     }
-    
+
     {
         let mut associated_token_account = accounts.get_mut(associated_token_account_key).unwrap();
         if !solana_program::system_program::check_id(&associated_token_account.owner) {
             return Err!(ProgramError::InvalidInstructionData; "Account {} is not system owned", associated_token_account_key);
         }
-        
+
         associated_token_account.lamports += required_lamports;
         associated_token_account.owner = spl_token::ID;
-        associated_token_account.data.resize(spl_token::state::Account::LEN, 0);
+        associated_token_account
+            .data
+            .resize(spl_token::state::Account::LEN, 0);
     }
-
 
     let initialize_account = spl_token::instruction::initialize_account3(
         spl_token_program_key,

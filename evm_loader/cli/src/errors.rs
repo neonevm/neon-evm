@@ -1,13 +1,13 @@
 //! Error types
 #![allow(clippy::use_self)]
 
-use log::{ error };
-use solana_sdk::pubkey::{Pubkey,PubkeyError as SolanaPubkeyError};
-use solana_sdk::signer::SignerError as SolanaSignerError;
-use solana_sdk::program_error::ProgramError as SolanaProgramError;
+use log::error;
+use solana_cli::cli::CliError as SolanaCliError;
 use solana_client::client_error::ClientError as SolanaClientError;
 use solana_client::tpu_client::TpuSenderError as SolanaTpuSenderError;
-use solana_cli::cli::CliError as SolanaCliError;
+use solana_sdk::program_error::ProgramError as SolanaProgramError;
+use solana_sdk::pubkey::{Pubkey, PubkeyError as SolanaPubkeyError};
+use solana_sdk::signer::SignerError as SolanaSignerError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
@@ -58,10 +58,10 @@ pub enum NeonCliError {
     AccountIsNotUpgradeable(Pubkey),
     /// Program data account not found
     #[error("Associated PDA not found {0:?} for Program {1:?}.")]
-    AssociatedPdaNotFound(Pubkey,Pubkey),
+    AssociatedPdaNotFound(Pubkey, Pubkey),
     /// Program data account not found
     #[error("Invalid Associated PDA {0:?} for Program {1:?}.")]
-    InvalidAssociatedPda(Pubkey,Pubkey),
+    InvalidAssociatedPda(Pubkey, Pubkey),
     /// too many steps
     #[error("Too many steps")]
     TooManySteps,
@@ -82,30 +82,29 @@ pub enum NeonCliError {
 impl NeonCliError {
     pub fn error_code(&self) -> i32 {
         match self {
-            NeonCliError::IncompleteEnvironment             =>  50,
-            NeonCliError::WrongEnvironment                  =>  51,
-            NeonCliError::EnvironmentError(_)               =>  52,
-            NeonCliError::StdIoError(_)                     => 102, // => 1002,
-            NeonCliError::ProgramError(_)                   => 111, // => 1011,
-            NeonCliError::SignerError(_)                    => 112, // => 1012,
-            NeonCliError::ClientError(_)                    => 113, // => 1013,
-            NeonCliError::CliError(_)                       => 114, // => 1014,
-            NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
-            NeonCliError::PubkeyError(_)                    => 116,
-            NeonCliError::EvmError(_)                       => 117,
-            NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
-            NeonCliError::KeypairNotSpecified               => 202, // => 4002,
-            NeonCliError::IncorrectProgram(_)               => 203,
-            NeonCliError::AccountNotFound(_)                => 205, // => 4005,
-            NeonCliError::AccountIsNotBpf(_)                => 226, // => 4026,
-            NeonCliError::AccountIsNotUpgradeable(_)        => 227, // => 4027,
-            NeonCliError::AssociatedPdaNotFound(_,_)        => 241, // => 4041,
-            NeonCliError::InvalidAssociatedPda(_,_)         => 242, // => 4042,
-            NeonCliError::TooManySteps                      => 245,
+            NeonCliError::IncompleteEnvironment => 50,
+            NeonCliError::WrongEnvironment => 51,
+            NeonCliError::EnvironmentError(_) => 52,
+            NeonCliError::StdIoError(_) => 102,     // => 1002,
+            NeonCliError::ProgramError(_) => 111,   // => 1011,
+            NeonCliError::SignerError(_) => 112,    // => 1012,
+            NeonCliError::ClientError(_) => 113,    // => 1013,
+            NeonCliError::CliError(_) => 114,       // => 1014,
+            NeonCliError::TpuSenderError(_) => 115, // => 1015,
+            NeonCliError::PubkeyError(_) => 116,
+            NeonCliError::EvmError(_) => 117,
+            NeonCliError::EvmLoaderNotSpecified => 201, // => 4001,
+            NeonCliError::KeypairNotSpecified => 202,   // => 4002,
+            NeonCliError::IncorrectProgram(_) => 203,
+            NeonCliError::AccountNotFound(_) => 205, // => 4005,
+            NeonCliError::AccountIsNotBpf(_) => 226, // => 4026,
+            NeonCliError::AccountIsNotUpgradeable(_) => 227, // => 4027,
+            NeonCliError::AssociatedPdaNotFound(_, _) => 241, // => 4041,
+            NeonCliError::InvalidAssociatedPda(_, _) => 242, // => 4042,
+            NeonCliError::TooManySteps => 245,
         }
     }
 }
-
 
 impl From<EnvironmentError> for NeonCliError {
     fn from(e: EnvironmentError) -> NeonCliError {

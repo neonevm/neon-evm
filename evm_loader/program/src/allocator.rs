@@ -1,11 +1,12 @@
 use std::{
     alloc::Layout,
-    ptr::NonNull, mem::{size_of, align_of}
+    mem::{align_of, size_of},
+    ptr::NonNull,
 };
 
-use solana_program::{entrypoint::HEAP_START_ADDRESS};
-use static_assertions::const_assert_eq;
 use linked_list_allocator::Heap;
+use solana_program::entrypoint::HEAP_START_ADDRESS;
+use static_assertions::const_assert_eq;
 
 const HEAP_SIZE: usize = 256 * 1024;
 
@@ -18,7 +19,6 @@ const EVM_HEAP_START_ADDRESS: usize = BUMP_HEAP_END_ADDRESS;
 const EVM_HEAP_SIZE: usize = HEAP_SIZE - BUMP_HEAP_SIZE;
 
 const_assert_eq!(EVM_HEAP_START_ADDRESS % align_of::<Heap>(), 0);
-
 
 #[inline]
 unsafe fn heap() -> &'static mut Heap {
@@ -38,7 +38,8 @@ pub struct SolanaAllocator;
 
 unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        heap().allocate_first_fit(layout)
+        heap()
+            .allocate_first_fit(layout)
             .map_or(core::ptr::null_mut(), NonNull::as_ptr)
     }
 
@@ -77,7 +78,6 @@ unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
         new_ptr
     }
 }
-
 
 struct BumpAllocator;
 
@@ -136,8 +136,6 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
         new_ptr
     }
 }
-
-
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "solana")] {

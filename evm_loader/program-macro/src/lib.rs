@@ -32,7 +32,11 @@ pub fn operators_whitelist(tokens: TokenStream) -> TokenStream {
         .list
         .iter()
         .map(LitStr::value)
-        .map(|key| bs58::decode(key).into_vec().expect("Pubkey is base64 encoded"))
+        .map(|key| {
+            bs58::decode(key)
+                .into_vec()
+                .expect("Pubkey is base64 encoded")
+        })
         .collect();
 
     operators.sort_unstable();
@@ -138,7 +142,7 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
         token_mint: TokenMint {
             neon_token_mint,
             decimals,
-        }
+        },
     } = parse_macro_input!(tokens as NetSpecificConfig);
 
     quote! {

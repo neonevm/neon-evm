@@ -1,10 +1,14 @@
-use std::{alloc::{Layout, GlobalAlloc}, ops::Deref, ptr::NonNull};
+use std::{
+    alloc::{GlobalAlloc, Layout},
+    ops::Deref,
+    ptr::NonNull,
+};
 
 const BUFFER_ALIGN: usize = 1;
 
 pub struct Buffer {
     ptr: NonNull<u8>,
-    len: usize
+    len: usize,
 }
 
 impl Buffer {
@@ -28,7 +32,10 @@ impl Buffer {
                 }
             }
 
-            Self { ptr: NonNull::new_unchecked(ptr), len }
+            Self {
+                ptr: NonNull::new_unchecked(ptr),
+                len,
+            }
         }
     }
 
@@ -36,7 +43,7 @@ impl Buffer {
     pub fn empty() -> Self {
         Self {
             ptr: NonNull::dangling(),
-            len: 0
+            len: 0,
         }
     }
 
@@ -68,9 +75,7 @@ impl Deref for Buffer {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            std::slice::from_raw_parts(self.ptr.as_ptr(), self.len)
-        }
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 }
 
@@ -89,7 +94,7 @@ impl Default for Buffer {
 impl serde::Serialize for Buffer {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer 
+        S: serde::Serializer,
     {
         serializer.serialize_bytes(self)
     }
@@ -98,18 +103,17 @@ impl serde::Serialize for Buffer {
 impl<'de> serde::Deserialize<'de> for Buffer {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de> 
+        D: serde::Deserializer<'de>,
     {
         struct BytesVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor
-        {
+        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
             type Value = Buffer;
-        
+
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("EVM Buffer")
             }
-        
+
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,

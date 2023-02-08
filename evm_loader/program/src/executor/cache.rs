@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, rc::Rc, cell::RefCell};
-use serde::{Serialize, Deserialize};
-use solana_program::{pubkey::Pubkey, account_info::AccountInfo};
 use ethnum::U256;
+use serde::{Deserialize, Serialize};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use crate::account_storage::AccountStorage;
 
@@ -42,12 +42,12 @@ impl OwnedAccountInfoPartial {
             return None;
         }
 
-        Some(Self { 
+        Some(Self {
             key: *info.key,
             is_signer: info.is_signer,
             is_writable: info.is_writable,
             lamports: info.lamports(),
-            data: data[offset .. offset+len].to_vec(),
+            data: data[offset..offset + len].to_vec(),
             data_offset: offset,
             data_total_len: data.len(),
             owner: *info.owner,
@@ -60,7 +60,7 @@ impl OwnedAccountInfoPartial {
 impl OwnedAccountInfo {
     #[must_use]
     pub fn from_account_info(program_id: &Pubkey, info: &AccountInfo) -> Self {
-        Self { 
+        Self {
             key: *info.key,
             is_signer: info.is_signer,
             is_writable: info.is_writable,
@@ -105,7 +105,13 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn get_account_or_insert<B: AccountStorage>(&mut self, key: Pubkey, backend: &B) -> &mut OwnedAccountInfo {
-        self.solana_accounts.entry(key).or_insert_with(|| backend.clone_solana_account(&key))
+    pub fn get_account_or_insert<B: AccountStorage>(
+        &mut self,
+        key: Pubkey,
+        backend: &B,
+    ) -> &mut OwnedAccountInfo {
+        self.solana_accounts
+            .entry(key)
+            .or_insert_with(|| backend.clone_solana_account(&key))
     }
 }

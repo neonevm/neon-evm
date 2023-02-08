@@ -1,9 +1,8 @@
 use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
 
-
 pub struct Instructions<'a> {
-    pub info: &'a AccountInfo<'a>
+    pub info: &'a AccountInfo<'a>,
 }
 
 impl<'a> Instructions<'a> {
