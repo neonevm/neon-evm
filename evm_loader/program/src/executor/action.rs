@@ -54,18 +54,17 @@ mod serde_bytes_32 {
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
     where
-        D: serde::Deserializer<'de>
+        D: serde::Deserializer<'de>,
     {
         struct BytesVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor
-        {
+        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
             type Value = [u8; 32];
-        
+
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("[u8; 32]")
             }
-        
+
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,

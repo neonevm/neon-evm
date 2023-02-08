@@ -5,23 +5,24 @@
 use std::marker::PhantomData;
 
 use ethnum::U256;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
 use crate::{
     error::{Error, Result},
-    types::{Address, Transaction}, evm::opcode::Action,
+    evm::opcode::Action,
+    types::{Address, Transaction},
 };
 
-#[cfg(feature = "tracing")]
-pub mod tracing;
+mod buffer;
 pub mod database;
 mod memory;
 mod opcode;
 mod opcode_table;
-mod stack;
 mod precompile;
-mod buffer;
+mod stack;
+#[cfg(feature = "tracing")]
+pub mod tracing;
 
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;
@@ -41,8 +42,7 @@ macro_rules! tracing_event {
 }
 pub(crate) use tracing_event;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ExitStatus {
     Stop,
     Return(#[serde(with = "serde_bytes")] Vec<u8>),
@@ -51,19 +51,17 @@ pub enum ExitStatus {
     StepLimit,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Reason {
     Call,
-    Create
+    Create,
 }
 
-#[derive(Debug, Copy, Clone)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Context {
     pub caller: Address,
     pub contract: Address,
-    #[serde(with="ethnum::serde::bytes::le")]
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub value: U256,
 
     pub code_address: Option<Address>,
@@ -74,49 +72,42 @@ pub struct Context {
 pub struct Machine<B: Database> {
     origin: Address,
     context: Context,
-    
-    #[serde(with="ethnum::serde::bytes::le")]
+
+    #[serde(with = "ethnum::serde::bytes::le")]
     gas_price: U256,
-    #[serde(with="ethnum::serde::bytes::le")]
+    #[serde(with = "ethnum::serde::bytes::le")]
     gas_limit: U256,
-    
+
     execution_code: Buffer,
     call_data: Buffer,
     return_data: Buffer,
-    
+
     stack: stack::Stack,
     memory: memory::Memory,
     pc: usize,
-    
+
     is_static: bool,
     reason: Reason,
 
     parent: Option<Box<Self>>,
-    
+
     #[serde(skip)]
     phantom: PhantomData<*const B>,
 }
 
 impl<B: Database> Machine<B> {
-    pub fn serialize_into<W>(self, writer: &mut W) -> Result<()> 
-        where W: std::io::Write
+    pub fn serialize_into<W>(self, writer: &mut W) -> Result<()>
+    where
+        W: std::io::Write,
     {
-        bincode::serialize_into(writer, &self)
-            .map_err(Error::from)
+        bincode::serialize_into(writer, &self).map_err(Error::from)
     }
 
-    pub fn deserialize_from(buffer: &mut &[u8], _backend: &B) -> Result<Self> 
-    {
-        bincode::deserialize_from(buffer)
-            .map_err(Error::from)
+    pub fn deserialize_from(buffer: &mut &[u8], _backend: &B) -> Result<Self> {
+        bincode::deserialize_from(buffer).map_err(Error::from)
     }
 
-
-    pub fn new(
-        trx: Transaction,
-        origin: Address,
-        backend: &mut B,
-    ) -> Result<Self> {
+    pub fn new(trx: Transaction, origin: Address, backend: &mut B) -> Result<Self> {
         let origin_nonce = backend.nonce(&origin)?;
 
         if origin_nonce == u64::MAX {
@@ -124,7 +115,11 @@ impl<B: Database> Machine<B> {
         }
 
         if origin_nonce != trx.nonce {
-            return Err(Error::InvalidTransactionNonce(origin, origin_nonce, trx.nonce));
+            return Err(Error::InvalidTransactionNonce(
+                origin,
+                origin_nonce,
+                trx.nonce,
+            ));
         }
 
         if let Some(chain_id) = trx.chain_id {
@@ -144,11 +139,7 @@ impl<B: Database> Machine<B> {
         }
     }
 
-    fn new_call(
-        trx: Transaction,
-        origin: Address,
-        backend: &mut B,
-    ) -> Result<Self> {
+    fn new_call(trx: Transaction, origin: Address, backend: &mut B) -> Result<Self> {
         assert!(trx.target.is_some());
 
         let target = trx.target.unwrap();
@@ -163,7 +154,7 @@ impl<B: Database> Machine<B> {
 
         Ok(Self {
             origin,
-            context: Context { 
+            context: Context {
                 caller: origin,
                 contract: target,
                 value: trx.value,
@@ -180,15 +171,11 @@ impl<B: Database> Machine<B> {
             is_static: false,
             reason: Reason::Call,
             parent: None,
-            phantom: PhantomData
+            phantom: PhantomData,
         })
     }
 
-    fn new_create(
-        trx: Transaction,
-        origin: Address,
-        backend: &mut B,
-    ) -> Result<Self> {
+    fn new_create(trx: Transaction, origin: Address, backend: &mut B) -> Result<Self> {
         assert!(trx.target.is_none());
 
         let target = Address::from_create(&origin, trx.nonce);
@@ -229,8 +216,9 @@ impl<B: Database> Machine<B> {
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
         let mut step = 0_u64;
 
-        tracing_event!(tracing::Event::BeginVM { 
-            context: self.context, code: self.execution_code.to_vec()
+        tracing_event!(tracing::Event::BeginVM {
+            context: self.context,
+            code: self.execution_code.to_vec()
         });
 
         let status = loop {
@@ -238,17 +226,18 @@ impl<B: Database> Machine<B> {
             if step > step_limit {
                 break ExitStatus::StepLimit;
             }
-            
+
             let opcode = self.execution_code.get_or_default(self.pc);
 
             tracing_event!(tracing::Event::BeginStep {
-                opcode, pc: self.pc, stack: self.stack.to_vec(), memory: self.memory.to_vec()
+                opcode,
+                pc: self.pc,
+                stack: self.stack.to_vec(),
+                memory: self.memory.to_vec()
             });
 
             // SAFETY: OPCODES.len() == 256, opcode <= 255
-            let opcode_fn = unsafe {
-                Self::OPCODES.get_unchecked(opcode as usize)
-            };
+            let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
             let opcode_result = opcode_fn(self, backend)?;
 
             tracing_event!(opcode_result != Action::Noop; tracing::Event::EndStep {
@@ -262,7 +251,7 @@ impl<B: Database> Machine<B> {
                 Action::Return(value) => break ExitStatus::Return(value),
                 Action::Revert(value) => break ExitStatus::Revert(value),
                 Action::Suicide => break ExitStatus::Suicide,
-                Action::Noop => {},
+                Action::Noop => {}
             }
         };
 
@@ -295,7 +284,7 @@ impl<B: Database> Machine<B> {
             is_static: self.is_static,
             reason,
             parent: None,
-            phantom: PhantomData
+            phantom: PhantomData,
         };
 
         core::mem::swap(self, &mut other);

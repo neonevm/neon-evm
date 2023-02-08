@@ -1,8 +1,8 @@
-use solana_clap_utils::{input_validators::{is_url_or_moniker, is_valid_pubkey},};
-use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand,};
+use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand};
 use ethnum::U256;
 use evm_loader::types::Address;
 use hex::FromHex;
+use solana_clap_utils::input_validators::{is_url_or_moniker, is_valid_pubkey};
 use std::fmt::Display;
 
 pub fn truncate(in_str: &str) -> &str {
@@ -14,7 +14,9 @@ pub fn truncate(in_str: &str) -> &str {
 }
 
 // Return an error if string cannot be parsed as a Address address
-fn is_valid_address<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+fn is_valid_address<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str>,
 {
     Address::from_hex(string.as_ref())
         .map(|_| ())
@@ -22,7 +24,9 @@ fn is_valid_address<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 }
 
 // Return an error if string cannot be parsed as a Address address
-fn is_valid_address_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+fn is_valid_address_or_deploy<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str>,
 {
     if string.as_ref() == "deploy" {
         return Ok(());
@@ -33,7 +37,9 @@ fn is_valid_address_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef
 }
 
 // Return an error if string cannot be parsed as a U256 integer
-fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+fn is_valid_u256<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str>,
 {
     let value = string.as_ref();
     if value.is_empty() {
@@ -45,7 +51,9 @@ fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
-fn is_valid_h256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+fn is_valid_h256<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str>,
 {
     let str = truncate(string.as_ref());
     <[u8; 32]>::from_hex(str)
@@ -54,136 +62,134 @@ fn is_valid_h256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 }
 
 fn is_amount<T, U>(amount: U) -> Result<(), String>
-    where
-        T: std::str::FromStr,
-        U: AsRef<str> + Display,
+where
+    T: std::str::FromStr,
+    U: AsRef<str> + Display,
 {
     if amount.as_ref().parse::<T>().is_ok() {
         Ok(())
     } else {
         Err(format!(
-            "Unable to parse argument as {}, provided: {}",
-            std::any::type_name::<T>(), amount
+            "Unable to parse argument as {}, provided: {amount}",
+            std::any::type_name::<T>()
         ))
     }
 }
 
-
 macro_rules! trx_params {
     ($cmd:expr, $desc:expr) => {
         SubCommand::with_name($cmd)
-                .about($desc)
-                .arg(
-                    Arg::with_name("sender")
-                        .value_name("SENDER")
-                        .takes_value(true)
-                        .index(1)
-                        .required(true)
-                        .validator(is_valid_address)
-                        .help("The sender of the transaction")
-                )
-                .arg(
-                    Arg::with_name("contract")
-                        .value_name("CONTRACT")
-                        .takes_value(true)
-                        .index(2)
-                        .required(true)
-                        .validator(is_valid_address_or_deploy)
-                        .help("The contract that executes the transaction or 'deploy'")
-                )
-                .arg(
-                    Arg::with_name("value")
-                        .value_name("VALUE")
-                        .takes_value(true)
-                        .index(3)
-                        .required(false)
-                        .validator(is_valid_u256)
-                        .help("Transaction value")
-                )
-                .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
-                )
-                .arg(
-                    Arg::with_name("chain_id")
-                        .long("chain_id")
-                        .value_name("CHAIN_ID")
-                        .takes_value(true)
-                        .required(false)
-                        .help("Network chain_id"),
-                )
-                .arg(
-                    Arg::with_name("max_steps_to_execute")
-                        .long("max_steps_to_execute")
-                        .value_name("NUMBER_OF_STEPS")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("100000")
-                        .help("Maximal number of steps to execute in a single run"),
-                )
-                .arg(
-                    Arg::with_name("gas_limit")
-                        .short("G")
-                        .long("gas_limit")
-                        .value_name("GAS_LIMIT")
-                        .takes_value(true)
-                        .required(false)
-                        .validator(is_valid_u256)
-                        .help("Gas limit"),
-                )
-    }
+            .about($desc)
+            .arg(
+                Arg::with_name("sender")
+                    .value_name("SENDER")
+                    .takes_value(true)
+                    .index(1)
+                    .required(true)
+                    .validator(is_valid_address)
+                    .help("The sender of the transaction"),
+            )
+            .arg(
+                Arg::with_name("contract")
+                    .value_name("CONTRACT")
+                    .takes_value(true)
+                    .index(2)
+                    .required(true)
+                    .validator(is_valid_address_or_deploy)
+                    .help("The contract that executes the transaction or 'deploy'"),
+            )
+            .arg(
+                Arg::with_name("value")
+                    .value_name("VALUE")
+                    .takes_value(true)
+                    .index(3)
+                    .required(false)
+                    .validator(is_valid_u256)
+                    .help("Transaction value"),
+            )
+            .arg(
+                Arg::with_name("token_mint")
+                    .long("token_mint")
+                    .value_name("TOKEN_MINT")
+                    .takes_value(true)
+                    .global(true)
+                    .validator(is_valid_pubkey)
+                    .help("Pubkey for token_mint"),
+            )
+            .arg(
+                Arg::with_name("chain_id")
+                    .long("chain_id")
+                    .value_name("CHAIN_ID")
+                    .takes_value(true)
+                    .required(false)
+                    .help("Network chain_id"),
+            )
+            .arg(
+                Arg::with_name("max_steps_to_execute")
+                    .long("max_steps_to_execute")
+                    .value_name("NUMBER_OF_STEPS")
+                    .takes_value(true)
+                    .required(false)
+                    .default_value("100000")
+                    .help("Maximal number of steps to execute in a single run"),
+            )
+            .arg(
+                Arg::with_name("gas_limit")
+                    .short("G")
+                    .long("gas_limit")
+                    .value_name("GAS_LIMIT")
+                    .takes_value(true)
+                    .required(false)
+                    .validator(is_valid_u256)
+                    .help("Gas limit"),
+            )
+    };
 }
 
 macro_rules! trx_hash {
     ($cmd:expr, $desc:expr) => {
         SubCommand::with_name($cmd)
-                .about($desc)
-                .arg(
-                    Arg::with_name("hash")
-                        .index(1)
-                        .value_name("hash")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_h256)
-                        .help("Neon transaction hash"),
-                )
-                .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
-                )
-                .arg(
-                    Arg::with_name("chain_id")
-                        .long("chain_id")
-                        .value_name("CHAIN_ID")
-                        .takes_value(true)
-                        .required(false)
-                        .help("Network chain_id"),
-                )
-                .arg(
-                    Arg::with_name("max_steps_to_execute")
-                        .long("max_steps_to_execute")
-                        .value_name("NUMBER_OF_STEPS")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("100000")
-                        .help("Maximal number of steps to execute in a single run"),
-                )
-    }
+            .about($desc)
+            .arg(
+                Arg::with_name("hash")
+                    .index(1)
+                    .value_name("hash")
+                    .takes_value(true)
+                    .required(true)
+                    .validator(is_valid_h256)
+                    .help("Neon transaction hash"),
+            )
+            .arg(
+                Arg::with_name("token_mint")
+                    .long("token_mint")
+                    .value_name("TOKEN_MINT")
+                    .takes_value(true)
+                    .global(true)
+                    .validator(is_valid_pubkey)
+                    .help("Pubkey for token_mint"),
+            )
+            .arg(
+                Arg::with_name("chain_id")
+                    .long("chain_id")
+                    .value_name("CHAIN_ID")
+                    .takes_value(true)
+                    .required(false)
+                    .help("Network chain_id"),
+            )
+            .arg(
+                Arg::with_name("max_steps_to_execute")
+                    .long("max_steps_to_execute")
+                    .value_name("NUMBER_OF_STEPS")
+                    .takes_value(true)
+                    .required(false)
+                    .default_value("100000")
+                    .help("Maximal number of steps to execute in a single run"),
+            )
+    };
 }
 
-
 #[allow(clippy::too_many_lines)]
-pub fn parse<'a >() -> ArgMatches<'a> {
+pub fn parse<'a>() -> ArgMatches<'a> {
     App::new(crate_name!())
         .about(crate_description!())
         .version(concat!("Neon-cli/v", env!("CARGO_PKG_VERSION"), "-", env!("NEON_REVISION")))

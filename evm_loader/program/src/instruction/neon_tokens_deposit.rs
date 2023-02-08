@@ -1,15 +1,13 @@
 use arrayref::array_ref;
 use ethnum::U256;
+use solana_program::program::invoke_signed;
 use solana_program::{
-    account_info::AccountInfo,
-    entrypoint::ProgramResult,
-    program_error::ProgramError,
+    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use solana_program::program::invoke_signed;
 use spl_associated_token_account::get_associated_token_address;
 
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program, token};
+use crate::account::{program, token, EthereumAccount, Operator, ACCOUNT_SEED_VERSION};
 use crate::types::Address;
 
 struct Accounts<'a> {
@@ -36,14 +34,23 @@ impl<'a> Accounts<'a> {
     }
 }
 
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
+pub fn process<'a>(
+    program_id: &'a Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    instruction: &[u8],
+) -> ProgramResult {
     solana_program::msg!("Instruction: Deposit");
 
     let parsed_accounts = Accounts::from_slice(accounts)?;
     let ethereum_address = Address::from(*array_ref![instruction, 0, 20]);
 
     let ethereum_bump_seed = validate(program_id, &parsed_accounts, &ethereum_address)?;
-    execute(program_id, &parsed_accounts, ethereum_address, ethereum_bump_seed)
+    execute(
+        program_id,
+        &parsed_accounts,
+        ethereum_address,
+        ethereum_bump_seed,
+    )
 }
 
 fn validate(
@@ -51,7 +58,8 @@ fn validate(
     accounts: &Accounts,
     ethereum_address: &Address,
 ) -> Result<u8, ProgramError> {
-    let (expected_solana_address, ethereum_bump_seed) = ethereum_address.find_solana_address(program_id);
+    let (expected_solana_address, ethereum_bump_seed) =
+        ethereum_address.find_solana_address(program_id);
     if expected_solana_address != *accounts.ethereum_account.key {
         return Err!(
             ProgramError::InvalidArgument;
@@ -70,10 +78,8 @@ fn validate(
     }
 
     let (authority_address, _) = Pubkey::find_program_address(&[AUTHORITY_SEED], program_id);
-    let expected_pool_address = get_associated_token_address(
-        &authority_address,
-        &crate::config::token_mint::id(),
-    );
+    let expected_pool_address =
+        get_associated_token_address(&authority_address, &crate::config::token_mint::id());
 
     if accounts.pool.info.key != &expected_pool_address {
         return Err!(
@@ -92,7 +98,11 @@ fn validate(
         );
     }
 
-    if !accounts.source.delegate.contains(accounts.ethereum_account.key) {
+    if !accounts
+        .source
+        .delegate
+        .contains(accounts.ethereum_account.key)
+    {
         return Err!(
             ProgramError::InvalidArgument;
             "Account {} - expected tokens delegated to an user account",
@@ -111,8 +121,8 @@ fn validate(
     Ok(ethereum_bump_seed)
 }
 
-fn execute<'a>(
-    program_id: &'a Pubkey,
+fn execute(
+    program_id: &Pubkey,
     accounts: &Accounts,
     ethereum_address: Address,
     ethereum_bump_seed: u8,
@@ -155,16 +165,20 @@ fn execute<'a>(
 
     assert!(crate::config::token_mint::decimals() <= 18);
     let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
-    let deposit = U256::from(accounts.source.delegated_amount) * U256::from(10_u64.pow(additional_decimals));
-    let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
-    ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
-        .ok_or_else(||
+    let deposit =
+        U256::from(accounts.source.delegated_amount) * U256::from(10_u64.pow(additional_decimals));
+    let mut ethereum_account =
+        EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
+    ethereum_account.balance = ethereum_account
+        .balance
+        .checked_add(deposit)
+        .ok_or_else(|| {
             E!(
                 ProgramError::InvalidArgument;
                 "Account {} - balance overflow",
                 ethereum_address
             )
-        )?;
+        })?;
 
     Ok(())
 }

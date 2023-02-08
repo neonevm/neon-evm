@@ -1,8 +1,5 @@
-
 #[must_use]
-pub fn ripemd160(
-    input: &[u8]
-) -> Vec<u8> {
+pub fn ripemd160(input: &[u8]) -> Vec<u8> {
     use ripemd::{Digest, Ripemd160};
     debug_print!("ripemd160");
 

@@ -1,6 +1,6 @@
-use ethnum::U256;
-use std::convert::{TryInto};
 use crate::error::Error;
+use ethnum::U256;
+use std::convert::TryInto;
 
 use super::Address;
 
@@ -33,10 +33,10 @@ impl Transaction {
 
         let signature = [self.r, self.s].concat();
         let public_key = secp256k1_recover(&self.signed_hash, self.recovery_id, &signature)?;
-    
+
         let Hash(address) = hash(&public_key.to_bytes());
         let address: [u8; 20] = address[12..32].try_into()?;
-    
+
         Ok(Address::from(address))
     }
 }
@@ -99,7 +99,7 @@ impl rlp::Decodable for Transaction {
         } else if v == 28 {
             (None, 1_u8)
         } else {
-            return Err(rlp::DecoderError::RlpExpectedToBeData)
+            return Err(rlp::DecoderError::RlpExpectedToBeData);
         };
 
         let raw = rlp.as_raw();
@@ -107,53 +107,65 @@ impl rlp::Decodable for Transaction {
         let signed_hash = signed_hash(rlp, chain_id)?;
 
         let tx = Self {
-            nonce, gas_price, gas_limit, target, value, call_data, v, r, s,
-            chain_id, recovery_id, rlp_len: payload_size, hash, signed_hash
+            nonce,
+            gas_price,
+            gas_limit,
+            target,
+            value,
+            call_data,
+            v,
+            r,
+            s,
+            chain_id,
+            recovery_id,
+            rlp_len: payload_size,
+            hash,
+            signed_hash,
         };
 
         Ok(tx)
     }
 }
 
-fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32], rlp::DecoderError> {
+fn signed_hash(
+    transaction: &rlp::Rlp,
+    chain_id: Option<U256>,
+) -> Result<[u8; 32], rlp::DecoderError> {
     let raw = transaction.as_raw();
     let payload_info = transaction.payload_info()?;
     let (_, v_offset) = transaction.at_with_offset(6)?;
 
     let middle = &raw[payload_info.header_len..v_offset];
 
-    let trailer = chain_id.map_or_else(
-        Vec::new,
-        |chain_id| {
-            let chain_id = {
-                let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
-                let bytes = chain_id.to_be_bytes();
-                bytes[leading_empty_bytes..].to_vec()
-            };
+    let trailer = chain_id.map_or_else(Vec::new, |chain_id| {
+        let chain_id = {
+            let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
+            let bytes = chain_id.to_be_bytes();
+            bytes[leading_empty_bytes..].to_vec()
+        };
 
-            let mut trailer = Vec::with_capacity(64);
-            match chain_id.len() {
-                0 => {
-                    trailer.extend_from_slice(&[0x80]);
-                },
-                1 if chain_id[0] < 0x80 => {
-                    trailer.extend_from_slice(&chain_id);
-                },
-                len @ 1..=55 => {
-                    let len: u8 = len.try_into().unwrap();
-
-                    trailer.extend_from_slice(&[0x80 + len]);
-                    trailer.extend_from_slice(&chain_id);
-                },
-                _ => {
-                    unreachable!("chain_id.len() <= 32")
-                }
+        let mut trailer = Vec::with_capacity(64);
+        match chain_id.len() {
+            0 => {
+                trailer.extend_from_slice(&[0x80]);
             }
+            1 if chain_id[0] < 0x80 => {
+                trailer.extend_from_slice(&chain_id);
+            }
+            len @ 1..=55 => {
+                let len: u8 = len.try_into().unwrap();
 
-            trailer.extend_from_slice(&[0x80, 0x80]);
-            trailer
+                trailer.extend_from_slice(&[0x80 + len]);
+                trailer.extend_from_slice(&chain_id);
+            }
+            _ => {
+                unreachable!("chain_id.len() <= 32")
+            }
         }
-    );
+
+        trailer.extend_from_slice(&[0x80, 0x80]);
+        trailer
+    });
 
     let header: Vec<u8> = {
         let len = middle.len() + trailer.len();
@@ -176,9 +188,7 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
         }
     };
 
-    let hash = solana_program::keccak::hashv(
-        &[&header, middle, &trailer]
-    ).to_bytes();
+    let hash = solana_program::keccak::hashv(&[&header, middle, &trailer]).to_bytes();
 
     Ok(hash)
 }

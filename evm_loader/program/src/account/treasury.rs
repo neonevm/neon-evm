@@ -1,11 +1,8 @@
+use crate::config::TREASURY_POOL_SEED;
 use solana_program::{
-    account_info::AccountInfo,
-    program_error::ProgramError,
-    program_pack::Pack,
-    pubkey::Pubkey,
+    account_info::AccountInfo, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey,
 };
 use std::ops::Deref;
-use crate::config::TREASURY_POOL_SEED;
 
 pub struct Treasury<'a> {
     info: &'a AccountInfo<'a>,
@@ -18,7 +15,11 @@ pub struct MainTreasury<'a> {
 }
 
 impl<'a> Treasury<'a> {
-    pub fn from_account(program_id: &Pubkey, index: u32, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+    pub fn from_account(
+        program_id: &Pubkey,
+        index: u32,
+        info: &'a AccountInfo<'a>,
+    ) -> Result<Self, ProgramError> {
         let (expected_key, bump_seed) = Treasury::address(program_id, index);
         if *info.key != expected_key {
             return Err!(ProgramError::InvalidArgument; "Account {} - invalid treasure account", info.key);
@@ -31,12 +32,14 @@ impl<'a> Treasury<'a> {
     pub fn address(program_id: &Pubkey, index: u32) -> (Pubkey, u8) {
         Pubkey::find_program_address(
             &[TREASURY_POOL_SEED.as_bytes(), &index.to_le_bytes()],
-            program_id
+            program_id,
         )
     }
 
     #[must_use]
-    pub fn get_bump_seed(&self) -> u8 {self.bump_seed}
+    pub fn get_bump_seed(&self) -> u8 {
+        self.bump_seed
+    }
 }
 
 impl<'a> Deref for Treasury<'a> {
@@ -48,7 +51,10 @@ impl<'a> Deref for Treasury<'a> {
 }
 
 impl<'a> MainTreasury<'a> {
-    pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+    pub fn from_account(
+        program_id: &Pubkey,
+        info: &'a AccountInfo<'a>,
+    ) -> Result<Self, ProgramError> {
         let (expected_key, bump_seed) = MainTreasury::address(program_id);
         if *info.key != expected_key {
             return Err!(ProgramError::InvalidArgument; "Account {} - invalid main treasure account", info.key);
@@ -72,7 +78,9 @@ impl<'a> MainTreasury<'a> {
     }
 
     #[must_use]
-    pub fn get_bump_seed(&self) -> u8 {self.bump_seed}
+    pub fn get_bump_seed(&self) -> u8 {
+        self.bump_seed
+    }
 }
 
 impl<'a> Deref for MainTreasury<'a> {
@@ -82,4 +90,3 @@ impl<'a> Deref for MainTreasury<'a> {
         self.info
     }
 }
-

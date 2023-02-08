@@ -2,26 +2,22 @@ use std::convert::TryInto;
 
 use ethnum::U256;
 
+use evm_loader::account::EthereumAccount;
 use evm_loader::{
-    account::{EthereumStorage, ether_storage::EthereumStorageAddress},
+    account::{ether_storage::EthereumStorageAddress, EthereumStorage},
     config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
     types::Address,
 };
-use evm_loader::account::EthereumAccount;
 
 use crate::{
-    account_storage::{EmulatorAccountStorage, account_info },
+    account_storage::{account_info, EmulatorAccountStorage},
     Config, NeonCliResult,
 };
 
-
-
-pub fn execute(
-    config: &Config,
-    ether_address: Address,
-    index: &U256
-) -> NeonCliResult {
-    let value = if let (solana_address, Some(mut account)) = EmulatorAccountStorage::get_account_from_solana(config, &ether_address) {
+pub fn execute(config: &Config, ether_address: Address, index: &U256) -> NeonCliResult {
+    let value = if let (solana_address, Some(mut account)) =
+        EmulatorAccountStorage::get_account_from_solana(config, &ether_address)
+    {
         let info = account_info(&solana_address, &mut account);
 
         let account_data = EthereumAccount::from_account(&config.evm_loader, &info)?;
@@ -33,15 +29,20 @@ pub fn execute(
                 let subindex = (*index & 0xFF).as_u8();
                 let index = *index & !U256::new(0xFF);
 
-                let address = EthereumStorageAddress::new(&config.evm_loader, account_data.info.key, &index);
+                let address =
+                    EthereumStorageAddress::new(&config.evm_loader, account_data.info.key, &index);
 
                 if let Ok(mut account) = config.rpc_client.get_account(address.pubkey()) {
                     if solana_sdk::system_program::check_id(&account.owner) {
                         <[u8; 32]>::default()
                     } else {
                         let account_info = account_info(address.pubkey(), &mut account);
-                        let storage = EthereumStorage::from_account(&config.evm_loader, &account_info)?;
-                        if (storage.address != ether_address) || (storage.index != index) || (storage.generation != account_data.generation) {
+                        let storage =
+                            EthereumStorage::from_account(&config.evm_loader, &account_info)?;
+                        if (storage.address != ether_address)
+                            || (storage.index != index)
+                            || (storage.generation != account_data.generation)
+                        {
                             <[u8; 32]>::default()
                         } else {
                             storage.get(subindex)
@@ -58,7 +59,5 @@ pub fn execute(
         <[u8; 32]>::default()
     };
 
-    Ok(serde_json::json!(
-        hex::encode(value)
-    ))
+    Ok(serde_json::json!(hex::encode(value)))
 }

@@ -1,9 +1,12 @@
-use crate::types::Bytes;
-use ethnum::U256;
-use std::{collections::HashMap};
+use {crate::types::Bytes, ethnum::U256, std::collections::HashMap};
 
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq, /*, RlpEncodable, RlpDecodable */
+)]
 /// A diff of some chunk of memory.
 pub struct MemoryDiff {
     /// Offset into memory the change begins.
@@ -12,7 +15,13 @@ pub struct MemoryDiff {
     pub data: Bytes,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq, /*, RlpEncodable, RlpDecodable */
+)]
 /// A diff of some storage value.
 pub struct StorageDiff {
     /// Which key in storage is changed.
@@ -21,7 +30,13 @@ pub struct StorageDiff {
     pub value: [u8; 32],
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq, /*, RlpEncodable, RlpDecodable */
+)]
 /// A record of an executed VM operation.
 pub struct VMExecutedOperation {
     /// The total gas used.
@@ -34,7 +49,14 @@ pub struct VMExecutedOperation {
     pub store_diff: Option<StorageDiff>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Default, /*, RlpEncodable, RlpDecodable */
+)]
 /// A record of the execution of a single VM operation.
 pub struct VMOperation {
     /// The program counter.
@@ -47,7 +69,14 @@ pub struct VMOperation {
     pub executed: Option<VMExecutedOperation>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Default, /*, RlpEncodable, RlpDecodable */
+)]
 /// A record of a full VM trace for a CALL/CREATE.
 #[allow(clippy::module_name_repetitions)]
 pub struct VMTrace {
@@ -121,10 +150,16 @@ impl VMTracer for ExecutiveVMTracer {
         });
     }
 
-    fn trace_executed(&mut self, gas_used: U256, stack_push: Vec<[u8; 32]>, mem_diff: Option<MemoryDiff>, store_diff: Option<StorageDiff>) {
+    fn trace_executed(
+        &mut self,
+        gas_used: U256,
+        stack_push: Vec<[u8; 32]>,
+        mem_diff: Option<MemoryDiff>,
+        store_diff: Option<StorageDiff>,
+    ) {
         self.trace_stack.push(TraceData {
             mem_written: mem_diff.as_ref().map(|d| (d.offset, d.data.len())),
-            store_written: store_diff.as_ref().map(|d| (d.location, d.value))
+            store_written: store_diff.as_ref().map(|d| (d.location, d.value)),
         });
 
         Self::with_trace_in_depth(&mut self.data, self.depth, move |trace| {
@@ -166,15 +201,17 @@ pub trait VMTracer: Send {
     type Output;
 
     /// Trace the preparation to execute a single valid instruction.
-    fn trace_prepare_execute(
-        &mut self,
-        _pc: usize,
-        _instruction: u8,
-    ) {
-    }
+    fn trace_prepare_execute(&mut self, _pc: usize, _instruction: u8) {}
 
     /// Trace the finalised execution of a single valid instruction.
-    fn trace_executed(&mut self, _gas_used: U256, _stack_push: Vec<[u8; 32]>, _mem_diff: Option<MemoryDiff>, _storage_diff: Option<StorageDiff>) {}
+    fn trace_executed(
+        &mut self,
+        _gas_used: U256,
+        _stack_push: Vec<[u8; 32]>,
+        _mem_diff: Option<MemoryDiff>,
+        _storage_diff: Option<StorageDiff>,
+    ) {
+    }
 
     /// Spawn subtracer which will be used to trace deeper levels of execution.
     fn prepare_subtrace(&mut self, _code: Vec<u8>) {}

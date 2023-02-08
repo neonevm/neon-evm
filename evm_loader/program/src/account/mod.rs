@@ -15,17 +15,17 @@ pub use incinerator::Incinerator;
 pub use operator::Operator;
 pub use treasury::{MainTreasury, Treasury};
 
-mod treasury;
-mod operator;
-mod incinerator;
 pub mod ether_account;
 pub mod ether_contract;
 pub mod ether_storage;
-pub mod state;
 pub mod holder;
+mod incinerator;
+mod operator;
 pub mod program;
-pub mod token;
+pub mod state;
 pub mod sysvar;
+pub mod token;
+mod treasury;
 
 /*
 Deprecated tags:
@@ -80,22 +80,25 @@ where
     pub info: &'a AccountInfo<'a>,
 }
 
-
-fn split_account_data<'a>(info: &'a AccountInfo<'a>, data_len: usize) -> Result<AccountParts, ProgramError>
-{
+fn split_account_data<'a>(
+    info: &'a AccountInfo<'a>,
+    data_len: usize,
+) -> Result<AccountParts, ProgramError> {
     if info.data_len() < 1 + data_len {
         return Err!(ProgramError::InvalidAccountData; "Account {} - invalid data len, expected = {} found = {}", info.key, data_len, info.data_len());
     }
 
     let account_data = info.try_borrow_mut_data()?;
-    let (tag, bytes) = RefMut::map_split(account_data,
-        |d| d.split_first_mut().expect("data is not empty")
-    );
-    let (data, remaining) = RefMut::map_split(bytes,
-        |d| d.split_at_mut(data_len)
-    );
+    let (tag, bytes) = RefMut::map_split(account_data, |d| {
+        d.split_first_mut().expect("data is not empty")
+    });
+    let (data, remaining) = RefMut::map_split(bytes, |d| d.split_at_mut(data_len));
 
-    Ok(AccountParts{ tag, data, remaining })
+    Ok(AccountParts {
+        tag,
+        data,
+        remaining,
+    })
 }
 
 impl<'a, T> AccountData<'a, T>
@@ -105,7 +108,10 @@ where
     pub const SIZE: usize = 1 + T::SIZE;
     pub const TAG: u8 = T::TAG;
 
-    pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+    pub fn from_account(
+        program_id: &Pubkey,
+        info: &'a AccountInfo<'a>,
+    ) -> Result<Self, ProgramError> {
         if info.owner != program_id {
             return Err!(ProgramError::InvalidArgument; "Account {} - expected program owned", info.key);
         }
@@ -117,7 +123,11 @@ where
 
         let data = T::unpack(&parts.data);
 
-        Ok(Self { dirty: false, data, info })
+        Ok(Self {
+            dirty: false,
+            data,
+            info,
+        })
     }
 
     pub fn init(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
@@ -140,7 +150,11 @@ where
 
         parts.remaining.fill(0);
 
-        Ok(Self { dirty: false, data, info })
+        Ok(Self {
+            dirty: false,
+            data,
+            info,
+        })
     }
 
     /// # Safety
@@ -178,7 +192,11 @@ where
 
         parts.remaining.fill(0);
 
-        Ok(AccountData { dirty: false, data, info })
+        Ok(AccountData {
+            dirty: false,
+            data,
+            info,
+        })
     }
 }
 
@@ -215,8 +233,8 @@ where
         debug_print!("Save into solana account {:?}", self.data);
         assert!(self.info.is_writable);
 
-        let mut parts = split_account_data(self.info, T::SIZE)
-            .expect("Account have incorrect size");
+        let mut parts =
+            split_account_data(self.info, T::SIZE).expect("Account have incorrect size");
 
         self.data.pack(&mut parts.data);
     }
@@ -240,7 +258,9 @@ pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> 
 pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> ProgramResult {
     debug_print!("DELETE ACCOUNT {}", account.key);
 
-    let operator_lamports = operator.lamports().checked_add(account.lamports())
+    let operator_lamports = operator
+        .lamports()
+        .checked_add(account.lamports())
         .ok_or_else(|| E!(ProgramError::InvalidArgument; "Operator lamports overflow"))?;
 
     **operator.lamports.borrow_mut() = operator_lamports;

@@ -1,15 +1,10 @@
 use std::convert::TryInto;
 
+use crate::account::Operator;
+use crate::{config::HOLDER_MSG_SIZE, types::Transaction};
 use ethnum::U256;
 use solana_program::account_info::AccountInfo;
-use solana_program::{
-    program_error::ProgramError,
-};
-use crate::account::Operator;
-use crate::{
-    config::{HOLDER_MSG_SIZE},
-    types::Transaction, 
-};
+use solana_program::program_error::ProgramError;
 
 pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
@@ -17,20 +12,19 @@ const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const CANCEL_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
 
-
 pub struct Gasometer {
     paid_gas: U256,
     gas: u64,
-    operator_balance: u64
+    operator_balance: u64,
 }
 
 impl Gasometer {
     pub fn new(paid_gas: Option<U256>, operator: &Operator) -> Result<Self, ProgramError> {
-        Ok( Self {
-            paid_gas: paid_gas.unwrap_or(U256::ZERO), 
+        Ok(Self {
+            paid_gas: paid_gas.unwrap_or(U256::ZERO),
             gas: 0_u64,
-            operator_balance: operator.lamports()
-        } )
+            operator_balance: operator.lamports(),
+        })
     }
 
     #[must_use]
@@ -56,7 +50,8 @@ impl Gasometer {
     pub fn record_iterative_overhead(&mut self) {
         // High chance of last iteration to fail with solana error
         // Consume gas for it in the first iteration
-        self.gas = self.gas
+        self.gas = self
+            .gas
             .saturating_add(LAST_ITERATION_COST)
             .saturating_add(CANCEL_TRX_COST);
     }
@@ -77,7 +72,8 @@ impl Gasometer {
             return;
         }
 
-        let extend_count = (accounts.len() + (ACCOUNTS_PER_ALT_EXTEND - 1) ) / ACCOUNTS_PER_ALT_EXTEND;
+        let extend_count =
+            (accounts.len() + (ACCOUNTS_PER_ALT_EXTEND - 1)) / ACCOUNTS_PER_ALT_EXTEND;
         // create_alt + extend_alt + deactivate_alt + close_alt
         let cost = (extend_count + 3) as u64 * LAMPORTS_PER_SIGNATURE;
 

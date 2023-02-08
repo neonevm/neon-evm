@@ -1,16 +1,12 @@
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
-
-use ethnum::{U256, I256};
+use ethnum::{I256, U256};
 use solana_program::log::sol_log_data;
 
-use super::{
-    Machine,
-    database::Database, Reason, Context,
-    tracing_event
-};
+use super::{database::Database, tracing_event, Context, Machine, Reason};
 use crate::{
-    error::{Error, Result, build_revert_message}, 
-    types::Address, evm::Buffer,
+    error::{build_revert_message, Error, Result},
+    evm::Buffer,
+    types::Address,
 };
 
 #[derive(Eq, PartialEq)]
@@ -24,11 +20,13 @@ pub enum Action {
     Noop,
 }
 
-
 impl<B: Database> Machine<B> {
     /// Unknown instruction
     pub fn opcode_unknown(&mut self, _backend: &mut B) -> Result<Action> {
-        Err(Error::UnknownOpcode(self.context.contract, self.execution_code[self.pc]))
+        Err(Error::UnknownOpcode(
+            self.context.contract,
+            self.execution_code[self.pc],
+        ))
     }
 
     /// (u)int256 addition modulo 2**256
@@ -65,7 +63,7 @@ impl<B: Database> Machine<B> {
     pub fn opcode_div(&mut self, _backend: &mut B) -> Result<Action> {
         let a = self.stack.pop_u256()?;
         let b = self.stack.pop_u256()?;
-        
+
         if b == U256::ZERO {
             self.stack.push_zero()?;
         } else {
@@ -83,7 +81,7 @@ impl<B: Database> Machine<B> {
         match (a, b) {
             (_, I256::ZERO) => self.stack.push_zero()?,
             (I256::MIN, I256::MINUS_ONE) => self.stack.push_i256(I256::MIN)?,
-            (a, b) => self.stack.push_i256(a / b)?
+            (a, b) => self.stack.push_i256(a / b)?,
         }
 
         Ok(Action::Continue)
@@ -107,7 +105,7 @@ impl<B: Database> Machine<B> {
     pub fn opcode_smod(&mut self, _backend: &mut B) -> Result<Action> {
         let a = self.stack.pop_i256()?;
         let b = self.stack.pop_i256()?;
-        
+
         if b == I256::ZERO {
             self.stack.push_zero()?;
         } else {
@@ -161,15 +159,14 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Continue);
         }
 
-    
         if b < a {
             core::mem::swap(&mut a, &mut b);
         }
-        
+
         if b >= m {
             b %= m;
         }
-        
+
         let mut result = U256::ZERO;
         while a != U256::ZERO {
             if (a & 1) != U256::ZERO {
@@ -418,7 +415,7 @@ impl<B: Database> Machine<B> {
 
     /// hash = keccak256(memory[offset:offset+length])
     pub fn opcode_sha3(&mut self, _backend: &mut B) -> Result<Action> {
-        use solana_program::keccak::{Hash, hash};
+        use solana_program::keccak::{hash, Hash};
 
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
@@ -479,7 +476,7 @@ impl<B: Database> Machine<B> {
     pub fn opcode_calldataload(&mut self, _backend: &mut B) -> Result<Action> {
         let index = self.stack.pop_usize()?;
 
-        if let Some(buffer) = self.call_data.get(index..index+32) {
+        if let Some(buffer) = self.call_data.get(index..index + 32) {
             let buffer = arrayref::array_ref![buffer, 0, 32];
             self.stack.push_array(buffer)?;
         } else {
@@ -508,8 +505,9 @@ impl<B: Database> Machine<B> {
         let memory_offset = self.stack.pop_usize()?;
         let data_offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
-        
-        self.memory.write_buffer(memory_offset, length, &self.call_data, data_offset)?;
+
+        self.memory
+            .write_buffer(memory_offset, length, &self.call_data, data_offset)?;
 
         Ok(Action::Continue)
     }
@@ -529,10 +527,11 @@ impl<B: Database> Machine<B> {
         let length = self.stack.pop_usize()?;
 
         if data_offset.saturating_add(length) > self.execution_code.len() {
-            return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length))
+            return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length));
         }
-        
-        self.memory.write_buffer(memory_offset, length, &self.execution_code, data_offset)?;
+
+        self.memory
+            .write_buffer(memory_offset, length, &self.execution_code, data_offset)?;
 
         Ok(Action::Continue)
     }
@@ -568,10 +567,11 @@ impl<B: Database> Machine<B> {
         let code = backend.code(&address)?;
 
         if data_offset.saturating_add(length) > code.len() {
-            return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length))
+            return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length));
         }
 
-        self.memory.write_buffer(memory_offset, length, &code, data_offset)?;
+        self.memory
+            .write_buffer(memory_offset, length, &code, data_offset)?;
 
         Ok(Action::Continue)
     }
@@ -588,8 +588,9 @@ impl<B: Database> Machine<B> {
         let memory_offset = self.stack.pop_usize()?;
         let data_offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
-        
-        self.memory.write_buffer(memory_offset, length, &self.return_data, data_offset)?;
+
+        self.memory
+            .write_buffer(memory_offset, length, &self.return_data, data_offset)?;
 
         Ok(Action::Continue)
     }
@@ -600,13 +601,12 @@ impl<B: Database> Machine<B> {
             let address = self.stack.pop_address()?;
             backend.code_hash(address)?
         };
-        
+
         self.stack.push_array(&code_hash)?;
 
         Ok(Action::Continue)
     }
 
-    
     /// hash of the specific block, only valid for the 256 most recent blocks, excluding the current one
     /// Solana limits to 150 most recent blocks
     pub fn opcode_blockhash(&mut self, backend: &mut B) -> Result<Action> {
@@ -674,7 +674,7 @@ impl<B: Database> Machine<B> {
     /// Istanbul hardfork, EIP-1884: balance of the executing contract in wei
     pub fn opcode_selfbalance(&mut self, backend: &mut B) -> Result<Action> {
         let balance = backend.balance(&self.context.contract)?;
-        
+
         self.stack.push_u256(balance)?;
 
         Ok(Action::Continue)
@@ -730,9 +730,7 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = backend.storage(&self.context.contract, &index)?;
 
-        tracing_event!(super::tracing::Event::StorageAccess { 
-            index, value 
-        });
+        tracing_event!(super::tracing::Event::StorageAccess { index, value });
 
         self.stack.push_array(&value)?;
 
@@ -748,12 +746,8 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = *self.stack.pop_array()?;
 
-        tracing_event!(super::tracing::Event::StorageSet {
-            index, value 
-        });
-        tracing_event!(super::tracing::Event::StorageAccess {
-            index, value 
-        });
+        tracing_event!(super::tracing::Event::StorageSet { index, value });
+        tracing_event!(super::tracing::Event::StorageAccess { index, value });
 
         backend.set_storage(self.context.contract, index, value)?;
 
@@ -781,9 +775,9 @@ impl<B: Database> Machine<B> {
         let condition = self.stack.pop_array()?;
 
         if condition == &[0_u8; 32] {
-            return Ok(Action::Continue)
+            return Ok(Action::Continue);
         }
-        
+
         if self.execution_code.get(value) == Some(&JUMPDEST) {
             Ok(Action::Jump(value))
         } else {
@@ -824,9 +818,7 @@ impl<B: Database> Machine<B> {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
-        let value = unsafe {
-            *self.execution_code.get_unchecked(self.pc + 1)
-        };
+        let value = unsafe { *self.execution_code.get_unchecked(self.pc + 1) };
 
         self.stack.push_byte(value)?;
 
@@ -881,6 +873,7 @@ impl<B: Database> Machine<B> {
     }
 
     /// Append log record with N topics
+    #[rustfmt::skip]
     pub fn opcode_log_0_4<const N: usize>(&mut self, _backend: &mut B) -> Result<Action> {
         if self.is_static {
             return Err(Error::StaticModeViolation(self.context.contract));
@@ -902,12 +895,12 @@ impl<B: Database> Machine<B> {
         let address = self.context.contract.as_bytes();
 
         match N {
-            0 => sol_log_data(&[b"LOG0", address, &[0], data]),
-            1 => sol_log_data(&[b"LOG1", address, &[1], &topics[0], data]),
-            2 => sol_log_data(&[b"LOG2", address, &[2], &topics[0], &topics[1], data]),
-            3 => sol_log_data(&[b"LOG3", address, &[3], &topics[0], &topics[1], &topics[2], data]),
+            0 => sol_log_data(&[b"LOG0", address, &[0], data]),                                                
+            1 => sol_log_data(&[b"LOG1", address, &[1], &topics[0], data]),                                    
+            2 => sol_log_data(&[b"LOG2", address, &[2], &topics[0], &topics[1], data]),                        
+            3 => sol_log_data(&[b"LOG3", address, &[3], &topics[0], &topics[1], &topics[2], data]),            
             4 => sol_log_data(&[b"LOG4", address, &[4], &topics[0], &topics[1], &topics[2], &topics[3], data]),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
 
         Ok(Action::Continue)
@@ -938,7 +931,7 @@ impl<B: Database> Machine<B> {
         if self.is_static {
             return Err(Error::StaticModeViolation(self.context.contract));
         }
-        
+
         let value = self.stack.pop_u256()?;
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
@@ -960,12 +953,12 @@ impl<B: Database> Machine<B> {
         value: U256,
         offset: usize,
         length: usize,
-        backend: &mut B
+        backend: &mut B,
     ) -> Result<Action> {
         if backend.nonce(&self.context.contract)? == u64::MAX {
             return Err(Error::NonceOverflow(self.context.contract));
         }
-        
+
         if (backend.nonce(&address)? != 0) || (backend.code_size(&address)? != 0) {
             // return Err(Error::DeployToExistingAccount(address, self.context.contract));
             self.stack.push_zero()?;
@@ -991,18 +984,13 @@ impl<B: Database> Machine<B> {
         };
         let init_code = Buffer::new(self.memory.read(offset, length)?);
 
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: init_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: init_code.to_vec()
         });
 
-        self.fork(
-            Reason::Create,
-            context,
-            init_code,
-            Buffer::empty(),
-            None
-        );
-        
+        self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
+
         Ok(Action::Noop)
     }
 
@@ -1038,11 +1026,10 @@ impl<B: Database> Machine<B> {
         };
         let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
+        let precompile_result =
+            self.opcode_call_precompile_impl(backend, &context, &address, &call_data, false)?;
         if precompile_result != Action::Noop {
-            return Ok(precompile_result)
+            return Ok(precompile_result);
         }
 
         backend.snapshot()?;
@@ -1050,8 +1037,9 @@ impl<B: Database> Machine<B> {
 
         let execution_code = backend.code(&address)?;
 
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: execution_code.to_vec()
         });
 
         sol_log_data(&[b"ENTER", b"CALL", address.as_bytes()]);
@@ -1061,7 +1049,7 @@ impl<B: Database> Machine<B> {
             context,
             execution_code,
             call_data,
-            Some(gas_limit)
+            Some(gas_limit),
         );
 
         Ok(Action::Noop)
@@ -1094,21 +1082,21 @@ impl<B: Database> Machine<B> {
             code_address: Some(address),
         };
         let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
-        
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
+
+        let precompile_result =
+            self.opcode_call_precompile_impl(backend, &context, &address, &call_data, false)?;
         if precompile_result != Action::Noop {
-            return Ok(precompile_result)
+            return Ok(precompile_result);
         }
-        
+
         backend.snapshot()?;
         // no need to transfer funds to yourself
 
         let execution_code = backend.code(&address)?;
 
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: execution_code.to_vec()
         });
 
         sol_log_data(&[b"ENTER", b"CALLCODE", address.as_bytes()]);
@@ -1118,13 +1106,13 @@ impl<B: Database> Machine<B> {
             context,
             execution_code,
             call_data,
-            Some(gas_limit)
+            Some(gas_limit),
         );
-        
+
         Ok(Action::Noop)
     }
 
-    /// Homestead hardfork, EIP-7: Message-call into this account with an alternative account’s code, 
+    /// Homestead hardfork, EIP-7: Message-call into this account with an alternative account’s code,
     /// but persisting the current values for sender and value
     pub fn opcode_delegatecall(&mut self, backend: &mut B) -> Result<Action> {
         let gas_limit = self.stack.pop_u256()?;
@@ -1137,19 +1125,19 @@ impl<B: Database> Machine<B> {
         let context = self.context;
         let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
+        let precompile_result =
+            self.opcode_call_precompile_impl(backend, &context, &address, &call_data, false)?;
         if precompile_result != Action::Noop {
-            return Ok(precompile_result)
+            return Ok(precompile_result);
         }
 
         backend.snapshot()?;
 
         let execution_code = backend.code(&address)?;
 
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: execution_code.to_vec()
         });
 
         sol_log_data(&[b"ENTER", b"DELEGATECALL", address.as_bytes()]);
@@ -1183,19 +1171,19 @@ impl<B: Database> Machine<B> {
         };
         let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
+        let precompile_result =
+            self.opcode_call_precompile_impl(backend, &context, &address, &call_data, false)?;
         if precompile_result != Action::Noop {
-            return Ok(precompile_result)
+            return Ok(precompile_result);
         }
 
         backend.snapshot()?;
 
         let execution_code = backend.code(&address)?;
 
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: execution_code.to_vec()
         });
 
         sol_log_data(&[b"ENTER", b"STATICCALL", address.as_bytes()]);
@@ -1220,7 +1208,7 @@ impl<B: Database> Machine<B> {
         context: &Context,
         address: &Address,
         data: &[u8],
-        is_static: bool
+        is_static: bool,
     ) -> Result<Action> {
         let is_static = self.is_static || is_static;
 
@@ -1231,7 +1219,7 @@ impl<B: Database> Machine<B> {
 
         let result = result.map(|r| match r {
             Ok(v) => (v, true),
-            Err(e) => (build_revert_message(&e.to_string()), false)
+            Err(e) => (build_revert_message(&e.to_string()), false),
         });
 
         if let Some((result, status)) = result {
@@ -1239,8 +1227,9 @@ impl<B: Database> Machine<B> {
 
             let return_offset = self.stack.pop_usize()?;
             let return_length = self.stack.pop_usize()?;
-            
-            self.memory.write_buffer(return_offset, return_length, &self.return_data, 0)?;
+
+            self.memory
+                .write_buffer(return_offset, return_length, &self.return_data, 0)?;
             self.stack.push_bool(status)?;
 
             Ok(Action::Continue)
@@ -1260,20 +1249,16 @@ impl<B: Database> Machine<B> {
 
         if self.parent.is_none() {
             match self.reason {
-                Reason::Call => {
-                    return Ok(Action::Return(return_data.to_vec()))
-                },
+                Reason::Call => return Ok(Action::Return(return_data.to_vec())),
                 Reason::Create => {
                     backend.set_code(self.context.contract, return_data)?;
-                    return Ok(Action::Return(Vec::new()))
-                },
+                    return Ok(Action::Return(Vec::new()));
+                }
             }
         }
 
-        tracing_event!(super::tracing::Event::EndStep {
-            gas_used: 0_u64
-        });
-        tracing_event!(super::tracing::Event::EndVM { 
+        tracing_event!(super::tracing::Event::EndStep { gas_used: 0_u64 });
+        tracing_event!(super::tracing::Event::EndVM {
             status: super::ExitStatus::Return(return_data.to_vec())
         });
 
@@ -1283,18 +1268,19 @@ impl<B: Database> Machine<B> {
                 let return_offset = self.stack.pop_usize()?;
                 let return_length = self.stack.pop_usize()?;
 
-                self.memory.write_buffer(return_offset, return_length, &return_data, 0)?;
+                self.memory
+                    .write_buffer(return_offset, return_length, &return_data, 0)?;
                 self.stack.push_bool(true)?; // success
 
                 self.return_data = return_data;
-            },
+            }
             Reason::Create => {
                 let address = returned.context.contract;
 
                 backend.set_code(address, return_data)?;
-    
+
                 self.stack.push_address(&address)?;
-            },
+            }
         }
 
         backend.commit_snapshot()?;
@@ -1302,7 +1288,7 @@ impl<B: Database> Machine<B> {
         Ok(Action::Continue)
     }
 
-    /// Byzantium hardfork, EIP-140: Halt execution reverting state changes but returning data 
+    /// Byzantium hardfork, EIP-140: Halt execution reverting state changes but returning data
     pub fn opcode_revert(&mut self, backend: &mut B) -> Result<Action> {
         sol_log_data(&[b"EXIT", b"REVERT"]);
 
@@ -1317,10 +1303,8 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Revert(return_data.to_vec()));
         }
 
-        tracing_event!(super::tracing::Event::EndStep {
-            gas_used: 0_u64
-        });
-        tracing_event!(super::tracing::Event::EndVM { 
+        tracing_event!(super::tracing::Event::EndStep { gas_used: 0_u64 });
+        tracing_event!(super::tracing::Event::EndVM {
             status: super::ExitStatus::Revert(return_data.to_vec())
         });
 
@@ -1330,14 +1314,15 @@ impl<B: Database> Machine<B> {
                 let return_offset = self.stack.pop_usize()?;
                 let return_length = self.stack.pop_usize()?;
 
-                self.memory.write_buffer(return_offset, return_length, &return_data, 0)?;
+                self.memory
+                    .write_buffer(return_offset, return_length, &return_data, 0)?;
                 self.stack.push_bool(false)?; // fail
 
                 self.return_data = return_data;
-            },
+            }
             Reason::Create => {
                 self.stack.push_zero()?;
-            },
+            }
         }
 
         Ok(Action::Continue)
@@ -1345,7 +1330,10 @@ impl<B: Database> Machine<B> {
 
     /// Invalid instruction
     pub fn opcode_invalid(&mut self, _backend: &mut B) -> Result<Action> {
-        Err(Error::InvalidOpcode(self.context.contract, self.execution_code[self.pc]))
+        Err(Error::InvalidOpcode(
+            self.context.contract,
+            self.execution_code[self.pc],
+        ))
     }
 
     /// Halt execution, destroys the contract and send all funds to address
@@ -1367,10 +1355,8 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Suicide);
         }
 
-        tracing_event!(super::tracing::Event::EndStep {
-            gas_used: 0_u64
-        });
-        tracing_event!(super::tracing::Event::EndVM { 
+        tracing_event!(super::tracing::Event::EndStep { gas_used: 0_u64 });
+        tracing_event!(super::tracing::Event::EndVM {
             status: super::ExitStatus::Suicide
         });
 
@@ -1380,14 +1366,15 @@ impl<B: Database> Machine<B> {
                 let return_offset = self.stack.pop_usize()?;
                 let return_length = self.stack.pop_usize()?;
 
-                self.memory.write_buffer(return_offset, return_length, &[], 0)?;
+                self.memory
+                    .write_buffer(return_offset, return_length, &[], 0)?;
                 self.stack.push_bool(true)?; // success
 
                 self.return_data = Buffer::empty();
-            },
+            }
             Reason::Create => {
                 self.stack.push_zero()?;
-            },
+            }
         }
 
         backend.commit_snapshot()?;
@@ -1403,10 +1390,8 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Stop);
         }
 
-        tracing_event!(super::tracing::Event::EndStep {
-            gas_used: 0_u64
-        });
-        tracing_event!(super::tracing::Event::EndVM { 
+        tracing_event!(super::tracing::Event::EndStep { gas_used: 0_u64 });
+        tracing_event!(super::tracing::Event::EndVM {
             status: super::ExitStatus::Stop
         });
 
@@ -1415,7 +1400,8 @@ impl<B: Database> Machine<B> {
             let return_offset = self.stack.pop_usize()?;
             let return_length = self.stack.pop_usize()?;
 
-            self.memory.write_buffer(return_offset, return_length, &[], 0)?;
+            self.memory
+                .write_buffer(return_offset, return_length, &[], 0)?;
             self.stack.push_bool(true)?; // success
 
             self.return_data = Buffer::empty();

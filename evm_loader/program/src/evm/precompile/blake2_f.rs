@@ -1,9 +1,6 @@
-
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn blake2_f(
-    input: &[u8]
-) -> Vec<u8> {
+pub fn blake2_f(input: &[u8]) -> Vec<u8> {
     const BLAKE2_F_ARG_LEN: usize = 213;
     debug_print!("blake2F");
 
@@ -116,7 +113,7 @@ pub fn blake2_f(
         false
     } else {
         // return Err(ExitError::Other("incorrect final block indicator flag".into()))
-        return Vec::new()
+        return Vec::new();
     };
 
     compress(&mut h, m, [t_0, t_1], f, rounds as usize);

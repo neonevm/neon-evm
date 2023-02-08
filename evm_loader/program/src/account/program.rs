@@ -1,25 +1,29 @@
-use std::convert::From;
+use super::{EthereumAccount, Operator, ACCOUNT_SEED_VERSION};
 use solana_program::account_info::AccountInfo;
-use solana_program::program::{invoke_unchecked, invoke_signed_unchecked};
+use solana_program::program::{invoke_signed_unchecked, invoke_unchecked};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::{
-    program::{invoke, invoke_signed}, system_instruction,
-    rent::Rent, sysvar::Sysvar
+    program::{invoke, invoke_signed},
+    rent::Rent,
+    system_instruction,
+    sysvar::Sysvar,
 };
-use super::{Operator, EthereumAccount, ACCOUNT_SEED_VERSION};
+use std::convert::From;
 use std::ops::Deref;
 
-
-pub struct Neon<'a> (&'a AccountInfo<'a>);
+pub struct Neon<'a>(&'a AccountInfo<'a>);
 
 impl<'a> Neon<'a> {
-    pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+    pub fn from_account(
+        program_id: &Pubkey,
+        info: &'a AccountInfo<'a>,
+    ) -> Result<Self, ProgramError> {
         if program_id != info.key {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not Neon program", info.key);
         }
 
-        Ok(Self ( info ))
+        Ok(Self(info))
     }
 }
 
@@ -31,17 +35,16 @@ impl<'a> Deref for Neon<'a> {
     }
 }
 
-
-pub struct System<'a> (&'a AccountInfo<'a>);
+pub struct System<'a>(&'a AccountInfo<'a>);
 
 impl<'a> From<&'a AccountInfo<'a>> for System<'a> {
     fn from(info: &'a AccountInfo<'a>) -> Self {
-        Self( info )
+        Self(info)
     }
 }
 
-impl<'a> From<& System<'a>> for &'a AccountInfo<'a> {
-    fn from(f:& System<'a>) -> Self {
+impl<'a> From<&System<'a>> for &'a AccountInfo<'a> {
+    fn from(f: &System<'a>) -> Self {
         f.0
     }
 }
@@ -52,7 +55,7 @@ impl<'a> System<'a> {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not system program", info.key);
         }
 
-        Ok(Self ( info ))
+        Ok(Self(info))
     }
 
     pub fn create_pda_account(
@@ -61,7 +64,7 @@ impl<'a> System<'a> {
         payer: &Operator<'a>,
         new_account: &AccountInfo<'a>,
         new_account_seeds: &[&[u8]],
-        space: usize
+        space: usize,
     ) -> Result<(), ProgramError> {
         let rent = Rent::get()?;
         let minimum_balance = rent.minimum_balance(space).max(1);
@@ -72,7 +75,7 @@ impl<'a> System<'a> {
             if required_lamports > 0 {
                 invoke(
                     &system_instruction::transfer(payer.key, new_account.key, required_lamports),
-                    &[(*payer).clone(), new_account.clone(), self.0.clone()]
+                    &[(*payer).clone(), new_account.clone(), self.0.clone()],
                 )?;
             }
 
@@ -85,7 +88,7 @@ impl<'a> System<'a> {
             invoke_signed(
                 &system_instruction::assign(new_account.key, program_id),
                 &[new_account.clone(), self.0.clone()],
-                &[new_account_seeds]
+                &[new_account_seeds],
             )
         } else {
             invoke_signed(
@@ -109,10 +112,14 @@ impl<'a> System<'a> {
         owner: &Pubkey,
         new_account: &AccountInfo<'a>,
         seed: &str,
-        space: usize
+        space: usize,
     ) -> Result<(), ProgramError> {
         let minimum_balance = Rent::get()?.minimum_balance(space).max(1);
-        let signer_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], base.address.as_bytes(), &[base.bump_seed]];
+        let signer_seeds: &[&[u8]] = &[
+            &[ACCOUNT_SEED_VERSION],
+            base.address.as_bytes(),
+            &[base.bump_seed],
+        ];
 
         if new_account.lamports() > 0 {
             let required_lamports = minimum_balance.saturating_sub(new_account.lamports());
@@ -120,12 +127,18 @@ impl<'a> System<'a> {
             if required_lamports > 0 {
                 invoke_unchecked(
                     &system_instruction::transfer(payer.key, new_account.key, required_lamports),
-                    &[(*payer).clone(), new_account.clone(), self.0.clone()]
+                    &[(*payer).clone(), new_account.clone(), self.0.clone()],
                 )?;
             }
 
             invoke_signed_unchecked(
-                &system_instruction::allocate_with_seed(new_account.key, base.info.key, seed, space as u64, owner),
+                &system_instruction::allocate_with_seed(
+                    new_account.key,
+                    base.info.key,
+                    seed,
+                    space as u64,
+                    owner,
+                ),
                 &[new_account.clone(), base.info.clone(), self.0.clone()],
                 &[signer_seeds],
             )?;
@@ -133,7 +146,7 @@ impl<'a> System<'a> {
             invoke_signed_unchecked(
                 &system_instruction::assign_with_seed(new_account.key, base.info.key, seed, owner),
                 &[new_account.clone(), base.info.clone(), self.0.clone()],
-                &[signer_seeds]
+                &[signer_seeds],
             )
         } else {
             invoke_signed_unchecked(
@@ -146,7 +159,12 @@ impl<'a> System<'a> {
                     space as u64,
                     owner,
                 ),
-                &[(*payer).clone(), new_account.clone(), base.info.clone(), self.0.clone()],
+                &[
+                    (*payer).clone(),
+                    new_account.clone(),
+                    base.info.clone(),
+                    self.0.clone(),
+                ],
                 &[signer_seeds],
             )
         }
@@ -156,13 +174,18 @@ impl<'a> System<'a> {
         &self,
         source: &Operator<'a>,
         target: &AccountInfo<'a>,
-        lamports: u64
+        lamports: u64,
     ) -> Result<(), ProgramError> {
-        crate::debug_print!("system transfer {} lamports from {} to {}", lamports, source.key, target.key);
+        crate::debug_print!(
+            "system transfer {} lamports from {} to {}",
+            lamports,
+            source.key,
+            target.key
+        );
 
         invoke(
             &system_instruction::transfer(source.key, target.key, lamports),
-            &[(*source).clone(), target.clone(), self.0.clone()]
+            &[(*source).clone(), target.clone(), self.0.clone()],
         )
     }
 }
@@ -175,7 +198,6 @@ impl<'a> Deref for System<'a> {
     }
 }
 
-
 pub struct Token<'a>(&'a AccountInfo<'a>);
 
 impl<'a> Token<'a> {
@@ -184,26 +206,25 @@ impl<'a> Token<'a> {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not token program", info.key);
         }
 
-        Ok(Self ( info ))
+        Ok(Self(info))
     }
 
     pub fn create_account(
         &self,
         account: &AccountInfo<'a>,
         mint: &AccountInfo<'a>,
-        owner: &AccountInfo<'a>
+        owner: &AccountInfo<'a>,
     ) -> Result<(), ProgramError> {
         invoke(
             &spl_token::instruction::initialize_account3(
                 self.0.key,
                 account.key,
                 mint.key,
-                owner.key
+                owner.key,
             )?,
-            &[account.clone(), mint.clone()]
+            &[account.clone(), mint.clone()],
         )
     }
-
 }
 
 impl<'a> Deref for Token<'a> {

@@ -1,15 +1,12 @@
-use crate::account::{Operator, program, EthereumAccount, Treasury};
+use crate::account::{program, EthereumAccount, Operator, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
+use crate::error::{Error, Result};
 use crate::evm::Machine;
 use crate::executor::ExecutorState;
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_step::log_return_value;
 use crate::types::{Address, Transaction};
-use crate::error::{Error, Result};
-use solana_program::{
-    account_info::AccountInfo,
-};
-
+use solana_program::account_info::AccountInfo;
 
 pub struct Accounts<'a> {
     pub operator: Operator<'a>,
@@ -39,7 +36,11 @@ pub fn execute<'a>(
     trx: Transaction,
     caller_address: Address,
 ) -> Result<()> {
-    accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
+    accounts.system_program.transfer(
+        &accounts.operator,
+        &accounts.treasury,
+        crate::config::PAYMENT_TO_TREASURE,
+    )?;
 
     let gas_limit = trx.gas_limit;
     let gas_price = trx.gas_price;
@@ -79,9 +80,13 @@ pub fn execute<'a>(
     solana_program::log::sol_log_data(&[b"GAS", &used_gas.to_le_bytes(), &used_gas.to_le_bytes()]);
 
     let gas_cost = used_gas.saturating_mul(gas_price);
-    account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost)?;
+    account_storage.transfer_gas_payment(
+        caller_address,
+        accounts.operator_ether_account,
+        gas_cost,
+    )?;
 
     log_return_value(&exit_reason);
-    
+
     Ok(())
 }

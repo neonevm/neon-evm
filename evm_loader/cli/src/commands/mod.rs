@@ -1,52 +1,40 @@
 pub mod cancel_trx;
+pub mod collect_treasury;
 pub mod create_ether_account;
 pub mod deposit;
 pub mod emulate;
 pub mod get_ether_account_data;
 pub mod get_neon_elf;
 pub mod get_storage_at;
-pub mod collect_treasury;
 pub mod init_environment;
-mod transaction_executor;
 mod trace;
+mod transaction_executor;
 
+use crate::{
+    commands::get_neon_elf::CachedElfParams, program_options::truncate, types::TxParams, Config,
+    NeonCliResult,
+};
 use clap::ArgMatches;
-use solana_clap_utils::input_parsers::{pubkey_of, value_of,};
+use ethnum::U256;
+use evm_loader::types::Address;
+use solana_clap_utils::input_parsers::{pubkey_of, value_of};
+use solana_client::{
+    client_error::Result as SolanaClientResult, rpc_config::RpcSendTransactionConfig,
+};
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
-    instruction::{Instruction},
+    instruction::Instruction,
     message::Message,
     pubkey::Pubkey,
     signature::Signature,
     transaction::Transaction,
 };
-use solana_client::{
-    rpc_config::RpcSendTransactionConfig,
-    client_error::Result as SolanaClientResult,
-};
-use ethnum::U256;
-use evm_loader::types::Address;
 use std::str::FromStr;
-use crate::{
-    NeonCliResult,
-    program_options::truncate,
-    Config,
-    commands::get_neon_elf::CachedElfParams,
-};
-
-#[derive(Clone)]
-pub struct TxParams {
-    pub from: Address,
-    pub to: Option<Address>,
-    pub data: Option<Vec<u8>>,
-    pub value: Option<U256>,
-    pub gas_limit: Option<U256>,
-}
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult {
     match (cmd, params) {
         ("emulate", Some(params)) => {
-            let tx= parse_tx(params);
+            let tx = parse_tx(params);
             let (token, chain, steps) = parse_tx_params(config, params);
             emulate::execute(config, tx, token, chain, steps)
         }
@@ -56,7 +44,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             emulate::execute(config, tx, token, chain, steps)
         }
         ("trace", Some(params)) => {
-            let tx= parse_tx(params);
+            let tx = parse_tx(params);
             let (token, chain, steps) = parse_tx_params(config, params);
             trace::execute(config, tx, token, chain, steps)
         }
@@ -79,16 +67,15 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             get_ether_account_data::execute(config, &ether)
         }
         ("cancel-trx", Some(params)) => {
-            let storage_account = pubkey_of(params, "storage_account").expect("storage_account parse error");
+            let storage_account =
+                pubkey_of(params, "storage_account").expect("storage_account parse error");
             cancel_trx::execute(config, &storage_account)
         }
         ("neon-elf-params", Some(params)) => {
             let program_location = params.value_of("program_location");
             get_neon_elf::execute(config, program_location)
         }
-        ("collect-treasury", Some(_)) => {
-            collect_treasury::execute(config)
-        }
+        ("collect-treasury", Some(_)) => collect_treasury::execute(config),
         ("init-environment", Some(params)) => {
             let file = params.value_of("file");
             let send_trx = params.is_present("send-trx");
@@ -101,7 +88,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             let index = u256_of(params, "index").expect("index parse error");
             get_storage_at::execute(config, contract_id, &index)
         }
-            _ => unreachable!(),
+        _ => unreachable!(),
     }
 }
 
@@ -113,9 +100,9 @@ fn address_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<Address>
 }
 
 fn address_of(matches: &ArgMatches<'_>, name: &str) -> Option<Address> {
-    matches.value_of(name).map(|value| {
-        Address::from_hex(value).unwrap()
-    })
+    matches
+        .value_of(name)
+        .map(|value| Address::from_hex(value).unwrap())
 }
 
 fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
@@ -128,45 +115,44 @@ fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
     })
 }
 
-
-fn read_stdin() -> Option<Vec<u8>>{
+fn read_stdin() -> Option<Vec<u8>> {
     let mut data = String::new();
 
-    if let Ok(len) = std::io::stdin().read_line(&mut data){
-        if len == 0{
-            return None
+    if let Ok(len) = std::io::stdin().read_line(&mut data) {
+        if len == 0 {
+            return None;
         }
         let data = truncate(data.as_str());
         let bin = hex::decode(data).expect("data hex::decore error");
         Some(bin)
-    }
-    else{
+    } else {
         None
     }
 }
 
 pub fn send_transaction(
     config: &Config,
-    instructions: &[Instruction]
+    instructions: &[Instruction],
 ) -> SolanaClientResult<Signature> {
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     let signers = [&*config.signer];
-    let (blockhash, _last_valid_slot) = config.rpc_client
+    let (blockhash, _last_valid_slot) = config
+        .rpc_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
     transaction.try_sign(&signers, blockhash)?;
 
-    config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &transaction,
-        CommitmentConfig::confirmed(),
-        RpcSendTransactionConfig {
-            preflight_commitment: Some(CommitmentLevel::Confirmed),
-            ..RpcSendTransactionConfig::default()
-        },
-    )
+    config
+        .rpc_client
+        .send_and_confirm_transaction_with_spinner_and_config(
+            &transaction,
+            CommitmentConfig::confirmed(),
+            RpcSendTransactionConfig {
+                preflight_commitment: Some(CommitmentLevel::Confirmed),
+                ..RpcSendTransactionConfig::default()
+            },
+        )
 }
-
-
 
 fn parse_tx(params: &ArgMatches) -> TxParams {
     let from = address_of(params, "sender").expect("sender parse error");
@@ -175,26 +161,46 @@ fn parse_tx(params: &ArgMatches) -> TxParams {
     let value = u256_of(params, "value");
     let gas_limit = u256_of(params, "gas_limit");
 
-    TxParams {from, to, data, value, gas_limit}
+    TxParams {
+        from,
+        to,
+        data,
+        value,
+        gas_limit,
+    }
 }
 
-
-pub fn parse_tx_params( config: &Config, params: &ArgMatches) -> (Pubkey, u64, u64) {
+pub fn parse_tx_params(config: &Config, params: &ArgMatches) -> (Pubkey, u64, u64) {
     // Read ELF params only if token_mint or chain_id is not set.
     let mut token = pubkey_of(params, "token_mint");
     let mut chain = value_of(params, "chain_id");
     if token.is_none() || chain.is_none() {
         let cached_elf_params = CachedElfParams::new(config);
-        token = token.or_else(|| Some(Pubkey::from_str(
-            cached_elf_params.get("NEON_TOKEN_MINT").expect("NEON_TOKEN_MINT load error")
-        ).expect("NEON_TOKEN_MINT Pubkey ctor error ")));
-        chain = chain.or_else(|| Some(u64::from_str(
-            cached_elf_params.get("NEON_CHAIN_ID").expect("NEON_CHAIN_ID load error")
-        ).expect("NEON_CHAIN_ID u64 ctor error")));
+        token = token.or_else(|| {
+            Some(
+                Pubkey::from_str(
+                    cached_elf_params
+                        .get("NEON_TOKEN_MINT")
+                        .expect("NEON_TOKEN_MINT load error"),
+                )
+                .expect("NEON_TOKEN_MINT Pubkey ctor error "),
+            )
+        });
+        chain = chain.or_else(|| {
+            Some(
+                u64::from_str(
+                    cached_elf_params
+                        .get("NEON_CHAIN_ID")
+                        .expect("NEON_CHAIN_ID load error"),
+                )
+                .expect("NEON_CHAIN_ID u64 ctor error"),
+            )
+        });
     }
     let token = token.expect("token_mint get error");
     let chain = chain.expect("chain_id get error");
-    let max_steps = value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
+    let max_steps =
+        value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
 
     (token, chain, max_steps)
 }

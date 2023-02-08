@@ -1,32 +1,40 @@
-use log::{debug};
+use log::debug;
 
 use ethnum::U256;
 use evm_loader::{
-    gasometer::LAMPORTS_PER_SIGNATURE, 
+    account_storage::AccountStorage,
     config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE},
-    types::Transaction, executor::ExecutorState, evm::{Machine, ExitStatus}, account_storage::AccountStorage
+    evm::{ExitStatus, Machine},
+    executor::ExecutorState,
+    gasometer::LAMPORTS_PER_SIGNATURE,
+    types::Transaction,
 };
 
+use crate::types::TxParams;
 use crate::{
-    account_storage::{
-        EmulatorAccountStorage, NeonAccount, SolanaAccount,
-    },
-    Config,
-    NeonCliResult,
-    syscall_stubs::Stubs, errors::NeonCliError,
+    account_storage::{EmulatorAccountStorage, NeonAccount, SolanaAccount},
+    errors::NeonCliError,
+    syscall_stubs::Stubs,
+    Config, NeonCliResult,
 };
-use super::TxParams;
 use solana_sdk::pubkey::Pubkey;
 
-
-pub fn execute(config: &Config, tx_params: TxParams, token: Pubkey, chain: u64, steps: u64) -> NeonCliResult {
+pub fn execute(
+    config: &Config,
+    tx_params: TxParams,
+    token: Pubkey,
+    chain: u64,
+    steps: u64,
+) -> NeonCliResult {
     let data = tx_params.data.clone().unwrap_or_default();
-    debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
+    debug!(
+        "command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
         tx_params.to,
         tx_params.from,
-        &hex::encode(&data),
-        tx_params.value);
+        &hex::encode(data),
+        tx_params.value
+    );
 
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
@@ -76,17 +84,10 @@ pub fn execute(config: &Config, tx_params: TxParams, token: Pubkey, chain: u64, 
         ExitStatus::StepLimit => unreachable!(),
     };
 
-    let accounts: Vec<NeonAccount> = storage.accounts
-        .borrow()
-        .values()
-        .cloned()
-        .collect();
+    let accounts: Vec<NeonAccount> = storage.accounts.borrow().values().cloned().collect();
 
-    let solana_accounts: Vec<SolanaAccount> = storage.solana_accounts
-        .borrow()
-        .values()
-        .cloned()
-        .collect();
+    let solana_accounts: Vec<SolanaAccount> =
+        storage.solana_accounts.borrow().values().cloned().collect();
 
     let json = serde_json::json!({
         "accounts": accounts,
