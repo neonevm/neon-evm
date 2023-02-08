@@ -1,18 +1,18 @@
-use crate::account::{Operator, program, EthereumAccount, Treasury, Holder};
+use crate::account::{program, EthereumAccount, Holder, Operator, Treasury};
 use crate::account_storage::ProgramAccountStorage;
+use crate::error::Result;
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_execute::Accounts;
 use crate::types::Transaction;
-use crate::error::Result;
 use arrayref::array_ref;
-use solana_program::{
-    account_info::AccountInfo,
-    pubkey::Pubkey,
-};
-
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 /// Execute Ethereum transaction in a single Solana transaction
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> Result<()> {
+pub fn process<'a>(
+    program_id: &'a Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    instruction: &[u8],
+) -> Result<()> {
     solana_program::msg!("Instruction: Execute Transaction from Account");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
@@ -43,13 +43,18 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         Some(&accounts.system_program),
         accounts.remaining_accounts,
     )?;
-    
+
     let mut gasometer = Gasometer::new(None, &accounts.operator)?;
     gasometer.record_solana_transaction_cost();
     gasometer.record_address_lookup_table(accounts.all_accounts);
     gasometer.record_write_to_holder(&trx);
 
     super::transaction_execute::validate(&accounts, &account_storage, &trx, &caller_address)?;
-    super::transaction_execute::execute(accounts, &mut account_storage, gasometer, trx, caller_address)
+    super::transaction_execute::execute(
+        accounts,
+        &mut account_storage,
+        gasometer,
+        trx,
+        caller_address,
+    )
 }
-

@@ -2,22 +2,27 @@
 
 use std::collections::BTreeMap;
 
-use crate::executor::{OwnedAccountInfo};
+use crate::executor::OwnedAccountInfo;
 use solana_program::{
-    entrypoint::ProgramResult,
-    pubkey::Pubkey,
-    system_instruction::SystemInstruction,
-    program_error::ProgramError, system_program, instruction::AccountMeta
+    entrypoint::ProgramResult, instruction::AccountMeta, program_error::ProgramError,
+    pubkey::Pubkey, system_instruction::SystemInstruction, system_program,
 };
 
-
-pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>) -> ProgramResult {
+pub fn emulate(
+    instruction: &[u8],
+    meta: &[AccountMeta],
+    accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+) -> ProgramResult {
     let system_instruction: SystemInstruction = bincode::deserialize(instruction).unwrap();
     match system_instruction {
-        SystemInstruction::CreateAccount { lamports, space, owner } => {
+        SystemInstruction::CreateAccount {
+            lamports,
+            space,
+            owner,
+        } => {
             let funder_key = &meta[0].pubkey;
             let account_key = &meta[1].pubkey;
-            
+
             {
                 let mut funder = accounts.get_mut(funder_key).unwrap();
                 if funder.lamports < lamports {
@@ -29,7 +34,10 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
 
             {
                 let mut account = accounts.get_mut(account_key).unwrap();
-                if (account.lamports > 0) || !account.data.is_empty() || !system_program::check_id(&account.owner) {
+                if (account.lamports > 0)
+                    || !account.data.is_empty()
+                    || !system_program::check_id(&account.owner)
+                {
                     return Err!(ProgramError::InvalidInstructionData; "Create Account: account already in use");
                 }
 
@@ -37,7 +45,7 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
                 account.owner = owner;
                 account.data.resize(space as usize, 0_u8);
             }
-        },
+        }
         SystemInstruction::Assign { owner } => {
             let account_key = &meta[0].pubkey;
             let mut account = accounts.get_mut(account_key).unwrap();
@@ -47,7 +55,7 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
             }
 
             account.owner = owner;
-        },
+        }
         SystemInstruction::Transfer { lamports } => {
             let from_key = &meta[0].pubkey;
             let to_key = &meta[1].pubkey;
@@ -73,7 +81,7 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
                 let mut to = accounts.get_mut(to_key).unwrap();
                 to.lamports += lamports;
             }
-        },
+        }
         SystemInstruction::Allocate { space } => {
             let account_key = &meta[0].pubkey;
             let account = accounts.get_mut(account_key).unwrap();
@@ -83,7 +91,7 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
             }
 
             account.data.resize(space as usize, 0_u8);
-        },
+        }
         _ => {
             return Err!(ProgramError::InvalidInstructionData; "Unknown system instruction");
         }

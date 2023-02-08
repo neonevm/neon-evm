@@ -1,15 +1,17 @@
+#![allow(clippy::use_self)] // Can't use generic parameter from outer function
+
 use std::mem::size_of;
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use ethnum::U256;
 use solana_program::account_info::AccountInfo;
-use solana_program::{entrypoint::ProgramResult, pubkey::Pubkey};
 use solana_program::program_error::ProgramError;
+use solana_program::{entrypoint::ProgramResult, pubkey::Pubkey};
 
 use crate::types::Address;
 
+use super::{program::System, EthereumAccount, Packable};
 use super::{Operator, ACCOUNT_SEED_VERSION};
-use super::{Packable, EthereumAccount, program::System};
 
 /// Ethereum account data v3
 #[derive(Debug, Default)]
@@ -45,28 +47,20 @@ impl Packable for Data {
     const TAG: u8 = super::TAG_ACCOUNT_V3;
 
     /// `AccountV3` struct serialized size
-    const SIZE: usize = Data::ADDRESS_SIZE +
-        Data::BUMP_SEED_SIZE +
-        Data::TRX_COUNT_SIZE +
-        Data::BALANCE_SIZE +
-        Data::GENERATION_SIZE +
-        Data::CODE_SIZE_SIZE +
-        Data::RW_BLOCKED_SIZE;
+    const SIZE: usize = Data::ADDRESS_SIZE
+        + Data::BUMP_SEED_SIZE
+        + Data::TRX_COUNT_SIZE
+        + Data::BALANCE_SIZE
+        + Data::GENERATION_SIZE
+        + Data::CODE_SIZE_SIZE
+        + Data::RW_BLOCKED_SIZE;
 
     /// Deserialize `AccountV3` struct from input data
     #[must_use]
     fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Data::SIZE];
         #[allow(clippy::ptr_offset_with_cast)]
-        let (
-            address,
-            bump_seed,
-            trx_count,
-            balance,
-            generation,
-            code_size,
-            rw_blocked,
-        ) = array_refs![
+        let (address, bump_seed, trx_count, balance, generation, code_size, rw_blocked) = array_refs![
             data,
             Data::ADDRESS_SIZE,
             Data::BUMP_SEED_SIZE,
@@ -92,15 +86,7 @@ impl Packable for Data {
     fn pack(&self, dst: &mut [u8]) {
         let data = array_mut_ref![dst, 0, Data::SIZE];
         #[allow(clippy::ptr_offset_with_cast)]
-        let (
-            address,
-            bump_seed,
-            trx_count,
-            balance,
-            generation,
-            code_size,
-            rw_blocked,
-        ) = mut_array_refs![
+        let (address, bump_seed, trx_count, balance, generation, code_size, rw_blocked) = mut_array_refs![
             data,
             Data::ADDRESS_SIZE,
             Data::BUMP_SEED_SIZE,
@@ -121,7 +107,6 @@ impl Packable for Data {
     }
 }
 
-
 impl<'a> EthereumAccount<'a> {
     pub fn check_blocked(&self) -> ProgramResult {
         if self.rw_blocked {
@@ -131,7 +116,7 @@ impl<'a> EthereumAccount<'a> {
 
         Ok(())
     }
-    
+
     pub fn create_account(
         system_program: &System<'a>,
         program_id: &Pubkey,
@@ -147,21 +132,11 @@ impl<'a> EthereumAccount<'a> {
                 "Account {} - account space must be not less than minimal size of {} bytes",
                 address,
                 EthereumAccount::SIZE
-            )
+            );
         }
 
-        let program_seeds: &[&[u8]] = &[
-            &[ACCOUNT_SEED_VERSION],
-            address.as_bytes(),
-            &[bump_seed],
-        ];
-        system_program.create_pda_account(
-            program_id,
-            operator,
-            info,
-            program_seeds,
-            space,
-        )?;
+        let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], address.as_bytes(), &[bump_seed]];
+        system_program.create_pda_account(program_id, operator, info, program_seeds, space)?;
 
         Ok(())
     }
@@ -175,7 +150,15 @@ impl<'a> EthereumAccount<'a> {
         bump_seed: u8,
         space: usize,
     ) -> ProgramResult {
-        Self::create_account(system_program, program_id, operator, &address, info, bump_seed, space)?;
+        Self::create_account(
+            system_program,
+            program_id,
+            operator,
+            &address,
+            info,
+            bump_seed,
+            space,
+        )?;
 
         EthereumAccount::init(
             info,

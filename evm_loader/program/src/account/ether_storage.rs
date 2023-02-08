@@ -1,8 +1,13 @@
-use crate::{types::Address};
-use super::{program, EthereumStorage, Operator, Packable, EthereumAccount};
-use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
+#![allow(clippy::use_self)] // Can't use generic parameter from outer function
+
+use super::{program, EthereumAccount, EthereumStorage, Operator, Packable};
+use crate::types::Address;
+use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use ethnum::U256;
-use solana_program::{program_error::ProgramError, rent::Rent, sysvar::Sysvar, pubkey::Pubkey, account_info::AccountInfo};
+use solana_program::{
+    account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey, rent::Rent,
+    sysvar::Sysvar,
+};
 
 /// Ethereum storage data account
 #[derive(Default, Debug)]
@@ -35,7 +40,7 @@ impl Packable for Data {
     fn pack(&self, output: &mut [u8]) {
         let data = array_mut_ref![output, 0, Data::SIZE];
         let (address, generation, index) = mut_array_refs![data, 20, 4, 32];
-        
+
         *address = *self.address.as_bytes();
         *generation = self.generation.to_le_bytes();
         *index = self.index.to_le_bytes();
@@ -83,7 +88,10 @@ impl EthereumStorageAddress {
 
         let pubkey = Pubkey::create_with_seed(base, seed, program_id).unwrap();
 
-        Self { seed: seed_buffer, pubkey }
+        Self {
+            seed: seed_buffer,
+            pubkey,
+        }
     }
 
     #[must_use]
@@ -171,16 +179,22 @@ impl<'a> EthereumStorage<'a> {
         let space = Self::SIZE + 1 + 32;
 
         system.create_account_with_seed(
-            operator, contract, contract.info.owner, 
-            storage_account, storage_address.seed(), 
-            space
+            operator,
+            contract,
+            contract.info.owner,
+            storage_account,
+            storage_address.seed(),
+            space,
         )?;
 
-        let storage = Self::init(storage_account, Data {
-            address: contract.address,
-            generation: contract.generation,
-            index,
-        })?;
+        let storage = Self::init(
+            storage_account,
+            Data {
+                address: contract.address,
+                generation: contract.generation,
+                index,
+            },
+        )?;
 
         let mut data = storage_account.data.borrow_mut();
         let data = &mut data[Self::SIZE..];
@@ -191,11 +205,7 @@ impl<'a> EthereumStorage<'a> {
         Ok(storage)
     }
 
-    pub fn clear(
-        &mut self,
-        generation: u32,
-        operator: &Operator<'a>,
-    ) -> Result<(), ProgramError> {
+    pub fn clear(&mut self, generation: u32, operator: &Operator<'a>) -> Result<(), ProgramError> {
         self.generation = generation;
 
         self.info.realloc(Self::SIZE, false)?;

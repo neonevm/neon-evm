@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
-use serde::{ Deserialize, Serialize };
 use clap::ArgMatches;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LogRecord {
@@ -12,20 +12,20 @@ pub struct LogRecord {
 
 pub static CONTEXT: Mutex<Vec<LogRecord>> = Mutex::new(Vec::new());
 
-
 pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
     let log_level: log::LevelFilter =
-        options.value_of("loglevel")
-            .map_or(log::LevelFilter::Trace, |ll|
+        options
+            .value_of("loglevel")
+            .map_or(log::LevelFilter::Trace, |ll| {
                 match ll.to_ascii_lowercase().as_str() {
-                    "off"   => log::LevelFilter::Off,
+                    "off" => log::LevelFilter::Off,
                     "error" => log::LevelFilter::Error,
-                    "warn"  => log::LevelFilter::Warn,
-                    "info"  => log::LevelFilter::Info,
+                    "warn" => log::LevelFilter::Warn,
+                    "info" => log::LevelFilter::Info,
                     "debug" => log::LevelFilter::Debug,
-                    _       => log::LevelFilter::Trace,
+                    _ => log::LevelFilter::Trace,
                 }
-            );
+            });
 
     fern::Dispatch::new()
         .filter(move |metadata| {
@@ -45,7 +45,7 @@ pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
             context.push(LogRecord {
                 message: record.args().to_string(),
                 source: format!("{file}:{line}"),
-                level: record.metadata().level().as_str()
+                level: record.metadata().level().as_str(),
             });
         }))
         .apply()

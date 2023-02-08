@@ -1,16 +1,15 @@
 use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 
-use crate::account::{EthereumAccount, Operator, program, State, Treasury};
+use crate::account::{program, EthereumAccount, Operator, State, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
-use crate::config::{EVM_STEPS_MIN, EVM_STEPS_LAST_ITERATION_MAX, PAYMENT_TO_TREASURE};
-use crate::evm::{Machine, ExitStatus};
+use crate::config::{EVM_STEPS_LAST_ITERATION_MAX, EVM_STEPS_MIN, PAYMENT_TO_TREASURE};
+use crate::error::{format_revert_message, Error, Result};
+use crate::evm::{ExitStatus, Machine};
 use crate::executor::{Action, ExecutorState};
+use crate::gasometer::Gasometer;
 use crate::state_account::Deposit;
 use crate::types::{Address, Transaction};
-use crate::gasometer::Gasometer;
-use crate::error::{Result, Error, format_revert_message};
-
 
 pub struct Accounts<'a> {
     pub operator: Operator<'a>,
@@ -21,7 +20,6 @@ pub struct Accounts<'a> {
     pub remaining_accounts: &'a [AccountInfo<'a>],
     pub all_accounts: &'a [AccountInfo<'a>],
 }
-
 
 pub fn do_begin<'a>(
     accounts: Accounts<'a>,
@@ -39,7 +37,8 @@ pub fn do_begin<'a>(
     let mut backend = ExecutorState::new(account_storage);
     let evm = Machine::new(trx, caller, &mut backend)?;
 
-    {   // Save EVM State into storage
+    {
+        // Save EVM State into storage
         let mut buffer: &mut [u8] = &mut storage.evm_state_mut_data();
         backend.serialize_into(&mut buffer)?;
         evm.serialize_into(&mut buffer)?;
@@ -58,12 +57,15 @@ pub fn do_continue<'a>(
     debug_print!("do_continue");
 
     if (step_count < EVM_STEPS_MIN) && (storage.gas_price > 0) {
-        return Err(Error::Custom(format!("Step limit {step_count} below minimum {EVM_STEPS_MIN}")));
+        return Err(Error::Custom(format!(
+            "Step limit {step_count} below minimum {EVM_STEPS_MIN}"
+        )));
     }
 
     let (mut backend, mut evm) = {
         let mut buffer: &[u8] = &mut storage.evm_state_data();
-        let backend: ExecutorState<_> = ExecutorState::deserialize_from(&mut buffer, account_storage)?;
+        let backend: ExecutorState<_> =
+            ExecutorState::deserialize_from(&mut buffer, account_storage)?;
         let evm: Machine<_> = Machine::deserialize_from(&mut buffer, &backend)?;
         (backend, evm)
     };
@@ -91,7 +93,14 @@ pub fn do_continue<'a>(
         result => Some((result, backend.into_actions())),
     };
 
-    finalize(steps_executed, accounts, storage, account_storage, results, gasometer)
+    finalize(
+        steps_executed,
+        accounts,
+        storage,
+        account_storage,
+        results,
+        gasometer,
+    )
 }
 
 fn pay_gas_cost<'a>(
@@ -106,11 +115,7 @@ fn pay_gas_cost<'a>(
     let value = used_gas.saturating_mul(storage.gas_price);
     storage.gas_used = storage.gas_used.saturating_add(used_gas);
 
-    account_storage.transfer_gas_payment(
-        storage.caller,
-        operator_ether_account,
-        value,
-    )?;
+    account_storage.transfer_gas_payment(storage.caller, operator_ether_account, value)?;
 
     Ok(())
 }
@@ -126,7 +131,11 @@ fn finalize<'a>(
     debug_print!("finalize");
 
     if steps_executed > 0 {
-        accounts.system_program.transfer(&accounts.operator, &accounts.treasury, PAYMENT_TO_TREASURE)?;
+        accounts.system_program.transfer(
+            &accounts.operator,
+            &accounts.treasury,
+            PAYMENT_TO_TREASURE,
+        )?;
     }
 
     let exit_reason_opt = if let Some((exit_reason, apply_state)) = results {
@@ -135,7 +144,8 @@ fn finalize<'a>(
             &accounts.system_program,
             &accounts.operator,
             apply_state,
-        )? == AccountsReadiness::Ready {
+        )? == AccountsReadiness::Ready
+        {
             Some(exit_reason)
         } else {
             None
@@ -153,10 +163,18 @@ fn finalize<'a>(
     }
 
     let used_gas = gasometer.used_gas();
-    solana_program::log::sol_log_data(&[b"GAS", &used_gas.to_le_bytes(), &total_used_gas.to_le_bytes()]);
+    solana_program::log::sol_log_data(&[
+        b"GAS",
+        &used_gas.to_le_bytes(),
+        &total_used_gas.to_le_bytes(),
+    ]);
 
-    pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage)?;
-
+    pay_gas_cost(
+        used_gas,
+        accounts.operator_ether_account,
+        &mut storage,
+        account_storage,
+    )?;
 
     if let Some(exit_reason) = exit_reason_opt {
         log_return_value(&exit_reason);
@@ -167,7 +185,6 @@ fn finalize<'a>(
 
     Ok(())
 }
-
 
 pub fn log_return_value(status: &ExitStatus) {
     use solana_program::log::sol_log_data;

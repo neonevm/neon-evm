@@ -1,10 +1,8 @@
-use std::{
-    alloc::{Layout, GlobalAlloc},
-};
-use solana_program::program_memory::{sol_memset, sol_memcpy};
+use solana_program::program_memory::{sol_memcpy, sol_memset};
+use std::alloc::{GlobalAlloc, Layout};
 
-use crate::error::Error;
 use super::tracing_event;
+use crate::error::Error;
 
 const MAX_MEMORY_SIZE: usize = 64 * 1024;
 const MEMORY_ALIGN: usize = 32;
@@ -17,7 +15,7 @@ pub struct Memory {
 
 impl Memory {
     pub fn new() -> Self {
-        const DEFAULT_CAPACITY: usize = 1024; 
+        const DEFAULT_CAPACITY: usize = 1024;
 
         Self::with_capacity(DEFAULT_CAPACITY)
     }
@@ -27,7 +25,11 @@ impl Memory {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
             let data = crate::allocator::EVM.alloc_zeroed(layout);
 
-            Self { data, capacity, size: 0 }
+            Self {
+                data,
+                capacity,
+                size: 0,
+            }
         }
     }
 
@@ -42,15 +44,17 @@ impl Memory {
         unsafe {
             std::ptr::copy_nonoverlapping(v.as_ptr(), data, v.len());
         }
-            
-        Self { data, capacity, size: v.len() }
+
+        Self {
+            data,
+            capacity,
+            size: v.len(),
+        }
     }
 
     #[allow(dead_code)]
     pub fn to_vec(&self) -> Vec<u8> {
-        let slice = unsafe {
-            std::slice::from_raw_parts(self.data, self.size)
-        };
+        let slice = unsafe { std::slice::from_raw_parts(self.data, self.size) };
         slice.to_vec()
     }
 
@@ -74,7 +78,7 @@ impl Memory {
 
         let slice = unsafe { core::slice::from_raw_parts_mut(self.data, size) };
         sol_memset(&mut slice[self.capacity..], 0, size - self.capacity);
-        
+
         self.capacity = size;
 
         Ok(())
@@ -96,7 +100,7 @@ impl Memory {
 
     pub fn read(&mut self, offset: usize, length: usize) -> Result<&[u8], Error> {
         if length == 0_usize {
-            return Ok(&[])
+            return Ok(&[]);
         }
 
         self.realloc(offset, length)?;
@@ -104,9 +108,8 @@ impl Memory {
 
         let slice = unsafe {
             let data = self.data.add(offset);
-            core::slice::from_raw_parts(data, length) 
+            core::slice::from_raw_parts(data, length)
         };
-
 
         Ok(slice)
     }
@@ -124,8 +127,9 @@ impl Memory {
     }
 
     pub fn write_32(&mut self, offset: usize, value: &[u8; 32]) -> Result<(), Error> {
-        tracing_event!(super::tracing::Event::MemorySet { 
-            offset, data: value.to_vec()
+        tracing_event!(super::tracing::Event::MemorySet {
+            offset,
+            data: value.to_vec()
         });
 
         self.realloc(offset, 32)?;
@@ -140,8 +144,9 @@ impl Memory {
     }
 
     pub fn write_byte(&mut self, offset: usize, value: u8) -> Result<(), Error> {
-        tracing_event!(super::tracing::Event::MemorySet { 
-            offset, data: vec![value]
+        tracing_event!(super::tracing::Event::MemorySet {
+            offset,
+            data: vec![value]
         });
 
         self.realloc(offset, 1)?;
@@ -155,7 +160,13 @@ impl Memory {
         Ok(())
     }
 
-    pub fn write_buffer(&mut self, offset: usize, length: usize, source: &[u8], source_offset: usize) -> Result<(), Error> {
+    pub fn write_buffer(
+        &mut self,
+        offset: usize,
+        length: usize,
+        source: &[u8],
+        source_offset: usize,
+    ) -> Result<(), Error> {
         if length == 0_usize {
             return Ok(());
         }
@@ -165,17 +176,18 @@ impl Memory {
 
         let data = unsafe {
             let data = self.data.add(offset);
-            core::slice::from_raw_parts_mut(data, length) 
+            core::slice::from_raw_parts_mut(data, length)
         };
 
         match source_offset {
             source_offset if source_offset >= source.len() => {
                 tracing_event!(super::tracing::Event::MemorySet {
-                    offset, data: vec![0; length]
+                    offset,
+                    data: vec![0; length]
                 });
 
                 sol_memset(data, 0, length);
-            },
+            }
             source_offset if (source_offset + length) > source.len() => {
                 let source = &source[source_offset..];
 
@@ -190,12 +202,13 @@ impl Memory {
 
                 data[..source.len()].copy_from_slice(source);
                 data[source.len()..].fill(0_u8);
-            },
+            }
             source_offset => {
-                let source = &source[source_offset..source_offset+length];
+                let source = &source[source_offset..source_offset + length];
 
                 tracing_event!(super::tracing::Event::MemorySet {
-                    offset, data: source.to_vec()
+                    offset,
+                    data: source.to_vec()
                 });
 
                 sol_memcpy(data, source, length);
@@ -215,16 +228,12 @@ impl Drop for Memory {
     }
 }
 
-
-
 impl serde::Serialize for Memory {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer 
+        S: serde::Serializer,
     {
-        let data = unsafe {
-            std::slice::from_raw_parts(self.data, self.capacity)
-        };
+        let data = unsafe { std::slice::from_raw_parts(self.data, self.capacity) };
         serializer.serialize_bytes(&data[..self.size()])
     }
 }
@@ -232,18 +241,17 @@ impl serde::Serialize for Memory {
 impl<'de> serde::Deserialize<'de> for Memory {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de> 
+        D: serde::Deserializer<'de>,
     {
         struct BytesVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor
-        {
+        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
             type Value = Memory;
-        
+
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("EVM Memory")
             }
-        
+
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,

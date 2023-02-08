@@ -1,20 +1,13 @@
 //! Error types
 #![allow(clippy::use_self)]
-#![allow(clippy::cast_possible_wrap)]
 
-use evm_loader::types::Address;
-use log::{ error };
-
-use ethnum::U256;
-
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::{Pubkey,PubkeyError as SolanaPubkeyError};
-use solana_sdk::signer::SignerError as SolanaSignerError;
-use solana_sdk::{decode_error::DecodeError};
-use solana_sdk::program_error::ProgramError as SolanaProgramError;
+use log::error;
+use solana_cli::cli::CliError as SolanaCliError;
 use solana_client::client_error::ClientError as SolanaClientError;
 use solana_client::tpu_client::TpuSenderError as SolanaTpuSenderError;
-use solana_cli::cli::CliError as SolanaCliError;
+use solana_sdk::program_error::ProgramError as SolanaProgramError;
+use solana_sdk::pubkey::{Pubkey, PubkeyError as SolanaPubkeyError};
+use solana_sdk::signer::SignerError as SolanaSignerError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
@@ -55,43 +48,6 @@ pub enum NeonCliError {
     /// Incorrect program
     #[error("Incorrect program {0:?}")]
     IncorrectProgram(Pubkey),
-    /// Account not found at address
-    #[error("Account not found at address {0:?}.")]
-    AccountNotFoundAtAddress(Address),
-    /// Code account not found
-    #[error("Code account not found at address {0:?}.")]
-    CodeAccountNotFound(Address),
-    /// Code account not found
-    #[error("Code account required at address {0:?}.")]
-    CodeAccountRequired(Address),
-    /// Changes of incorrect account were found
-    #[error("Incorrect account at address {0:?}.")]
-    IncorrectAccount(Address),
-    /// Account already exists
-    #[error("Account already exists. {0:?}")]
-    AccountAlreadyExists(Account),
-    /// Account is already initialized.
-    #[error("Account is already initialized.  account={0:?}, code_account={1:?}")]
-    AccountAlreadyInitialized(Pubkey,Pubkey),
-    /// Changes to the storage can only be applied to the contract account
-    #[error("Contract account expected at address {0:?}.")]
-    ContractAccountExpected(Address),
-    /// Deploy to existing account.
-    #[error("Attempt to deploy to existing account at address {0:?}.")]
-    DeploymentToExistingAccount(Address),
-    /// Invalid storage account owner
-    #[error("Invalid storage account owner {0:?}.")]
-    InvalidStorageAccountOwner(Pubkey),
-    /// Storage account required
-    #[error("Storage account required. {0:?}")]
-    StorageAccountRequired(Account),
-    /// Account incorrect type
-    #[error("Account incorrect type. {0:?}")]
-    AccountIncorrectType(Account),
-    /// Account data too small
-    #[error("Account data too small. account_data.len()={0:?} < end={1:?}")]
-    AccountDataTooSmall(usize,usize),
-    /// Account not found
     #[error("Account not found {0:?}.")]
     AccountNotFound(Pubkey),
     /// Account is not BFP
@@ -100,27 +56,15 @@ pub enum NeonCliError {
     /// Account is not upgradeable
     #[error("Account is not upgradeable {0:?}.")]
     AccountIsNotUpgradeable(Pubkey),
-    /// Convert nonce error
-    #[error("Nonce conversion error. {0:?}")]
-    ConvertNonceError(U256),
     /// Program data account not found
     #[error("Associated PDA not found {0:?} for Program {1:?}.")]
-    AssociatedPdaNotFound(Pubkey,Pubkey),
+    AssociatedPdaNotFound(Pubkey, Pubkey),
     /// Program data account not found
     #[error("Invalid Associated PDA {0:?} for Program {1:?}.")]
-    InvalidAssociatedPda(Pubkey,Pubkey),
-    /// Invalid message verbosity
-    #[error("Invalid verbosity message.")]
-    InvalidVerbosityMessage,
-    /// Transaction failed
-    #[error("Transaction failed.")]
-    TransactionFailed,
+    InvalidAssociatedPda(Pubkey, Pubkey),
     /// too many steps
     #[error("Too many steps")]
     TooManySteps,
-    // Account nonce exceeds u64::max
-    #[error("Transaction count overflow")]
-    TrxCountOverflow,
 
     /// Environment Error
     #[error("Environment error {0:?}")]
@@ -133,71 +77,37 @@ pub enum NeonCliError {
     /// Environment in wrong state (some item in wrong state)
     #[error("Wrong environment")]
     WrongEnvironment,
-
-    /// Unknown Error.
-    #[error("Unknown error.")]
-    UnknownError
 }
 
 impl NeonCliError {
-    pub fn error_code(&self) -> u32 {
+    pub fn error_code(&self) -> i32 {
         match self {
-            NeonCliError::IncompleteEnvironment             =>  50,
-            NeonCliError::WrongEnvironment                  =>  51,
-            NeonCliError::EnvironmentError(_)               =>  52,
-            NeonCliError::StdIoError(_)                     => 102, // => 1002,
-            NeonCliError::ProgramError(_)                   => 111, // => 1011,
-            NeonCliError::SignerError(_)                    => 112, // => 1012,
-            NeonCliError::ClientError(_)                    => 113, // => 1013,
-            NeonCliError::CliError(_)                       => 114, // => 1014,
-            NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
-            NeonCliError::PubkeyError(_)                    => 116,
-            NeonCliError::EvmError(_)                       => 117,
-            NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
-            NeonCliError::KeypairNotSpecified               => 202, // => 4002,
-            NeonCliError::IncorrectProgram(_)               => 203,
-            NeonCliError::AccountNotFound(_)                => 205, // => 4005,
-            NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,
-            NeonCliError::CodeAccountNotFound(_)            => 207, // => 4007,
-            NeonCliError::CodeAccountRequired(_)            => 208, // => 4008,
-            NeonCliError::IncorrectAccount(_)               => 209, // => 4009,
-            NeonCliError::AccountAlreadyExists(_)           => 210, // => 4010,
-            NeonCliError::AccountAlreadyInitialized(_,_)    => 213, // => 4013,
-            NeonCliError::ContractAccountExpected(_)        => 215, // => 4015,
-            NeonCliError::DeploymentToExistingAccount(_)    => 221, // => 4021,
-            NeonCliError::InvalidStorageAccountOwner(_)     => 222, // => 4022,
-            NeonCliError::StorageAccountRequired(_)         => 223, // => 4023,
-            NeonCliError::AccountIncorrectType(_)           => 224, // => 4024,
-            NeonCliError::AccountDataTooSmall(_,_)          => 225, // => 4025,
-            NeonCliError::AccountIsNotBpf(_)                => 226, // => 4026,
-            NeonCliError::AccountIsNotUpgradeable(_)        => 227, // => 4027,
-            NeonCliError::ConvertNonceError(_)              => 230, // => 4030,
-            NeonCliError::AssociatedPdaNotFound(_,_)        => 241, // => 4041,
-            NeonCliError::InvalidAssociatedPda(_,_)         => 242, // => 4042,
-            NeonCliError::InvalidVerbosityMessage           => 243, // => 4100,
-            NeonCliError::TransactionFailed                 => 244, // => 4200,
-            NeonCliError::TooManySteps                      => 245,
-            NeonCliError::TrxCountOverflow                  => 246,
-            NeonCliError::UnknownError                      => 249, // => 4900,
+            NeonCliError::IncompleteEnvironment => 50,
+            NeonCliError::WrongEnvironment => 51,
+            NeonCliError::EnvironmentError(_) => 52,
+            NeonCliError::StdIoError(_) => 102,     // => 1002,
+            NeonCliError::ProgramError(_) => 111,   // => 1011,
+            NeonCliError::SignerError(_) => 112,    // => 1012,
+            NeonCliError::ClientError(_) => 113,    // => 1013,
+            NeonCliError::CliError(_) => 114,       // => 1014,
+            NeonCliError::TpuSenderError(_) => 115, // => 1015,
+            NeonCliError::PubkeyError(_) => 116,
+            NeonCliError::EvmError(_) => 117,
+            NeonCliError::EvmLoaderNotSpecified => 201, // => 4001,
+            NeonCliError::KeypairNotSpecified => 202,   // => 4002,
+            NeonCliError::IncorrectProgram(_) => 203,
+            NeonCliError::AccountNotFound(_) => 205, // => 4005,
+            NeonCliError::AccountIsNotBpf(_) => 226, // => 4026,
+            NeonCliError::AccountIsNotUpgradeable(_) => 227, // => 4027,
+            NeonCliError::AssociatedPdaNotFound(_, _) => 241, // => 4041,
+            NeonCliError::InvalidAssociatedPda(_, _) => 242, // => 4042,
+            NeonCliError::TooManySteps => 245,
         }
     }
 }
 
-
 impl From<EnvironmentError> for NeonCliError {
     fn from(e: EnvironmentError) -> NeonCliError {
         NeonCliError::EnvironmentError(e)
-    }
-}
-
-impl From<NeonCliError> for SolanaProgramError {
-    fn from(e: NeonCliError) -> Self {
-        Self::Custom(e.error_code())
-    }
-}
-
-impl<T> DecodeError<T> for NeonCliError {
-    fn type_of() -> &'static str {
-        "NeonCliError"
     }
 }

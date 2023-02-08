@@ -1,7 +1,6 @@
-use std::ops::Deref;
 use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
-
+use std::ops::Deref;
 
 pub struct Incinerator<'a> {
     info: &'a AccountInfo<'a>,
@@ -10,7 +9,7 @@ pub struct Incinerator<'a> {
 impl<'a> Incinerator<'a> {
     pub fn from_account(info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
         if !solana_program::incinerator::check_id(info.key) {
-            return Err!(ProgramError::InvalidArgument; "Account {} - expected incinerator", info.key)
+            return Err!(ProgramError::InvalidArgument; "Account {} - expected incinerator", info.key);
         }
 
         Ok(Self { info })

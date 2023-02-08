@@ -1,18 +1,15 @@
 use crate::{
+    account::{program, EthereumAccount, FinalizedState, Holder, Incinerator, Operator, State},
     config::OPERATOR_PRIORITY_SLOTS,
     error::Error,
-    account::{State, FinalizedState, Operator, Incinerator, program, Holder, EthereumAccount},
-    types::{Transaction, Address},
+    types::{Address, Transaction},
 };
 use ethnum::U256;
 use solana_program::{
-    account_info::AccountInfo,
-    pubkey::Pubkey,
-    program_error::ProgramError,
+    account_info::AccountInfo, clock::Clock, program_error::ProgramError, pubkey::Pubkey,
     sysvar::Sysvar,
-    clock::Clock,
 };
-use std::cell::{RefMut, Ref};
+use std::cell::{Ref, RefMut};
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
@@ -29,13 +26,12 @@ pub struct BlockedAccountMeta {
 
 pub type BlockedAccounts = Vec<BlockedAccountMeta>;
 
-impl <'a> FinalizedState<'a> {
+impl<'a> FinalizedState<'a> {
     #[must_use]
     pub fn is_outdated(&self, transaction_hash: &[u8; 32]) -> bool {
         self.transaction_hash.ne(transaction_hash)
     }
 }
-
 
 impl<'a> State<'a> {
     pub fn new(
@@ -53,16 +49,18 @@ impl<'a> State<'a> {
             FinalizedState::TAG => {
                 let finalized_storage = FinalizedState::from_account(program_id, info)?;
                 if !finalized_storage.is_outdated(&trx.hash) {
-                    return Err!(Error::StorageAccountFinalized.into(); "Transaction already finalized")
+                    return Err!(Error::StorageAccountFinalized.into(); "Transaction already finalized");
                 }
 
                 finalized_storage.owner
             }
-            _ => return Err!(ProgramError::InvalidAccountData; "Account {} - expected finalized storage or holder", info.key)
+            _ => {
+                return Err!(ProgramError::InvalidAccountData; "Account {} - expected finalized storage or holder", info.key)
+            }
         };
 
         if &owner != accounts.operator.key {
-            return Err!(ProgramError::InvalidAccountData; "Account {} - invalid state account owner", info.key)
+            return Err!(ProgramError::InvalidAccountData; "Account {} - invalid state account owner", info.key);
         }
 
         let data = crate::account::state::Data {
@@ -101,10 +99,13 @@ impl<'a> State<'a> {
         }
 
         let mut storage = State::from_account(program_id, info)?;
-        let blocked_accounts = storage.check_blocked_accounts(program_id, remaining_accounts, is_cancelling)?;
+        let blocked_accounts =
+            storage.check_blocked_accounts(program_id, remaining_accounts, is_cancelling)?;
 
         let clock = Clock::get()?;
-        if (*operator.key != storage.operator) && ((clock.slot - storage.slot) <= OPERATOR_PRIORITY_SLOTS) {
+        if (*operator.key != storage.operator)
+            && ((clock.slot - storage.slot) <= OPERATOR_PRIORITY_SLOTS)
+        {
             return Err!(ProgramError::InvalidAccountData; "operator.key != storage.operator");
         }
 
@@ -126,22 +127,33 @@ impl<'a> State<'a> {
 
         let finalized_data = crate::account::state::FinalizedData {
             owner: self.owner,
-            transaction_hash: self.transaction_hash
+            transaction_hash: self.transaction_hash,
         };
 
         let finalized = unsafe { self.replace(finalized_data) }?;
         Ok(finalized)
     }
 
-    fn make_deposit(&self, system_program: &program::System<'a>, source: &Operator<'a>) -> Result<(), ProgramError> {
+    fn make_deposit(
+        &self,
+        system_program: &program::System<'a>,
+        source: &Operator<'a>,
+    ) -> Result<(), ProgramError> {
         system_program.transfer(source, self.info, crate::config::PAYMENT_TO_DEPOSIT)
     }
 
     fn withdraw_deposit(&self, target: &AccountInfo<'a>) -> Result<(), ProgramError> {
-        let source_lamports = self.info.lamports().checked_sub(crate::config::PAYMENT_TO_DEPOSIT)
-            .ok_or_else(|| E!(ProgramError::InvalidArgument; "Deposit source lamports underflow"))?;
+        let source_lamports = self
+            .info
+            .lamports()
+            .checked_sub(crate::config::PAYMENT_TO_DEPOSIT)
+            .ok_or_else(
+                || E!(ProgramError::InvalidArgument; "Deposit source lamports underflow"),
+            )?;
 
-        let target_lamports = target.lamports().checked_add(crate::config::PAYMENT_TO_DEPOSIT)
+        let target_lamports = target
+            .lamports()
+            .checked_add(crate::config::PAYMENT_TO_DEPOSIT)
             .ok_or_else(|| E!(ProgramError::InvalidArgument; "Deposit target lamports overflow"))?;
 
         **self.info.lamports.borrow_mut() = source_lamports;
@@ -162,19 +174,21 @@ impl<'a> State<'a> {
         let chunks = keys_storage.chunks_exact(ACCOUNT_CHUNK_LEN);
         let accounts = chunks
             .map(|c| c.split_at(2))
-            .map(|(meta, key)|
-                BlockedAccountMeta {
-                    key: Pubkey::new(key),
-                    exists: meta[1] != 0,
-                    is_writable: meta[0] != 0,
-                }
-            )
+            .map(|(meta, key)| BlockedAccountMeta {
+                key: Pubkey::try_from(key).expect("key is 32 bytes"),
+                exists: meta[1] != 0,
+                is_writable: meta[0] != 0,
+            })
             .collect();
 
         Ok(accounts)
     }
 
-    fn write_blocked_accounts(&mut self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    fn write_blocked_accounts(
+        &mut self,
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+    ) -> Result<(), ProgramError> {
         assert_eq!(self.accounts_len, accounts.len()); // should be always true
 
         let (begin, end) = self.blocked_accounts_region();
@@ -254,6 +268,8 @@ impl<'a> State<'a> {
 
     #[must_use]
     fn account_exists(program_id: &Pubkey, info: &AccountInfo) -> bool {
-        (info.owner == program_id) && !info.data_is_empty() && (info.data.borrow()[0] == EthereumAccount::TAG)
+        (info.owner == program_id)
+            && !info.data_is_empty()
+            && (info.data.borrow()[0] == EthereumAccount::TAG)
     }
 }

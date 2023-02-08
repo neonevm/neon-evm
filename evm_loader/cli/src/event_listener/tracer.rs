@@ -1,13 +1,12 @@
-use crate::{types::trace::{FullTraceData, VMTrace, VMTracer},};
-use super::{vm_tracer::VmTracer,};
-
+use super::vm_tracer::VmTracer;
+use crate::types::trace::{FullTraceData, VMTrace, VMTracer};
 
 pub struct Tracer {
     pub vm: VmTracer,
     pub data: Vec<FullTraceData>,
 }
 
-impl Tracer  {
+impl Tracer {
     pub fn new() -> Self {
         Tracer {
             vm: VmTracer::init(),
@@ -15,14 +14,8 @@ impl Tracer  {
         }
     }
 
-    pub fn into_traces(
-        self,
-    ) -> (
-        Option<VMTrace>,
-        Vec<FullTraceData>,
-    ) {
+    pub fn into_traces(self) -> (Option<VMTrace>, Vec<FullTraceData>) {
         let vm = self.vm.tracer.drain();
         (vm, self.data)
     }
 }
-

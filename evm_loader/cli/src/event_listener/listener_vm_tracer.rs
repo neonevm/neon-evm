@@ -1,7 +1,7 @@
+use super::vm_tracer::VmTracer;
+use crate::types::trace::{MemoryDiff, StorageDiff, VMTracer};
 use ethnum::U256;
 use evm_loader::evm::{Context, ExitStatus};
-use crate::types::trace::{VMTracer, StorageDiff, MemoryDiff};
-use super::vm_tracer::{VmTracer};
 
 pub trait ListenerVmTracer {
     fn begin_vm(&mut self, context: Context, code: Vec<u8>);
@@ -41,7 +41,8 @@ impl ListenerVmTracer for VmTracer {
         let gas_used = U256::from(gas_used);
         let diff = self.step_diff().clone();
 
-        self.tracer.trace_executed(gas_used, diff.stack_push, diff.memory_set, diff.storage_set);
+        self.tracer
+            .trace_executed(gas_used, diff.stack_push, diff.memory_set, diff.storage_set);
     }
 
     fn storage_access(&mut self, index: U256, value: [u8; 32]) {
@@ -49,7 +50,10 @@ impl ListenerVmTracer for VmTracer {
     }
 
     fn storage_set(&mut self, index: U256, value: [u8; 32]) {
-        self.step_diff().storage_set = Some(StorageDiff { location: index, value });
+        self.step_diff().storage_set = Some(StorageDiff {
+            location: index,
+            value,
+        });
     }
 
     fn stack_push(&mut self, value: [u8; 32]) {

@@ -1,7 +1,9 @@
+#![allow(clippy::use_self)] // Can't use generic parameter from outer function
+
 use std::cell::Ref;
 
-use arrayref::{mut_array_refs, array_refs};
 use arrayref::{array_mut_ref, array_ref};
+use arrayref::{array_refs, mut_array_refs};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
@@ -15,7 +17,7 @@ use super::Packable;
 #[derive(Default, Debug)]
 pub struct Data {
     pub owner: Pubkey,
-    pub transaction_hash: [u8; 32]
+    pub transaction_hash: [u8; 32],
 }
 
 impl Packable for Data {
@@ -32,13 +34,12 @@ impl Packable for Data {
 
         Self {
             owner: Pubkey::new_from_array(*owner),
-            transaction_hash: *hash
+            transaction_hash: *hash,
         }
     }
 
     /// Serialize `Holder` struct into given destination
     fn pack(&self, dst: &mut [u8]) {
-        #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
         let (owner, hash) = mut_array_refs![data, 32, 32];
 
@@ -47,18 +48,17 @@ impl Packable for Data {
     }
 }
 
-
 impl<'a> Holder<'a> {
     pub fn clear(&mut self) {
         self.transaction_hash.fill(0);
-        
+
         let mut data = self.info.data.borrow_mut();
         data[Self::SIZE..].fill(0);
     }
 
     pub fn write(&mut self, offset: usize, bytes: &[u8]) {
         let mut data = self.info.data.borrow_mut();
-        
+
         let begin = Self::SIZE + offset;
         let end = begin + bytes.len();
 

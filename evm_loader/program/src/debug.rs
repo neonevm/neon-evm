@@ -1,4 +1,3 @@
-
 #[cfg(all(target_arch = "bpf", not(feature = "no-logs")))]
 #[macro_export]
 macro_rules! debug_print {
@@ -14,5 +13,5 @@ macro_rules! debug_print {
 #[cfg(feature = "no-logs")]
 #[macro_export]
 macro_rules! debug_print {
-    ($( $args:expr ),*) => {}
+    ($( $args:expr ),*) => {};
 }

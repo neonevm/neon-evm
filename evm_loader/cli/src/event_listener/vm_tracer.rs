@@ -1,5 +1,5 @@
-use ethnum::U256;
 use crate::types::trace::{ExecutiveVMTracer, MemoryDiff, StorageDiff};
+use ethnum::U256;
 
 #[derive(Debug, Default, Clone)]
 pub struct StepDiff {
@@ -11,7 +11,7 @@ pub struct StepDiff {
 
 pub struct VmTracer {
     pub tracer: ExecutiveVMTracer,
-    step_diff: Vec<StepDiff>
+    step_diff: Vec<StepDiff>,
 }
 
 impl VmTracer {
@@ -31,6 +31,8 @@ impl VmTracer {
     }
 
     pub fn step_diff(&mut self) -> &mut StepDiff {
-        self.step_diff.last_mut().expect("diff was pushed in begin_vm")
+        self.step_diff
+            .last_mut()
+            .expect("diff was pushed in begin_vm")
     }
 }

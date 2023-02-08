@@ -32,18 +32,16 @@ impl<'acc> ContractData<'_, 'acc> {
 
     #[must_use]
     pub fn extension_borrow_mut(&self) -> RefMut<'acc, [u8]> {
-        RefMut::map(
-            self.account.info.data.borrow_mut(),
-            |slice| &mut slice[EthereumAccount::SIZE..],
-        )
+        RefMut::map(self.account.info.data.borrow_mut(), |slice| {
+            &mut slice[EthereumAccount::SIZE..]
+        })
     }
 
     #[must_use]
     fn extension_part_borrow_mut(&self, offset: usize, len: usize) -> RefMut<'acc, [u8]> {
-        RefMut::map(
-            self.extension_borrow_mut(),
-            |slice| &mut slice[offset..][..len],
-        )
+        RefMut::map(self.extension_borrow_mut(), |slice| {
+            &mut slice[offset..][..len]
+        })
     }
 }
 
@@ -68,8 +66,8 @@ impl<'this, 'acc> EthereumAccount<'acc> {
 
     #[must_use]
     pub fn space_needed(code_size: usize) -> usize {
-        EthereumAccount::SIZE +
-            if code_size > 0 {
+        EthereumAccount::SIZE
+            + if code_size > 0 {
                 code_size + ContractData::INTERNAL_STORAGE_SIZE
             } else {
                 0

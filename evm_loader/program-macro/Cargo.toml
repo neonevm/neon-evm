@@ -13,5 +13,5 @@ syn = "1"
 quote = "1"
 itertools = "0.10.5"
 bs58 = "0.4"
-serde = { version = "1.0.145", features = [ "derive" ] }
-toml = "0.5.9"
+serde = { version = "1", features = [ "derive" ] }
+toml = "0.5"

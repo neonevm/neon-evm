@@ -1,40 +1,48 @@
-use std::collections::BTreeMap;
 use borsh::{BorshDeserialize, BorshSerialize};
 use mpl_token_metadata::assertions::collection::assert_collection_update_is_valid;
 use mpl_token_metadata::assertions::uses::assert_valid_use;
-use mpl_token_metadata::utils::{assert_initialized, assert_data_valid, puff_out_data_fields};
+use mpl_token_metadata::utils::{assert_data_valid, assert_initialized, puff_out_data_fields};
 use solana_program::account_info::IntoAccountInfo;
 use solana_program::instruction::AccountMeta;
 use solana_program::program_option::COption;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 use spl_token::state::Mint;
+use std::collections::BTreeMap;
 
-use crate::executor::{OwnedAccountInfo};
-use solana_program::{
-    entrypoint::ProgramResult,
-    pubkey::Pubkey, program_error::ProgramError,
-    program_pack::Pack
+use crate::executor::OwnedAccountInfo;
+use mpl_token_metadata::instruction::{
+    CreateMasterEditionArgs, CreateMetadataAccountArgsV3, MetadataInstruction,
 };
-use mpl_token_metadata::instruction::{MetadataInstruction, CreateMasterEditionArgs, CreateMetadataAccountArgsV3};
-use mpl_token_metadata::state::{Metadata, TokenMetadataAccount, MAX_MASTER_EDITION_LEN, MasterEditionV2, Key, TokenStandard, MAX_METADATA_LEN, CollectionDetails};
+use mpl_token_metadata::state::{
+    CollectionDetails, Key, MasterEditionV2, Metadata, TokenMetadataAccount, TokenStandard,
+    MAX_MASTER_EDITION_LEN, MAX_METADATA_LEN,
+};
+use solana_program::{
+    entrypoint::ProgramResult, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey,
+};
 
-
-pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>) -> ProgramResult {
-
+pub fn emulate(
+    instruction: &[u8],
+    meta: &[AccountMeta],
+    accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+) -> ProgramResult {
     match MetadataInstruction::try_from_slice(instruction)? {
         MetadataInstruction::CreateMetadataAccountV3(args) => {
             create_metadata_accounts_v3(meta, accounts, &args)
-        },
+        }
         MetadataInstruction::CreateMasterEditionV3(args) => {
             create_master_edition_v3(meta, accounts, &args)
-        },
-        _ => Err!(ProgramError::InvalidInstructionData; "Unknown Metaplex instruction")
+        }
+        _ => Err!(ProgramError::InvalidInstructionData; "Unknown Metaplex instruction"),
     }
 }
 
-
-fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>, args: &CreateMetadataAccountArgsV3) -> ProgramResult {
+fn create_metadata_accounts_v3(
+    meta: &[AccountMeta],
+    accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+    args: &CreateMetadataAccountArgsV3,
+) -> ProgramResult {
     let metadata_account_key = &meta[0].pubkey;
     let mint_key = &meta[1].pubkey;
     // let _mint_authority_key = &meta[2].pubkey;
@@ -43,14 +51,15 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
     // let _system_account_key = &meta[5].pubkey;
     // let _rent_key = &meta[6].pubkey;
 
-
     let mut metadata: Metadata = {
         let rent = Rent::get()?;
 
         let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
         metadata_account.data.resize(MAX_METADATA_LEN, 0);
         metadata_account.owner = mpl_token_metadata::ID;
-        metadata_account.lamports = metadata_account.lamports.max(rent.minimum_balance(MAX_METADATA_LEN));
+        metadata_account.lamports = metadata_account
+            .lamports
+            .max(rent.minimum_balance(MAX_METADATA_LEN));
 
         let metadata_account_info = metadata_account.into_account_info();
         Metadata::from_account_info(&metadata_account_info)?
@@ -62,7 +71,14 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
     };
 
     let compatible_data = args.data.to_v1();
-    assert_data_valid(&compatible_data, update_authority_key, &metadata, false, meta[4].is_signer, false)?;
+    assert_data_valid(
+        &compatible_data,
+        update_authority_key,
+        &metadata,
+        false,
+        meta[4].is_signer,
+        false,
+    )?;
 
     metadata.mint = *mint_key;
     metadata.key = Key::MetadataV1;
@@ -86,7 +102,11 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
         metadata.collection_details = None;
     }
 
-    let token_standard = if mint.decimals == 0 { TokenStandard::FungibleAsset } else { TokenStandard::Fungible };
+    let token_standard = if mint.decimals == 0 {
+        TokenStandard::FungibleAsset
+    } else {
+        TokenStandard::Fungible
+    };
     metadata.token_standard = Some(token_standard);
 
     puff_out_data_fields(&mut metadata);
@@ -97,7 +117,8 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
         metadata.mint.as_ref(),
         mpl_token_metadata::state::EDITION.as_bytes(),
     ];
-    let (_, edition_bump_seed) = Pubkey::find_program_address(edition_seeds, &mpl_token_metadata::ID);
+    let (_, edition_bump_seed) =
+        Pubkey::find_program_address(edition_seeds, &mpl_token_metadata::ID);
     metadata.edition_nonce = Some(edition_bump_seed);
 
     {
@@ -108,10 +129,13 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
     Ok(())
 }
 
-
-fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>, args: &CreateMasterEditionArgs) -> ProgramResult {
-    let edition_account_key  = &meta[0].pubkey;
-    let mint_key             = &meta[1].pubkey;
+fn create_master_edition_v3(
+    meta: &[AccountMeta],
+    accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+    args: &CreateMasterEditionArgs,
+) -> ProgramResult {
+    let edition_account_key = &meta[0].pubkey;
+    let mint_key = &meta[1].pubkey;
     // let update_authority_key = &meta[2].pubkey;
     // let _mint_authority_key   = &meta[3].pubkey;
     // let _payer_account_key    = &meta[4].pubkey;
@@ -121,7 +145,10 @@ fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey
     // let _rent_key            = &meta[8].pubkey;
 
     let mut metadata: Metadata = {
-        let metadata_info = accounts.get_mut(metadata_account_key).unwrap().into_account_info();
+        let metadata_info = accounts
+            .get_mut(metadata_account_key)
+            .unwrap()
+            .into_account_info();
         Metadata::from_account_info(&metadata_info)?
     };
 
@@ -142,16 +169,21 @@ fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey
         return Err!(ProgramError::InvalidArgument; "Metaplex: mint supply != 1");
     }
 
-    
     {
         let rent = Rent::get()?;
 
         let edition_account = accounts.get_mut(edition_account_key).unwrap();
         edition_account.data.resize(MAX_MASTER_EDITION_LEN, 0);
         edition_account.owner = mpl_token_metadata::ID;
-        edition_account.lamports = edition_account.lamports.max(rent.minimum_balance(MAX_MASTER_EDITION_LEN));
+        edition_account.lamports = edition_account
+            .lamports
+            .max(rent.minimum_balance(MAX_MASTER_EDITION_LEN));
 
-        let edition = MasterEditionV2 { key: Key::MasterEditionV2, supply: 0, max_supply: args.max_supply };
+        let edition = MasterEditionV2 {
+            key: Key::MasterEditionV2,
+            supply: 0,
+            max_supply: args.max_supply,
+        };
         edition.serialize(&mut edition_account.data.as_mut_slice())?;
     }
 

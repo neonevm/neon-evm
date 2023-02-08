@@ -1,7 +1,7 @@
-use clickhouse::Client;
 use super::block;
+use clickhouse::Client;
+use solana_sdk::clock::{Slot, UnixTimestamp};
 use std::sync::Arc;
-use solana_sdk::clock::{UnixTimestamp, Slot};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,11 +21,7 @@ pub struct ClickHouseDb {
 
 #[allow(dead_code)]
 impl ClickHouseDb {
-    pub fn _new(
-        server_url: &str,
-        username: Option<&str>,
-        password: Option<&str>,
-    ) -> ClickHouseDb {
+    pub fn _new(server_url: &str, username: Option<&str>, password: Option<&str>) -> ClickHouseDb {
         let client = match (username, password) {
             (None, None | Some(_)) => Client::default().with_url(server_url),
             (Some(user), None) => Client::default().with_url(server_url).with_user(user),
@@ -35,7 +31,9 @@ impl ClickHouseDb {
                 .with_password(password),
         };
 
-        ClickHouseDb { client: Arc::new(client) }
+        ClickHouseDb {
+            client: Arc::new(client),
+        }
     }
 
     pub fn get_block_time(&self, slot: Slot) -> ChResult<UnixTimestamp> {
@@ -54,8 +52,7 @@ impl ClickHouseDb {
         block(|| async {
             let query =
                 "SELECT hash FROM events.notify_block_local ORDER BY retrieved_time DESC LIMIT 1";
-            self
-                .client
+            self.client
                 .query(query)
                 .fetch_one::<String>()
                 .await
