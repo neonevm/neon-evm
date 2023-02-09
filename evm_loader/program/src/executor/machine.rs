@@ -100,7 +100,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.executor.call_begin(caller, code_address, &input, transfer_value, gas_limit, gas_price)?;
 
         let code = self.executor.code(code_address);
-        let valids = self.executor.valids(code_address);
+        let valids = evm::Valids::compute(code_address.as_bytes());
         let context = evm::Context{ address: code_address, caller, apparent_value: transfer_value };
 
         let runtime = evm::Runtime::new(code, valids, input, context);
@@ -193,7 +193,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
     fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
         let code = self.executor.code(interrupt.code_address);
-        let valids = self.executor.valids(interrupt.code_address);
+        let valids = evm::Valids::compute(interrupt.code_address.as_bytes());
 
         self.executor.state.enter(interrupt.is_static);
 
