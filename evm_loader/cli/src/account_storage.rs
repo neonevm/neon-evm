@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc, str::Fr
 
 use ethnum::U256;
 use evm_loader::account::ether_contract;
-use evm_loader::account_storage::{AccountOperation, AccountsOperations};
+use evm_loader::account_storage::{generate_fake_block_hash, AccountOperation, AccountsOperations};
 use evm_loader::{
     account::{
         ether_storage::EthereumStorageAddress, EthereumAccount, EthereumStorage,
@@ -23,7 +23,7 @@ use solana_sdk::{
     pubkey,
     pubkey::Pubkey,
     rent::Rent,
-    sysvar::{recent_blockhashes, Sysvar},
+    sysvar::{recent_blockhashes, slot_hashes, Sysvar},
 };
 
 use crate::Config;
@@ -376,18 +376,42 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_hash(&self, number: U256) -> [u8; 32] {
         info!("block_hash {}", number);
 
+        let number = number.as_u64();
+
+        self.add_solana_account(slot_hashes::ID, false);
         self.add_solana_account(recent_blockhashes::ID, false);
 
-        if self.block_number <= number.as_u64() {
+        if self.block_number <= number {
             return <[u8; 32]>::default();
         }
 
-        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
+        if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
+            if let Ok(recent_blockhashes_account) =
+                self.config.rpc_client.get_account(&recent_blockhashes::ID)
+            {
+                let slot_hashes_data = slot_hashes_account.data;
+                let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[..8].try_into().unwrap());
+                for i in 0..slot_hashes_len {
+                    let offset = usize::try_from((i * 40) + 8).unwrap();
+                    let slot =
+                        u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
+                    if number == slot {
+                        let recent_blockhashes_data = recent_blockhashes_account.data;
+                        if offset + 32 > recent_blockhashes_data.len() {
+                            break;
+                        }
+                        return recent_blockhashes_data[offset..][..32].try_into().unwrap();
+                    }
+                }
+            }
+        }
+
+        if let Ok(timestamp) = self.config.rpc_client.get_block(number) {
             let hash = bs58::decode(timestamp.blockhash).into_vec().unwrap();
             hash.try_into().unwrap()
         } else {
             warn!("Got error trying to get block hash");
-            <[u8; 32]>::default()
+            generate_fake_block_hash(number)
         }
     }
 

@@ -5,6 +5,7 @@ use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
+use solana_program::slot_history::Slot;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -139,4 +140,38 @@ pub trait AccountStorage {
             )
             .collect()
     }
+}
+
+#[must_use]
+pub fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
+    let slot_bytes: [u8; 8] = slot.to_be_bytes();
+    let mut initial = 0;
+    for b in slot_bytes {
+        if b != 0 {
+            break;
+        }
+        initial += 1;
+    }
+    let slot_slice = &slot_bytes[initial..];
+    let slot_slice_len = slot_slice.len();
+    let mut hash = [255; 32];
+    hash[32 - slot_slice_len - 1] = 0;
+    hash[(32 - slot_slice_len)..].copy_from_slice(slot_slice);
+    hash
+}
+
+#[test]
+fn test_generate_fake_block_hash() {
+    let slot = 0x46;
+    let mut expected: [u8; 32] = [255; 32];
+    expected[30] = 0;
+    expected[31] = 0x46;
+    assert_eq!(generate_fake_block_hash(slot), expected);
+
+    let slot = 0x3e8;
+    let mut expected: [u8; 32] = [255; 32];
+    expected[29] = 0;
+    expected[30] = 0x03;
+    expected[31] = 0xe8;
+    assert_eq!(generate_fake_block_hash(slot), expected);
 }

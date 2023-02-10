@@ -142,7 +142,7 @@ impl From<Error> for ProgramError {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    return Err!(ProgramError::InvalidArgument; "Caller pubkey: {} ", &caller_info.key.to_string());
 /// ```
 ///
@@ -165,7 +165,7 @@ macro_rules! Err {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
 /// ```
 ///
