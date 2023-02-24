@@ -56,13 +56,17 @@ impl<'a> Holder<'a> {
         data[Self::SIZE..].fill(0);
     }
 
-    pub fn write(&mut self, offset: usize, bytes: &[u8]) {
+    pub fn write(&mut self, offset: usize, bytes: &[u8]) -> Result<(), ProgramError>  {
         let mut data = self.info.data.borrow_mut();
         
-        let begin = Self::SIZE + offset;
-        let end = begin + bytes.len();
+        let begin = Self::SIZE.checked_add(offset)
+            .ok_or_else(|| E!(ProgramError::InvalidArgument; "Holder offset overflow"))?;
+        let end = begin.checked_add(bytes.len())
+            .ok_or_else(|| E!(ProgramError::InvalidArgument; "Holder offset overflow"))?;
 
         data[begin..end].copy_from_slice(bytes);
+
+        Ok(())
     }
 
     #[must_use]
