@@ -4,9 +4,9 @@ use std::cell::Ref;
 
 use arrayref::{array_mut_ref, array_ref};
 use arrayref::{array_refs, mut_array_refs};
-use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
+use crate::error::{Error, Result};
 use crate::types::Transaction;
 
 use super::Holder;
@@ -49,20 +49,28 @@ impl Packable for Data {
 }
 
 impl<'a> Holder<'a> {
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> Result<()> {
         self.transaction_hash.fill(0);
 
-        let mut data = self.info.data.borrow_mut();
+        let mut data = self.info.try_borrow_mut_data()?;
         data[Self::SIZE..].fill(0);
+
+        Ok(())
     }
 
-    pub fn write(&mut self, offset: usize, bytes: &[u8]) {
-        let mut data = self.info.data.borrow_mut();
+    pub fn write(&mut self, offset: usize, bytes: &[u8]) -> Result<()> {
+        let mut data = self.info.try_borrow_mut_data()?;
 
-        let begin = Self::SIZE + offset;
-        let end = begin + bytes.len();
+        let begin = Self::SIZE
+            .checked_add(offset)
+            .ok_or(Error::IntegerOverflow)?;
+        let end = begin
+            .checked_add(bytes.len())
+            .ok_or(Error::IntegerOverflow)?;
 
         data[begin..end].copy_from_slice(bytes);
+
+        Ok(())
     }
 
     #[must_use]
@@ -71,17 +79,17 @@ impl<'a> Holder<'a> {
         Ref::map(data, |d| &d[Self::SIZE..])
     }
 
-    pub fn validate_owner(&self, operator: &Operator) -> Result<(), ProgramError> {
+    pub fn validate_owner(&self, operator: &Operator) -> Result<()> {
         if &self.owner != operator.key {
-            return Err!(ProgramError::InvalidAccountData; "Invalid Holder account owner");
+            return Err(Error::HolderInvalidOwner(self.owner, *operator.key));
         }
 
         Ok(())
     }
 
-    pub fn validate_transaction(&self, trx: &Transaction) -> Result<(), ProgramError> {
+    pub fn validate_transaction(&self, trx: &Transaction) -> Result<()> {
         if self.transaction_hash != trx.hash {
-            return Err!(ProgramError::InvalidAccountData; "Invalid Holder transaction hash");
+            return Err(Error::HolderInvalidHash(self.transaction_hash, trx.hash));
         }
 
         Ok(())

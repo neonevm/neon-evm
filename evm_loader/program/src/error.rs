@@ -121,6 +121,15 @@ pub enum Error {
 
     #[error("New contract code size exceeds 24kb (EIP-170), contract = {0}, size = {1}")]
     ContractCodeSizeLimit(Address, usize),
+
+    #[error("Checked Integer Math Overflow")]
+    IntegerOverflow,
+
+    #[error("Holder Account - invalid owner {0}, expected = {1}")]
+    HolderInvalidOwner(Pubkey, Pubkey),
+
+    #[error("Holder Account - invalid transaction hash {}, expected = {}", hex::encode(.0), hex::encode(.1))]
+    HolderInvalidHash([u8; 32], [u8; 32]),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
