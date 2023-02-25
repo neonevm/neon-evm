@@ -66,7 +66,7 @@ impl CallDbClient {
             ).await
         })?;
 
-        if rows.is_empty() == 0 {
+        if rows.is_empty() {
             return Ok(None);
         }
 
