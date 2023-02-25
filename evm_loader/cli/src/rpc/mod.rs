@@ -46,6 +46,7 @@ pub struct TrxDbClient {
     pub hash: [u8; 32],
     tracer_db: Client,
     indexer_db: Client,
+    sol_sig: Vec<u8>,
 }
 
 pub trait Rpc{
