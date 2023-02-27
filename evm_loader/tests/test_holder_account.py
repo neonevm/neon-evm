@@ -105,7 +105,7 @@ def test_write_to_not_finalized_holder(rw_lock_contract, user_account, evm_loade
     send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                        [user_account.solana_account_address,
                                         rw_lock_contract.solana_address], 1, operator_keypair)
-    account_data = solana_client.get_account_info(new_holder_acc).value.data
+    account_data = solana_client.get_account_info(new_holder_acc, commitment=Confirmed).value.data
     parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
     assert parsed_data.tag == TAG_STATE
 

@@ -12,7 +12,8 @@ class GithubClient():
     def get_proxy_runs_list(self, proxy_branch):
         response = requests.get(
             f"{self.PROXY_ENDPOINT}/actions/workflows/pipeline.yml/runs?branch={proxy_branch}", headers=self.headers)
-        click.echo(f"Proxy runs: {response.json()}")
+        if response.status_code != 200:
+            raise f"Can't get proxy runs list. Error: {response.json()}"
         runs = [item['id'] for item in response.json()['workflow_runs']]
         return runs
 
