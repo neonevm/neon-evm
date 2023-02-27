@@ -41,7 +41,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     solana_program::log::sol_log_data(&[b"HASH", &transaction_hash]);
 
-    holder.write(offset, data);
+    holder.write(offset, data)?;
 
     Ok(())
 }
