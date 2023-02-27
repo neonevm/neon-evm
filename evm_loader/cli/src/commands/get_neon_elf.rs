@@ -26,7 +26,33 @@ impl CachedElfParams {
 pub fn read_elf_parameters(_config: &Config, program_data: &[u8]) -> HashMap<String, String> {
     let mut result = HashMap::new();
     let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
-    elf.dynsyms.iter().for_each(|sym| {
+    let ctx = goblin::container::Ctx::new(
+        if elf.is_64 {
+            goblin::container::Container::Big
+        } else {
+            goblin::container::Container::Little
+        },
+        if elf.little_endian {
+            scroll::Endian::Little
+        } else {
+            scroll::Endian::Big
+        },
+    );
+
+    let (num_syms, offset) = elf
+        .section_headers
+        .into_iter()
+        .find(|section| section.sh_type == goblin::elf::section_header::SHT_DYNSYM)
+        .map(|section| (section.sh_size / section.sh_entsize, section.sh_offset))
+        .unwrap();
+    let dynsyms = goblin::elf::Symtab::parse(
+        program_data,
+        offset.try_into().expect("Offset too large"),
+        num_syms.try_into().expect("Count too large"),
+        ctx,
+    )
+    .unwrap();
+    dynsyms.iter().for_each(|sym| {
         let name = String::from(&elf.dynstrtab[sym.st_name]);
         if name.starts_with("NEON") {
             let end = program_data.len();

@@ -32,7 +32,8 @@ fern = "0.6"
 rlp = "0.5"
 rand = "0.8"
 ethnum = { version = "1", default_features = false, features = [ "serde" ] }
-goblin = { version = "0.4.2" }
+goblin = { version = "0.6.0" }
+scroll = "0.11.0"
 tokio = { version = "1", features = ["full"] }
 postgres = { version = "0.19", features = ["with-chrono-0_4", "array-impls"] }
 tokio-postgres = {version="0.7", features=["with-uuid-0_8"]}
