@@ -40,6 +40,7 @@ fn process_instruction<'a>(
         }
         EvmInstruction::HolderWrite => {
             instruction::account_holder_write::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::DepositV03 => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
