@@ -23,6 +23,7 @@ use std::any::Any;
 #[derive(Debug)]
 pub struct TrxDbClient {
     pub hash: [u8; 32],
+    sol_sig: [u8; 64],
     tracer_db: TracerDb,
     indexer_db: IndexerDb,
 }
@@ -31,9 +32,13 @@ impl TrxDbClient {
     pub fn new(config: &DbConfig, hash: [u8; 32]) -> Self {
         let tracer_db = TracerDb::new(config);
         let indexer_db = IndexerDb::new(config);
+        let sol_sig = indexer_db
+            .get_sol_sig(&hash)
+            .unwrap_or_else(|_| panic!("get_sol_sig error, hash: 0x{}", hex::encode(hash)));
 
         Self {
             hash,
+            sol_sig,
             tracer_db,
             indexer_db,
         }
@@ -57,13 +62,8 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
-        let sol_sig = self
-            .indexer_db
-            .get_sol_sig(&self.hash)
-            .map_err(|e| e!("get_sol_sig error", e))?;
-
         self.tracer_db
-            .get_account_by_sol_sig(key, &sol_sig)
+            .get_account_by_sol_sig(key, &self.sol_sig)
             .map_err(|e| e!("load account error", key, e))?
             .ok_or_else(|| e!("account not found", key))
     }
@@ -73,7 +73,11 @@ impl Rpc for TrxDbClient {
         key: &Pubkey,
         _commitment: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
-        let account = self.get_account(key)?;
+        let account = self
+            .tracer_db
+            .get_account_by_sol_sig(key, &self.sol_sig)
+            .map_err(|e| e!("load account error", key, e))?;
+
         let slot = self
             .indexer_db
             .get_slot(&self.hash)
@@ -85,7 +89,7 @@ impl Rpc for TrxDbClient {
         };
         Ok(Response {
             context,
-            value: Some(account),
+            value: account,
         })
     }
 

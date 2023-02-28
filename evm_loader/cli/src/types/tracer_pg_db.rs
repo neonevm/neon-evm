@@ -79,20 +79,20 @@ impl TracerDb {
             .try_into()
             .map_err(|e| PgError::Custom(format!("slot cast error: {e}")))?;
 
-        let rows = block(|| async {
+        let row = block(|| async {
             self.client
-                .query(
+                .query_opt(
                     "SELECT * FROM get_account_at_slot($1, $2)",
                     &[&pubkey_bytes.as_slice(), &slot],
                 )
                 .await
         })?;
 
-        if rows.is_empty() {
+        if row.is_none() {
             return Ok(None);
         }
 
-        let row = &rows[0];
+        let row = row.unwrap();
         let owner: &[u8] = row.try_get(1)?;
         let lamports: i64 = row.try_get(2)?;
         let rent_epoch: i64 = row.try_get(4)?;
@@ -116,12 +116,17 @@ impl TracerDb {
         let pubkey_bytes = pubkey.to_bytes();
         let row = block(|| async {
             self.client
-                .query_one(
+                .query_opt(
                     "SELECT * FROM get_pre_accounts($1, $2)",
                     &[&sol_sig.as_slice(), &[pubkey_bytes.as_slice()]],
                 )
                 .await
         })?;
+
+        if row.is_none() {
+            return Ok(None);
+        }
+        let row = row.unwrap();
 
         let lamports: i64 = row.try_get(0)?;
         let owner: &[u8] = row.try_get(2)?;

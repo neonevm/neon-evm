@@ -64,14 +64,18 @@ impl Rpc for CallDbClient {
         key: &Pubkey,
         _: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
-        let account = self.get_account(key)?;
+        let account = self
+            .tracer_db
+            .get_account_at(key, self.slot)
+            .map_err(|e| e!("load account error", key, e))?;
+
         let context = RpcResponseContext {
             slot: self.slot,
             api_version: None,
         };
         Ok(Response {
             context,
-            value: Some(account),
+            value: account,
         })
     }
 
