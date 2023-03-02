@@ -116,7 +116,7 @@ def run_tests(github_sha):
         click.echo(current_line)
         if 'ERROR ' in current_line or 'FAILED ' in current_line:
             tests_are_failed = True
-    if tests_are_failed:
+    if tests_are_failed or docker_client.exec_inspect(exec_id['Id'])["ExitCode"] == 1:
         print("Tests are failed")
         sys.exit(1)
 
