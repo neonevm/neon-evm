@@ -49,13 +49,11 @@ class TestTransactionStepFromAccount:
         assert sender_balance_before - amount == sender_balance_after
         assert recipient_balance_before + amount == recipient_balance_after
 
-    @pytest.mark.parametrize("chain_id", [None, 111])
-    def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
-                             chain_id):
+    def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens):
         contract_filename = "hello_world.binary"
         contract = create_contract_address(sender_with_tokens, evm_loader)
 
-        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=chain_id)
+        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         contract_path = pytest.CONTRACTS_PATH / contract_filename

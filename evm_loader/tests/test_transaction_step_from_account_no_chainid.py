@@ -22,7 +22,7 @@ class TestTransactionStepFromAccountNoChainId:
         recipient_balance_before = get_neon_balance(solana_client, session_user.solana_account_address)
 
         signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, amount)
+                                         sender_with_tokens.solana_account_address, amount, chain_id=None)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
         resp = execute_transaction_steps_from_account_no_chain_id(operator_keypair, evm_loader, treasury_pool,
                                                                   holder_acc,
@@ -68,7 +68,7 @@ class TestTransactionStepFromAccountNoChainId:
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
 
         signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text],
-                                           value=transfer_amount)
+                                           value=transfer_amount, chain_id=None)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         resp = execute_transaction_steps_from_account_no_chain_id(operator_keypair, evm_loader, treasury_pool,
