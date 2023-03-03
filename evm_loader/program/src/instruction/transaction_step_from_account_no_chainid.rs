@@ -1,10 +1,8 @@
 use crate::account::{program, EthereumAccount, Operator, Treasury};
 use crate::account_storage::ProgramAccountStorage;
-use crate::config::GAS_LIMIT_MULTIPLIER_NO_CHAINID;
 use crate::error::Result;
 use crate::instruction::transaction_step::Accounts;
 use arrayref::array_ref;
-use ethnum::U256;
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 pub fn process<'a>(
@@ -36,13 +34,12 @@ pub fn process<'a>(
         accounts.remaining_accounts,
     )?;
 
-    let gas_multiplier = U256::from(GAS_LIMIT_MULTIPLIER_NO_CHAINID);
     super::transaction_step_from_account::execute(
         program_id,
         holder_or_storage_info,
         accounts,
         &mut account_storage,
         step_count,
-        Some(gas_multiplier),
+        None,
     )
 }

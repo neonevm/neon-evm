@@ -1,11 +1,13 @@
 use crate::account::{program, EthereumAccount, Operator, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
+use crate::config::CHAIN_ID;
 use crate::error::{Error, Result};
 use crate::evm::Machine;
 use crate::executor::ExecutorState;
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_step::log_return_value;
 use crate::types::{Address, Transaction};
+use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 
 pub struct Accounts<'a> {
@@ -21,9 +23,13 @@ pub struct Accounts<'a> {
 pub fn validate(
     _accounts: &Accounts,
     account_storage: &ProgramAccountStorage,
-    _trx: &Transaction,
+    trx: &Transaction,
     _caller_address: &Address,
 ) -> Result<()> {
+    if trx.chain_id != Some(CHAIN_ID.into()) {
+        return Err(Error::InvalidChainId(trx.chain_id.unwrap_or(U256::ZERO)));
+    }
+
     account_storage.check_for_blocked_accounts()?;
 
     Ok(())
