@@ -20,7 +20,7 @@ class ComputeBudget:
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
             keys=[AccountMeta(PublicKey(operator.public_key), is_signer=True, is_writable=False)],
-            data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
+            data=bytes.fromhex("02") + units.to_bytes(4, "little")  #  + additional_fee.to_bytes(4, "little")
         )
 
     @staticmethod
