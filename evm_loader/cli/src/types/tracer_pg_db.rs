@@ -75,7 +75,7 @@ impl TracerDb {
 
     pub fn get_account_at(&self, pubkey: &Pubkey, slot: u64) -> PgResult<Option<Account>> {
         let pubkey_bytes = pubkey.to_bytes();
-        let slot: i32 = slot
+        let slot: i64 = slot
             .try_into()
             .map_err(|e| PgError::Custom(format!("slot cast error: {e}")))?;
 
