@@ -157,10 +157,10 @@ impl From<Error> for ProgramError {
 ///
 macro_rules! Err {
     ( $n:expr; $($args:expr),* ) => ({
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         solana_program::msg!("{}:{} : {}", file!(), line!(), &format!($($args),*));
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(all(not(target_os = "solana"), feature = "log"))]
         log::error!("{}", &format!($($args),*));
 
         Err($n)
@@ -180,10 +180,10 @@ macro_rules! Err {
 ///
 macro_rules! E {
     ( $n:expr; $($args:expr),* ) => ({
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         solana_program::msg!("{}:{} : {}", file!(), line!(), &format!($($args),*));
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(all(not(target_os = "solana"), feature = "log"))]
         log::error!("{}", &format!($($args),*));
 
         $n

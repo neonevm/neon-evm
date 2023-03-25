@@ -27,9 +27,6 @@ devnet = []
 ## contain a configuration for appropriated deployment.
 emergency = []
 
-## Builds program without debug logs
-no-logs = []
-
 ## Do not include entrypoint (for include in other application)
 no-entrypoint = []
 test-bpf = []
@@ -57,7 +54,7 @@ serde = { version = "1", features = ["derive"] }
 ethnum = { version = "1", default_features = false, features = [ "serde" ] }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
-log = { version = "0.4", default-features = false }
+log = { version = "0.4", default-features = false, optional = true }
 environmental = { version = "1", default-features = false, optional = true}
 
 [lib]
