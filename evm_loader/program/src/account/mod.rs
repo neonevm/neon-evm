@@ -2,9 +2,8 @@ use std::cell::RefMut;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
+use crate::error::{Error, Result};
 use solana_program::account_info::AccountInfo;
-use solana_program::entrypoint::ProgramResult;
-use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
@@ -80,12 +79,9 @@ where
     pub info: &'a AccountInfo<'a>,
 }
 
-fn split_account_data<'a>(
-    info: &'a AccountInfo<'a>,
-    data_len: usize,
-) -> Result<AccountParts, ProgramError> {
+fn split_account_data<'a>(info: &'a AccountInfo<'a>, data_len: usize) -> Result<AccountParts> {
     if info.data_len() < 1 + data_len {
-        return Err!(ProgramError::InvalidAccountData; "Account {} - invalid data len, expected = {} found = {}", info.key, data_len, info.data_len());
+        return Err(Error::AccountInvalidData(*info.key));
     }
 
     let account_data = info.try_borrow_mut_data()?;
@@ -108,17 +104,14 @@ where
     pub const SIZE: usize = 1 + T::SIZE;
     pub const TAG: u8 = T::TAG;
 
-    pub fn from_account(
-        program_id: &Pubkey,
-        info: &'a AccountInfo<'a>,
-    ) -> Result<Self, ProgramError> {
+    pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self> {
         if info.owner != program_id {
-            return Err!(ProgramError::InvalidArgument; "Account {} - expected program owned", info.key);
+            return Err(Error::AccountInvalidOwner(*info.key, *program_id));
         }
 
         let parts = split_account_data(info, T::SIZE)?;
         if *parts.tag != T::TAG {
-            return Err!(ProgramError::InvalidAccountData; "Account {} - invalid tag, expected = {} found = {}", info.key, T::TAG, parts.tag);
+            return Err(Error::AccountInvalidTag(*info.key, T::TAG));
         }
 
         let data = T::unpack(&parts.data);
@@ -130,19 +123,23 @@ where
         })
     }
 
-    pub fn init(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
+    pub fn init(program_id: &Pubkey, info: &'a AccountInfo<'a>, data: T) -> Result<Self> {
+        if info.owner != program_id {
+            return Err(Error::AccountInvalidOwner(*info.key, *program_id));
+        }
+
         if !info.is_writable {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not writable", info.key);
+            return Err(Error::AccountNotWritable(*info.key));
         }
 
         let rent = Rent::get()?;
         if !rent.is_exempt(info.lamports(), info.data_len()) {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not rent exempt", info.key);
+            return Err(Error::AccountNotRentExempt(*info.key));
         }
 
         let mut parts = split_account_data(info, T::SIZE)?;
         if *parts.tag != TAG_EMPTY {
-            return Err!(ProgramError::AccountAlreadyInitialized; "Account {} - already initialized", info.key);
+            return Err(Error::AccountAlreadyInitialized(*info.key));
         }
 
         *parts.tag = T::TAG;
@@ -160,18 +157,18 @@ where
     /// # Safety
     /// *Delete account*. Transfer lamports to the operator.
     /// All data stored in the account will be lost
-    pub unsafe fn suicide(mut self, operator: &Operator<'a>) -> ProgramResult {
+    pub unsafe fn suicide(mut self, operator: &Operator<'a>) {
         let info = self.info;
 
         self.dirty = false; // Do not save data into solana account
         core::mem::drop(self); // Release borrowed account data
 
-        crate::account::delete(info, operator)
+        crate::account::delete(info, operator);
     }
 
     /// # Safety
     /// Should be used with care. Can corrupt account data
-    pub unsafe fn replace<U>(mut self, data: U) -> Result<AccountData<'a, U>, ProgramError>
+    pub unsafe fn replace<U>(mut self, data: U) -> Result<AccountData<'a, U>>
     where
         U: Packable + Debug,
     {
@@ -179,7 +176,7 @@ where
         let info = self.info;
 
         if !info.is_writable {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not writable", self.info.key);
+            return Err(Error::AccountNotWritable(*info.key));
         }
 
         self.dirty = false; // Do not save data into solana account
@@ -240,14 +237,14 @@ where
     }
 }
 
-pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> {
+pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8> {
     if info.owner != program_id {
-        return Err!(ProgramError::InvalidAccountData; "Account {} - expected program owned", info.key);
+        return Err(Error::AccountInvalidOwner(*info.key, *program_id));
     }
 
     let data = info.try_borrow_data()?;
     if data.is_empty() {
-        return Err!(ProgramError::InvalidAccountData; "Account {} - expected not empty", info.key);
+        return Err(Error::AccountInvalidData(*info.key));
     }
 
     Ok(data[0])
@@ -255,19 +252,12 @@ pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> 
 
 /// # Safety
 /// *Permanently delete all data* in the account. Transfer lamports to the operator.
-pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> ProgramResult {
+pub unsafe fn delete(account: &AccountInfo, operator: &Operator) {
     debug_print!("DELETE ACCOUNT {}", account.key);
 
-    let operator_lamports = operator
-        .lamports()
-        .checked_add(account.lamports())
-        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Operator lamports overflow"))?;
-
-    **operator.lamports.borrow_mut() = operator_lamports;
+    **operator.lamports.borrow_mut() += account.lamports();
     **account.lamports.borrow_mut() = 0;
 
     let mut data = account.data.borrow_mut();
     data.fill(0);
-
-    Ok(())
 }

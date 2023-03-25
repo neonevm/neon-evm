@@ -110,9 +110,8 @@ pub fn execute<'a>(
             do_continue(step_count, accounts, storage, account_storage, gasometer)
         }
         FinalizedState::TAG => Err(Error::StorageAccountFinalized),
-        tag => Err(Error::AccountInvalidTag(
+        _ => Err(Error::AccountInvalidTag(
             *holder_or_storage_info.key,
-            tag,
             Holder::TAG,
         )),
     }

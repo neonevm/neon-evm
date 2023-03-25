@@ -396,6 +396,7 @@ impl<'a> ProgramAccountStorage<'a> {
         })?;
 
         let ether_account = EthereumAccount::init(
+            self.program_id,
             info,
             ether_account::Data {
                 address: *address,

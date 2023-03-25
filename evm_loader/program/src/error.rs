@@ -44,17 +44,26 @@ pub enum Error {
     #[error("Account {0} - blocked")]
     AccountBlocked(Address),
 
-    #[error("Account {0} - invalid tag {1}, expected {2}")]
-    AccountInvalidTag(Pubkey, u8, u8),
+    #[error("Account {0} - invalid tag, expected {1}")]
+    AccountInvalidTag(Pubkey, u8),
 
-    #[error("Account {0} - invalid owner {1}, expected {2}")]
-    AccountInvalidOwner(Pubkey, Pubkey, Pubkey),
+    #[error("Account {0} - invalid owner, expected {1}")]
+    AccountInvalidOwner(Pubkey, Pubkey),
 
     #[error("Account {0} - invalid public key, expected {1}")]
     AccountInvalidKey(Pubkey, Pubkey),
 
+    #[error("Account {0} - invalid data")]
+    AccountInvalidData(Pubkey),
+
     #[error("Account {0} - not writable")]
     AccountNotWritable(Pubkey),
+
+    #[error("Account {0} - not rent exempt")]
+    AccountNotRentExempt(Pubkey),
+
+    #[error("Account {0} - already initialized")]
+    AccountAlreadyInitialized(Pubkey),
 
     #[error("Operator is not authorized")]
     UnauthorizedOperator,

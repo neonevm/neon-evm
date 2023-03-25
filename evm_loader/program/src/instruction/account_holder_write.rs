@@ -26,8 +26,8 @@ pub fn process<'a>(
             };
             unsafe { finalized_state.replace(holder_data) }
         }
-        tag => {
-            return Err(Error::AccountInvalidTag(*holder_info.key, tag, Holder::TAG));
+        _ => {
+            return Err(Error::AccountInvalidTag(*holder_info.key, Holder::TAG));
         }
     }?;
 

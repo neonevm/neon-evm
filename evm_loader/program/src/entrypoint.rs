@@ -34,9 +34,11 @@ fn process_instruction<'a>(
     match EvmInstruction::parse(tag)? {
         EvmInstruction::HolderCreate => {
             instruction::account_holder_create::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::HolderDelete => {
             instruction::account_holder_delete::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::HolderWrite => {
             instruction::account_holder_write::process(program_id, accounts, instruction)

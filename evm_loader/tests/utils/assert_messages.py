@@ -11,6 +11,6 @@ class InstructionAsserts:
     NOT_AUTHORIZED_OPERATOR = "Operator is not authorized"
     NOT_SYSTEM_PROGRAM = "Account {} - is not system program"
     NOT_NEON_PROGRAM = "Account {} - is not Neon program"
-    NOT_PROGRAM_OWNED = "Account {} - expected program owned"
+    NOT_PROGRAM_OWNED = "Account {} - invalid owner"
     INVALID_HOLDER_OWNER = "Holder Account - invalid owner"
     INVALID_OPERATOR_KEY = "operator.key != storage.operator"

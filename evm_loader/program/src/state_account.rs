@@ -76,7 +76,7 @@ impl<'a> State<'a> {
         };
 
         info.data.borrow_mut()[0] = 0_u8;
-        let mut storage = State::init(info, data)?;
+        let mut storage = State::init(program_id, info, data)?;
 
         storage.make_deposit(&accounts.system_program, &accounts.operator)?;
         storage.write_blocked_accounts(program_id, accounts.remaining_accounts)?;

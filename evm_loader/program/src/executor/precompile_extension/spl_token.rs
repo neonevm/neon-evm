@@ -310,11 +310,7 @@ fn initialize_mint<B: AccountStorage>(
 
     let account = state.external_account(mint_key)?;
     if !system_program::check_id(&account.owner) {
-        return Err(Error::AccountInvalidOwner(
-            mint_key,
-            account.owner,
-            system_program::ID,
-        ));
+        return Err(Error::AccountInvalidOwner(mint_key, system_program::ID));
     }
 
     let seeds: Vec<Vec<u8>> = vec![
@@ -361,11 +357,7 @@ fn initialize_account<B: AccountStorage>(
 
     let account = state.external_account(account_key)?;
     if !system_program::check_id(&account.owner) {
-        return Err(Error::AccountInvalidOwner(
-            account_key,
-            account.owner,
-            system_program::ID,
-        ));
+        return Err(Error::AccountInvalidOwner(account_key, system_program::ID));
     }
 
     let seeds: Vec<Vec<u8>> = vec![
