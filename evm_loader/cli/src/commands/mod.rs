@@ -17,7 +17,7 @@ use crate::{
 use clap::ArgMatches;
 use ethnum::U256;
 use evm_loader::types::Address;
-use solana_clap_utils::input_parsers::{pubkey_of, value_of};
+use solana_clap_utils::input_parsers::{pubkey_of, value_of, values_of};
 use solana_client::{
     client_error::Result as SolanaClientResult, rpc_config::RpcSendTransactionConfig,
 };
@@ -35,23 +35,23 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
     match (cmd, params) {
         ("emulate", Some(params)) => {
             let tx = parse_tx(params);
-            let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, tx, token, chain, steps)
+            let (token, chain, steps, accounts) = parse_tx_params(config, params);
+            emulate::execute(config, tx, token, chain, steps, &accounts)
         }
         ("emulate_hash", Some(params)) => {
             let tx = config.rpc_client.get_transaction_data()?;
-            let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, tx, token, chain, steps)
+            let (token, chain, steps, accounts) = parse_tx_params(config, params);
+            emulate::execute(config, tx, token, chain, steps, &accounts)
         }
         ("trace", Some(params)) => {
             let tx = parse_tx(params);
-            let (token, chain, steps) = parse_tx_params(config, params);
-            trace::execute(config, tx, token, chain, steps)
+            let (token, chain, steps, accounts) = parse_tx_params(config, params);
+            trace::execute(config, tx, token, chain, steps, &accounts)
         }
         ("trace_hash", Some(params)) => {
             let tx = config.rpc_client.get_transaction_data()?;
-            let (token, chain, steps) = parse_tx_params(config, params);
-            trace::execute(config, tx, token, chain, steps)
+            let (token, chain, steps, accounts) = parse_tx_params(config, params);
+            trace::execute(config, tx, token, chain, steps, &accounts)
         }
         ("create-ether-account", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
@@ -170,7 +170,7 @@ fn parse_tx(params: &ArgMatches) -> TxParams {
     }
 }
 
-pub fn parse_tx_params(config: &Config, params: &ArgMatches) -> (Pubkey, u64, u64) {
+pub fn parse_tx_params(config: &Config, params: &ArgMatches) -> (Pubkey, u64, u64, Vec<Address>) {
     // Read ELF params only if token_mint or chain_id is not set.
     let mut token = pubkey_of(params, "token_mint");
     let mut chain = value_of(params, "chain_id");
@@ -202,5 +202,7 @@ pub fn parse_tx_params(config: &Config, params: &ArgMatches) -> (Pubkey, u64, u6
     let max_steps =
         value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
 
-    (token, chain, max_steps)
+    let accounts = values_of::<Address>(params, "cached_accounts").unwrap_or_default();
+
+    (token, chain, max_steps, accounts)
 }

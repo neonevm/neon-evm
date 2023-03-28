@@ -39,6 +39,7 @@ pub trait Rpc {
         key: &Pubkey,
         commitment: CommitmentConfig,
     ) -> RpcResult<Option<Account>>;
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>>;
     fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>>;
     fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>;
     fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>;

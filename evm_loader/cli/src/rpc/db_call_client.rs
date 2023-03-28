@@ -79,6 +79,18 @@ impl Rpc for CallDbClient {
         })
     }
 
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
+        let mut result = Vec::new();
+        for key in pubkeys {
+            let account = self
+                .tracer_db
+                .get_account_at(key, self.slot)
+                .map_err(|e| e!("load account error", key, e))?;
+            result.push(account);
+        }
+        Ok(result)
+    }
+
     fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
         Ok(self.get_account(key)?.data)
     }

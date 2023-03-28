@@ -77,16 +77,13 @@ pub struct NeonAccount {
 }
 
 impl NeonAccount {
-    pub fn rpc_load(config: &Config, address: Address, writable: bool) -> Self {
-        let (key, _) = make_solana_program_address(&address, &config.evm_loader);
-        info!("get_account_from_solana {} => {}", address, key);
-
-        if let Ok(account) = config.rpc_client.get_account(&key) {
-            trace!("Account found");
+    fn new(address: Address, pubkey: Pubkey, account: Option<Account>, writable: bool) -> Self {
+        if let Some(account) = account {
+            trace!("Account found {}", address);
 
             Self {
                 address,
-                account: key,
+                account: pubkey,
                 writable,
                 new: false,
                 size: account.data.len(),
@@ -95,11 +92,11 @@ impl NeonAccount {
                 data: Some(account),
             }
         } else {
-            warn!("Account not found {}", address);
+            trace!("Account not found {}", address);
 
             Self {
                 address,
-                account: key,
+                account: pubkey,
                 writable,
                 new: true,
                 size: 0,
@@ -108,6 +105,14 @@ impl NeonAccount {
                 data: None,
             }
         }
+    }
+
+    pub fn rpc_load(config: &Config, address: Address, writable: bool) -> Self {
+        let (key, _) = make_solana_program_address(&address, &config.evm_loader);
+        info!("get_account_from_solana {} => {}", address, key);
+
+        let account = config.rpc_client.get_account(&key).ok();
+        Self::new(address, key, account, writable)
     }
 }
 
@@ -144,6 +149,20 @@ impl<'a> EmulatorAccountStorage<'a> {
             block_timestamp: timestamp,
             neon_token_mint: token_mint,
             chain_id,
+        }
+    }
+
+    pub fn initialize_cached_accounts(&self, addresses: &[Address]) {
+        let pubkeys: Vec<_> = addresses
+            .iter()
+            .map(|address| make_solana_program_address(address, &self.config.evm_loader).0)
+            .collect();
+        if let Ok(accounts) = self.config.rpc_client.get_multiple_accounts(&pubkeys) {
+            let entries = addresses.iter().zip(accounts).zip(pubkeys);
+            let mut accounts_storage = self.accounts.borrow_mut();
+            for ((&address, account), pubkey) in entries {
+                accounts_storage.insert(address, NeonAccount::new(address, pubkey, account, false));
+            }
         }
     }
 
