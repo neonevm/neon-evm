@@ -14,3 +14,4 @@ class InstructionAsserts:
     NOT_PROGRAM_OWNED = "Account {} - invalid owner"
     INVALID_HOLDER_OWNER = "Holder Account - invalid owner"
     INVALID_OPERATOR_KEY = "operator.key != storage.operator"
+    HOLDER_OVERFLOW = "Checked Integer Math Overflow"
