@@ -198,6 +198,7 @@ impl<B: Database> Machine<B> {
             return Err(Error::DeployToExistingAccount(target, origin));
         }
 
+        backend.increment_nonce(target)?;
         backend.increment_nonce(origin)?;
         backend.snapshot()?;
 

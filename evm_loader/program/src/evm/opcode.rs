@@ -978,6 +978,7 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Continue);
         }
 
+        backend.increment_nonce(address)?;
         backend.snapshot()?;
 
         backend.increment_nonce(self.context.contract)?;
