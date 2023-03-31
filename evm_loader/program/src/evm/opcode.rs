@@ -1397,15 +1397,20 @@ impl<B: Database> Machine<B> {
         });
 
         let returned = self.join();
-        if returned.reason == Reason::Call {
-            let return_offset = self.stack.pop_usize()?;
-            let return_length = self.stack.pop_usize()?;
+        match returned.reason {
+            Reason::Call => {
+                let return_offset = self.stack.pop_usize()?;
+                let return_length = self.stack.pop_usize()?;
 
-            self.memory
-                .write_buffer(return_offset, return_length, &[], 0)?;
-            self.stack.push_bool(true)?; // success
+                self.memory
+                    .write_buffer(return_offset, return_length, &[], 0)?;
+                self.stack.push_bool(true)?; // success
 
-            self.return_data = Buffer::empty();
+                self.return_data = Buffer::empty();
+            }
+            Reason::Create => {
+                self.stack.push_zero()?;
+            }
         }
 
         backend.commit_snapshot()?;
