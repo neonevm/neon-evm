@@ -91,7 +91,10 @@ pub enum Error {
     MemoryAccessOutOfLimits(usize, usize),
 
     #[error("EVM (EXT)CODECOPY offset = {0} with length = {1} exceeds code size")]
-    CodeCopyOffsetExceedsCodeSize(usize, usize),
+    CodeCopyOverflow(usize, usize),
+
+    #[error("EVM RETURNDATACOPY offset = {0} with length = {1} exceeds data size")]
+    ReturnDataCopyOverflow(usize, usize),
 
     #[error("EVM static mode violation, contract = {0}")]
     StaticModeViolation(Address),
