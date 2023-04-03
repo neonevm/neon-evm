@@ -962,6 +962,8 @@ impl<B: Database> Machine<B> {
         length: usize,
         backend: &mut B
     ) -> Result<Action> {
+        self.return_data = Buffer::empty();
+
         if backend.nonce(&self.context.contract)? == u64::MAX {
             return Err(Error::NonceOverflow(self.context.contract));
         }
@@ -1017,6 +1019,8 @@ impl<B: Database> Machine<B> {
         // let return_offset = self.stack.pop_usize()?;
         // let return_length = self.stack.pop_usize()?;
 
+        self.return_data = Buffer::empty();
+
         if self.is_static && (value != U256::ZERO) {
             return Err(Error::StaticModeViolation(self.context.contract));
         }
@@ -1025,8 +1029,6 @@ impl<B: Database> Machine<B> {
             self.stack.discard()?; // return_offset
             self.stack.discard()?; // return_length
             self.stack.push_bool(false)?; // fail
-
-            self.return_data = Buffer::empty();
 
             return Ok(Action::Continue);
         }
@@ -1078,12 +1080,12 @@ impl<B: Database> Machine<B> {
         // let return_offset = self.stack.pop_usize()?;
         // let return_length = self.stack.pop_usize()?;
 
+        self.return_data = Buffer::empty();
+
         if backend.balance(&self.context.contract)? < value {
             self.stack.discard()?; // return_offset
             self.stack.discard()?; // return_length
             self.stack.push_bool(false)?; // fail
-
-            self.return_data = Buffer::empty();
 
             return Ok(Action::Continue);
         }
@@ -1135,6 +1137,8 @@ impl<B: Database> Machine<B> {
         // let return_offset = self.stack.pop_usize()?;
         // let return_length = self.stack.pop_usize()?;
 
+        self.return_data = Buffer::empty();
+
         let context = self.context;
         let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
@@ -1175,6 +1179,8 @@ impl<B: Database> Machine<B> {
         let args_length = self.stack.pop_usize()?;
         // let return_offset = self.stack.pop_usize()?;
         // let return_length = self.stack.pop_usize()?;
+
+        self.return_data = Buffer::empty();
 
         let context = Context {
             caller: self.context.contract,
@@ -1326,15 +1332,15 @@ impl<B: Database> Machine<B> {
         });
 
         let returned = self.join();
+        self.return_data = return_data;
+
         match returned.reason {
             Reason::Call => {
                 let return_offset = self.stack.pop_usize()?;
                 let return_length = self.stack.pop_usize()?;
 
-                self.memory.write_buffer(return_offset, return_length, &return_data, 0)?;
+                self.memory.write_buffer(return_offset, return_length, &self.return_data, 0)?;
                 self.stack.push_bool(false)?; // fail
-
-                self.return_data = return_data;
             },
             Reason::Create => {
                 self.stack.push_zero()?;
