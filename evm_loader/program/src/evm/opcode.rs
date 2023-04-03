@@ -527,7 +527,7 @@ impl<B: Database> Machine<B> {
         let length = self.stack.pop_usize()?;
 
         if data_offset.saturating_add(length) > self.execution_code.len() {
-            return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length));
+            return Err(Error::CodeCopyOverflow(data_offset, length));
         }
 
         self.memory
@@ -567,7 +567,7 @@ impl<B: Database> Machine<B> {
         let code = backend.code(&address)?;
 
         if data_offset.saturating_add(length) > code.len() {
-            return Err(Error::CodeCopyOffsetExceedsCodeSize(data_offset, length));
+            return Err(Error::CodeCopyOverflow(data_offset, length));
         }
 
         self.memory
@@ -588,6 +588,10 @@ impl<B: Database> Machine<B> {
         let memory_offset = self.stack.pop_usize()?;
         let data_offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
+
+        if data_offset.saturating_add(length) > self.return_data.len() {
+            return Err(Error::ReturnDataCopyOverflow(data_offset, length));
+        }
 
         self.memory
             .write_buffer(memory_offset, length, &self.return_data, data_offset)?;
