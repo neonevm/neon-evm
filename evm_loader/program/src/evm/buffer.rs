@@ -23,6 +23,9 @@ impl Buffer {
 
             let layout = Layout::from_size_align_unchecked(len, BUFFER_ALIGN);
             let ptr = crate::allocator::EVM.alloc(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
 
             cfg_if::cfg_if! {
                 if #[cfg(target_os = "solana")] {

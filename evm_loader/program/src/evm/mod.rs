@@ -23,6 +23,7 @@ mod precompile;
 mod stack;
 #[cfg(feature = "tracing")]
 pub mod tracing;
+mod utils;
 
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;

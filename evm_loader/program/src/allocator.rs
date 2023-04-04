@@ -22,6 +22,7 @@ const_assert_eq!(EVM_HEAP_START_ADDRESS % align_of::<Heap>(), 0);
 
 #[inline]
 unsafe fn heap() -> &'static mut Heap {
+    // This is legal since all-zero is a valid `Heap`-struct representation
     const HEAP_PTR: *mut Heap = EVM_HEAP_START_ADDRESS as *mut Heap;
     let heap = &mut *HEAP_PTR;
 
@@ -69,7 +70,7 @@ unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
             if #[cfg(target_os = "solana")] {
                 solana_program::syscalls::sol_memcpy_(new_ptr, ptr, std::cmp::min(layout.size(), new_size) as u64);
             } else {
-                std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size))
+                std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
             }
         }
 
@@ -131,7 +132,13 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
         let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
         let new_ptr = self.alloc(new_layout);
 
-        std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "solana")] {
+                solana_program::syscalls::sol_memcpy_(new_ptr, ptr, std::cmp::min(layout.size(), new_size) as u64);
+            } else {
+                std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
+            }
+        }
 
         new_ptr
     }
