@@ -90,9 +90,6 @@ pub enum Error {
     #[error("EVM Memory Access at offset = {0} with length = {1} is out of limits")]
     MemoryAccessOutOfLimits(usize, usize),
 
-    #[error("EVM (EXT)CODECOPY offset = {0} with length = {1} exceeds code size")]
-    CodeCopyOverflow(usize, usize),
-
     #[error("EVM RETURNDATACOPY offset = {0} with length = {1} exceeds data size")]
     ReturnDataCopyOverflow(usize, usize),
 
