@@ -33,8 +33,9 @@ impl<B: Database> Machine<B> {
     pub fn opcode_add(&mut self, _backend: &mut B) -> Result<Action> {
         let a = self.stack.pop_u256()?;
         let b = self.stack.pop_u256()?;
+        let c = a.wrapping_add(b);
 
-        self.stack.push_u256(a + b)?;
+        self.stack.push_u256(c)?;
 
         Ok(Action::Continue)
     }
@@ -43,8 +44,9 @@ impl<B: Database> Machine<B> {
     pub fn opcode_mul(&mut self, _backend: &mut B) -> Result<Action> {
         let a = self.stack.pop_u256()?;
         let b = self.stack.pop_u256()?;
+        let c = a.wrapping_mul(b);
 
-        self.stack.push_u256(a * b)?;
+        self.stack.push_u256(c)?;
 
         Ok(Action::Continue)
     }
@@ -53,8 +55,9 @@ impl<B: Database> Machine<B> {
     pub fn opcode_sub(&mut self, _backend: &mut B) -> Result<Action> {
         let a = self.stack.pop_u256()?;
         let b = self.stack.pop_u256()?;
+        let c = a.wrapping_sub(b);
 
-        self.stack.push_u256(a - b)?;
+        self.stack.push_u256(c)?;
 
         Ok(Action::Continue)
     }
@@ -67,7 +70,8 @@ impl<B: Database> Machine<B> {
         if b == U256::ZERO {
             self.stack.push_zero()?;
         } else {
-            self.stack.push_u256(a / b)?;
+            let c = a.wrapping_div(b);
+            self.stack.push_u256(c)?;
         }
 
         Ok(Action::Continue)
@@ -78,10 +82,12 @@ impl<B: Database> Machine<B> {
         let a = self.stack.pop_i256()?;
         let b = self.stack.pop_i256()?;
 
-        match (a, b) {
-            (_, I256::ZERO) => self.stack.push_zero()?,
-            (I256::MIN, I256::MINUS_ONE) => self.stack.push_i256(I256::MIN)?,
-            (a, b) => self.stack.push_i256(a / b)?,
+        if b == I256::ZERO {
+            self.stack.push_zero()?;
+        } else {
+            // Wrapping occurs when dividing MIN / -1, in which case c = I256::MIN
+            let c = a.wrapping_div(b);
+            self.stack.push_i256(c)?;
         }
 
         Ok(Action::Continue)
@@ -95,7 +101,8 @@ impl<B: Database> Machine<B> {
         if b == U256::ZERO {
             self.stack.push_zero()?;
         } else {
-            self.stack.push_u256(a % b)?;
+            let c = a.wrapping_rem(b);
+            self.stack.push_u256(c)?;
         }
 
         Ok(Action::Continue)
@@ -109,7 +116,8 @@ impl<B: Database> Machine<B> {
         if b == I256::ZERO {
             self.stack.push_zero()?;
         } else {
-            self.stack.push_i256(a % b)?;
+            let c = a.wrapping_rem(b);
+            self.stack.push_i256(c)?;
         }
 
         Ok(Action::Continue)
@@ -137,7 +145,7 @@ impl<B: Database> Machine<B> {
             if a >= b {
                 a - b
             } else {
-                m - b + a
+                (m - b).wrapping_add(a)
             }
         };
 
@@ -172,19 +180,19 @@ impl<B: Database> Machine<B> {
             if (a & 1) != U256::ZERO {
                 // (result + b) % m, without overflow
                 // logic is the same as in `addmod`
-                if b >= (m - result) {
-                    result -= m;
+                if b >= m.wrapping_sub(result) {
+                    result = result.wrapping_sub(m);
                 }
-                result += b;
+                result = result.wrapping_add(b);
             }
             a >>= 1;
 
             // (b + b) % m, without overflow
             let mut temp_b = b;
-            if b >= (m - b) {
-                temp_b -= m;
+            if b >= m.wrapping_sub(b) {
+                temp_b = temp_b.wrapping_sub(m);
             }
-            b += temp_b;
+            b = b.wrapping_add(temp_b);
         }
 
         self.stack.push_u256(result)?;
@@ -203,18 +211,18 @@ impl<B: Database> Machine<B> {
         // exponentiation by squaring
         while b > 1 {
             if (b & 1) == 1 {
-                result *= a;
+                result = result.wrapping_mul(a);
             }
 
             b >>= 1;
-            a = a * a;
+            a = a.wrapping_mul(a);
         }
 
         // Deal with the final bit of the exponent separately, since
         // squaring the base afterwards is not necessary and may cause a
         // needless overflow.
         if b == 1 {
-            result *= a;
+            result = result.wrapping_mul(a);
         }
 
         self.stack.push_u256(result)?;
