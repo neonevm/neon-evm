@@ -22,6 +22,7 @@ mod opcode_table;
 mod stack;
 mod precompile;
 mod buffer;
+mod utils;
 
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;

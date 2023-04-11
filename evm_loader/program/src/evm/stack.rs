@@ -19,6 +19,10 @@ impl Stack {
         let (begin, end) = unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
             let begin = crate::allocator::EVM.alloc(layout);
+            if begin.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+
             let end = begin.add(STACK_SIZE - ELEMENT_SIZE);
 
             (begin, end)
