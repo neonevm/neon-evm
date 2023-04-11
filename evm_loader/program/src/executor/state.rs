@@ -252,7 +252,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         }
 
         if self.balance(&source)? < value {
-            return Err(Error::InsufficientBalanceForTransfer(source, value));
+            return Err(Error::InsufficientBalance(source, value));
         }
 
         let transfer = Action::NeonTransfer {
