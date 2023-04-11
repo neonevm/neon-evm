@@ -70,10 +70,7 @@ pub enum Error {
     UnknownPrecompileMethodSelector(Address, [u8; 4]),
 
     #[error("Insufficient balance for transfer, account = {0}, required = {1}")]
-    InsufficientBalanceForTransfer(Address, U256),
-
-    #[error("Insufficient balance for gas payment, account = {0}, required = {1}")]
-    InsufficientBalanceForGas(Address, U256),
+    InsufficientBalance(Address, U256),
 
     #[error("Out of Gas, limit = {0}, required = {1}")]
     OutOfGas(U256, U256),

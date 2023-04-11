@@ -9,7 +9,7 @@ use super::{
     tracing_event
 };
 use crate::{
-    error::{Error, Result, build_revert_message}, 
+    error::{Error, Result},
     types::Address, evm::Buffer,
 };
 
@@ -924,8 +924,6 @@ impl<B: Database> Machine<B> {
             Address::from_create(&self.context.contract, nonce)
         };
 
-        sol_log_data(&[b"ENTER", b"CREATE", created_address.as_bytes()]);
-
         self.opcode_create_impl(created_address, value, offset, length, backend)
     }
 
@@ -945,8 +943,6 @@ impl<B: Database> Machine<B> {
             Address::from_create2(&self.context.contract, &salt, initialization_code)
         };
 
-        sol_log_data(&[b"ENTER", b"CREATE2", created_address.as_bytes()]);
-
         self.opcode_create_impl(created_address, value, offset, length, backend)
     }
 
@@ -958,29 +954,16 @@ impl<B: Database> Machine<B> {
         length: usize,
         backend: &mut B
     ) -> Result<Action> {
-        self.return_data = Buffer::empty();
-
         if backend.nonce(&self.context.contract)? == u64::MAX {
             return Err(Error::NonceOverflow(self.context.contract));
         }
-        
-        if (backend.nonce(&address)? != 0) || (backend.code_size(&address)? != 0) {
-            // return Err(Error::DeployToExistingAccount(address, self.context.contract));
-            self.stack.push_zero()?;
-            return Ok(Action::Continue);
-        }
-
-        if backend.balance(&self.context.contract)? < value {
-            // return Err(Error::InsufficientBalanceForTransfer(self.context.contract, value));
-            self.stack.push_zero()?;
-            return Ok(Action::Continue);
-        }
-
-        backend.increment_nonce(address)?;
-        backend.snapshot()?;
 
         backend.increment_nonce(self.context.contract)?;
-        backend.transfer(self.context.contract, address, value)?;
+
+        self.return_data = Buffer::empty();
+        self.return_range = 0..0;
+
+        let init_code = self.memory.read_buffer(offset, length)?;
 
         let context = Context {
             caller: self.context.contract,
@@ -988,20 +971,27 @@ impl<B: Database> Machine<B> {
             value,
             code_address: None,
         };
-        let init_code = Buffer::new(self.memory.read(offset, length)?);
 
         tracing_event!(super::tracing::Event::BeginVM { 
             context, code: init_code.to_vec()
         });
 
-        self.fork(
-            Reason::Create,
-            context,
-            init_code,
-            Buffer::empty(),
-            None
-        );
-        
+        self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
+        backend.snapshot()?;
+
+        sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
+
+        if (backend.nonce(&address)? != 0) || (backend.code_size(&address)? != 0) {
+            return Err(Error::DeployToExistingAccount(address, self.context.caller));
+        }
+
+        if backend.balance(&self.context.caller)? < value {
+            return Err(Error::InsufficientBalance(self.context.caller, value));
+        }
+
+        backend.increment_nonce(address)?;
+        backend.transfer(self.context.caller, address, value)?;
+
         Ok(Action::Noop)
     }
 
@@ -1012,22 +1002,14 @@ impl<B: Database> Machine<B> {
         let value = self.stack.pop_u256()?;
         let args_offset = self.stack.pop_usize()?;
         let args_length = self.stack.pop_usize()?;
-        // let return_offset = self.stack.pop_usize()?;
-        // let return_length = self.stack.pop_usize()?;
+        let return_offset = self.stack.pop_usize()?;
+        let return_length = self.stack.pop_usize()?;
 
         self.return_data = Buffer::empty();
+        self.return_range = return_offset..(return_offset + return_length);
 
-        if self.is_static && (value != U256::ZERO) {
-            return Err(Error::StaticModeViolation(self.context.contract));
-        }
-
-        if backend.balance(&self.context.contract)? < value {
-            self.stack.discard()?; // return_offset
-            self.stack.discard()?; // return_length
-            self.stack.push_bool(false)?; // fail
-
-            return Ok(Action::Continue);
-        }
+        let call_data = self.memory.read_buffer(args_offset, args_length)?;
+        let code = backend.code(&address)?;
 
         let context = Context {
             caller: self.context.contract,
@@ -1035,35 +1017,28 @@ impl<B: Database> Machine<B> {
             value,
             code_address: Some(address),
         };
-        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
-        if precompile_result != Action::Noop {
-            return Ok(precompile_result)
-        }
-
-        backend.snapshot()?;
-        backend.transfer(self.context.contract, address, value)?;
-
-        let execution_code = backend.code(&address)?;
-
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: code.to_vec()
         });
+
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        backend.snapshot()?;
 
         sol_log_data(&[b"ENTER", b"CALL", address.as_bytes()]);
 
-        self.fork(
-            Reason::Call,
-            context,
-            execution_code,
-            call_data,
-            Some(gas_limit)
-        );
+        if self.is_static && (value != U256::ZERO) {
+            return Err(Error::StaticModeViolation(self.context.caller));
+        }
 
-        Ok(Action::Noop)
+        if backend.balance(&self.context.caller)? < value {
+            return Err(Error::InsufficientBalance(self.context.caller, value));
+        }
+
+        backend.transfer(self.context.caller, self.context.contract, value)?;
+
+        self.opcode_call_precompile_impl(backend, &address)
     }
 
     /// Message-call into this account with an alternative account’s code
@@ -1073,18 +1048,14 @@ impl<B: Database> Machine<B> {
         let value = self.stack.pop_u256()?;
         let args_offset = self.stack.pop_usize()?;
         let args_length = self.stack.pop_usize()?;
-        // let return_offset = self.stack.pop_usize()?;
-        // let return_length = self.stack.pop_usize()?;
+        let return_offset = self.stack.pop_usize()?;
+        let return_length = self.stack.pop_usize()?;
 
         self.return_data = Buffer::empty();
+        self.return_range = return_offset..(return_offset + return_length);
 
-        if backend.balance(&self.context.contract)? < value {
-            self.stack.discard()?; // return_offset
-            self.stack.discard()?; // return_length
-            self.stack.push_bool(false)?; // fail
-
-            return Ok(Action::Continue);
-        }
+        let call_data = self.memory.read_buffer(args_offset, args_length)?;
+        let code = backend.code(&address)?;
 
         let context = Context {
             caller: self.context.contract,
@@ -1092,35 +1063,22 @@ impl<B: Database> Machine<B> {
             value,
             code_address: Some(address),
         };
-        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
-        
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
-        if precompile_result != Action::Noop {
-            return Ok(precompile_result)
-        }
-        
-        backend.snapshot()?;
-        // no need to transfer funds to yourself
 
-        let execution_code = backend.code(&address)?;
-
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: code.to_vec()
         });
+
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        backend.snapshot()?;
 
         sol_log_data(&[b"ENTER", b"CALLCODE", address.as_bytes()]);
 
-        self.fork(
-            Reason::Call,
-            context,
-            execution_code,
-            call_data,
-            Some(gas_limit)
-        );
-        
-        Ok(Action::Noop)
+        if backend.balance(&self.context.caller)? < value {
+            return Err(Error::InsufficientBalance(self.context.caller, value));
+        }
+
+        self.opcode_call_precompile_impl(backend, &address)
     }
 
     /// Homestead hardfork, EIP-7: Message-call into this account with an alternative account’s code, 
@@ -1130,40 +1088,31 @@ impl<B: Database> Machine<B> {
         let address = *self.stack.pop_address()?;
         let args_offset = self.stack.pop_usize()?;
         let args_length = self.stack.pop_usize()?;
-        // let return_offset = self.stack.pop_usize()?;
-        // let return_length = self.stack.pop_usize()?;
+        let return_offset = self.stack.pop_usize()?;
+        let return_length = self.stack.pop_usize()?;
 
         self.return_data = Buffer::empty();
+        self.return_range = return_offset..(return_offset + return_length);
 
-        let context = self.context;
-        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
+        let call_data = self.memory.read_buffer(args_offset, args_length)?;
+        let code = backend.code(&address)?;
 
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
-        if precompile_result != Action::Noop {
-            return Ok(precompile_result)
-        }
+        let context = Context {
+            code_address: Some(address),
+            ..self.context
+        };
 
-        backend.snapshot()?;
-
-        let execution_code = backend.code(&address)?;
-
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: code.to_vec()
         });
+
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        backend.snapshot()?;
 
         sol_log_data(&[b"ENTER", b"DELEGATECALL", address.as_bytes()]);
 
-        self.fork(
-            Reason::Call,
-            context,
-            execution_code,
-            call_data,
-            Some(gas_limit),
-        );
-
-        Ok(Action::Noop)
+        self.opcode_call_precompile_impl(backend, &address)
     }
 
     /// Byzantium hardfork, EIP-214: Static message-call into an account
@@ -1173,10 +1122,14 @@ impl<B: Database> Machine<B> {
         let address = *self.stack.pop_address()?;
         let args_offset = self.stack.pop_usize()?;
         let args_length = self.stack.pop_usize()?;
-        // let return_offset = self.stack.pop_usize()?;
-        // let return_length = self.stack.pop_usize()?;
+        let return_offset = self.stack.pop_usize()?;
+        let return_length = self.stack.pop_usize()?;
 
         self.return_data = Buffer::empty();
+        self.return_range = return_offset..(return_offset + return_length);
+
+        let call_data = self.memory.read_buffer(args_offset, args_length)?;
+        let code = backend.code(&address)?;
 
         let context = Context {
             caller: self.context.contract,
@@ -1184,35 +1137,20 @@ impl<B: Database> Machine<B> {
             value: U256::ZERO,
             code_address: Some(address),
         };
-        let call_data = Buffer::new(self.memory.read(args_offset, args_length)?);
 
-        let precompile_result = self.opcode_call_precompile_impl(
-            backend, &context, &address, &call_data, false
-        )?;
-        if precompile_result != Action::Noop {
-            return Ok(precompile_result)
-        }
+        tracing_event!(super::tracing::Event::BeginVM {
+            context,
+            code: code.to_vec()
+        });
+
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.is_static = true;
 
         backend.snapshot()?;
 
-        let execution_code = backend.code(&address)?;
-
-        tracing_event!(super::tracing::Event::BeginVM { 
-            context, code: execution_code.to_vec()
-        });
-
         sol_log_data(&[b"ENTER", b"STATICCALL", address.as_bytes()]);
 
-        self.fork(
-            Reason::Call,
-            context,
-            execution_code,
-            call_data,
-            Some(gas_limit),
-        );
-        self.is_static = true;
-
-        Ok(Action::Noop)
+        self.opcode_call_precompile_impl(backend, &address)
     }
 
     /// Call precompile contract.
@@ -1220,57 +1158,48 @@ impl<B: Database> Machine<B> {
     fn opcode_call_precompile_impl(
         &mut self,
         backend: &mut B,
-        context: &Context,
         address: &Address,
-        data: &[u8],
-        is_static: bool
     ) -> Result<Action> {
-        let is_static = self.is_static || is_static;
-
-        let mut result = Self::precompile(address, data).map(Ok);
-        if result.is_none() {
-            result = backend.precompile_extension(context, address, data, is_static);
-        }
-
-        let result = result.map(|r| match r {
-            Ok(v) => (v, true),
-            Err(e) => (build_revert_message(&e.to_string()), false)
+        let result = Self::precompile(address, &self.call_data).map(Ok);
+        let result = result.or_else(|| {
+            backend.precompile_extension(&self.context, address, &self.call_data, self.is_static)
         });
 
-        if let Some((result, status)) = result {
-            self.return_data = Buffer::new(&result);
-
-            let return_offset = self.stack.pop_usize()?;
-            let return_length = self.stack.pop_usize()?;
-            
-            self.memory.write_buffer(return_offset, return_length, &self.return_data, 0)?;
-            self.stack.push_bool(status)?;
-
-            Ok(Action::Continue)
-        } else {
-            Ok(Action::Noop)
+        if result.is_none() {
+            return Ok(Action::Noop);
         }
+
+        let result = result.unwrap()?;
+        let return_data = Buffer::new(&result);
+
+        self.opcode_return_impl(return_data, backend)
     }
 
     /// Halt execution returning output data
     pub fn opcode_return(&mut self, backend: &mut B) -> Result<Action> {
-        sol_log_data(&[b"EXIT", b"RETURN"]);
-
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let return_data = Buffer::new(self.memory.read(offset, length)?);
+        let return_data = self.memory.read_buffer(offset, length)?;
 
+        self.opcode_return_impl(return_data, backend)
+    }
+
+    /// Halt execution returning output data
+    pub fn opcode_return_impl(
+        &mut self,
+        mut return_data: Buffer,
+        backend: &mut B,
+    ) -> Result<Action> {
         if self.parent.is_none() {
-            match self.reason {
-                Reason::Call => {
-                    return Ok(Action::Return(return_data.to_vec()))
-                },
-                Reason::Create => {
-                    backend.set_code(self.context.contract, return_data)?;
-                    return Ok(Action::Return(Vec::new()))
-                },
+            if self.reason == Reason::Create {
+                let code = std::mem::take(&mut return_data);
+                backend.set_code(self.context.contract, code)?;
             }
+
+            backend.commit_snapshot()?;
+            sol_log_data(&[b"EXIT", b"RETURN"]);
+            return Ok(Action::Return(return_data.to_vec()));
         }
 
         tracing_event!(super::tracing::Event::EndStep {
@@ -1283,10 +1212,7 @@ impl<B: Database> Machine<B> {
         let returned = self.join();
         match returned.reason {
             Reason::Call => {
-                let return_offset = self.stack.pop_usize()?;
-                let return_length = self.stack.pop_usize()?;
-
-                self.memory.write_buffer(return_offset, return_length, &return_data, 0)?;
+                self.memory.write_range(&self.return_range, &return_data)?;
                 self.stack.push_bool(true)?; // success
 
                 self.return_data = return_data;
@@ -1302,21 +1228,26 @@ impl<B: Database> Machine<B> {
 
         backend.commit_snapshot()?;
 
+        sol_log_data(&[b"EXIT", b"RETURN"]);
         Ok(Action::Continue)
     }
 
     /// Byzantium hardfork, EIP-140: Halt execution reverting state changes but returning data 
     pub fn opcode_revert(&mut self, backend: &mut B) -> Result<Action> {
-        sol_log_data(&[b"EXIT", b"REVERT"]);
-
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let return_data = Buffer::new(self.memory.read(offset, length)?);
+        let return_data = self.memory.read_buffer(offset, length)?;
 
+        self.opcode_revert_impl(return_data, backend)
+    }
+
+    pub fn opcode_revert_impl(&mut self, return_data: Buffer, backend: &mut B) -> Result<Action> {
         backend.revert_snapshot()?;
 
         if self.parent.is_none() {
+            backend.commit_snapshot()?;
+            sol_log_data(&[b"EXIT", b"REVERT"]);
             return Ok(Action::Revert(return_data.to_vec()));
         }
 
@@ -1328,14 +1259,9 @@ impl<B: Database> Machine<B> {
         });
 
         let returned = self.join();
-        self.return_data = return_data;
-
         match returned.reason {
             Reason::Call => {
-                let return_offset = self.stack.pop_usize()?;
-                let return_length = self.stack.pop_usize()?;
-
-                self.memory.write_buffer(return_offset, return_length, &self.return_data, 0)?;
+                self.memory.write_range(&self.return_range, &return_data)?;
                 self.stack.push_bool(false)?; // fail
             },
             Reason::Create => {
@@ -1343,6 +1269,9 @@ impl<B: Database> Machine<B> {
             },
         }
 
+        self.return_data = return_data;
+
+        sol_log_data(&[b"EXIT", b"REVERT"]);
         Ok(Action::Continue)
     }
 
@@ -1353,8 +1282,6 @@ impl<B: Database> Machine<B> {
 
     /// Halt execution, destroys the contract and send all funds to address
     pub fn opcode_selfdestruct(&mut self, backend: &mut B) -> Result<Action> {
-        sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
-
         if self.is_static {
             return Err(Error::StaticModeViolation(self.context.contract));
         }
@@ -1363,10 +1290,10 @@ impl<B: Database> Machine<B> {
 
         let value = backend.balance(&self.context.contract)?;
         backend.transfer(self.context.contract, address, value)?;
-
         backend.selfdestruct(self.context.contract)?;
 
         if self.parent.is_none() {
+            sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
             return Ok(Action::Suicide);
         }
 
@@ -1380,14 +1307,9 @@ impl<B: Database> Machine<B> {
         let returned = self.join();
         match returned.reason {
             Reason::Call => {
-                let return_offset = self.stack.pop_usize()?;
-                let return_length = self.stack.pop_usize()?;
-
-                self.memory.write_buffer(return_offset, return_length, &[], 0)?;
+                self.memory.write_range(&self.return_range, &[])?;
                 self.stack.push_bool(true)?; // success
-
-                self.return_data = Buffer::empty();
-            },
+            }
             Reason::Create => {
                 self.stack.push_zero()?;
             },
@@ -1395,14 +1317,14 @@ impl<B: Database> Machine<B> {
 
         backend.commit_snapshot()?;
 
+        sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
         Ok(Action::Continue)
     }
 
     /// Halts execution of the contract
     pub fn opcode_stop(&mut self, backend: &mut B) -> Result<Action> {
-        sol_log_data(&[b"EXIT", b"STOP"]);
-
         if self.parent.is_none() {
+            sol_log_data(&[b"EXIT", b"STOP"]);
             return Ok(Action::Stop);
         }
 
@@ -1416,13 +1338,8 @@ impl<B: Database> Machine<B> {
         let returned = self.join();
         match returned.reason {
             Reason::Call => {
-                let return_offset = self.stack.pop_usize()?;
-                let return_length = self.stack.pop_usize()?;
-
-                self.memory.write_buffer(return_offset, return_length, &[], 0)?;
+                self.memory.write_range(&self.return_range, &[])?;
                 self.stack.push_bool(true)?; // success
-
-                self.return_data = Buffer::empty();
             }
             Reason::Create => {
                 self.stack.push_zero()?;
@@ -1431,6 +1348,7 @@ impl<B: Database> Machine<B> {
 
         backend.commit_snapshot()?;
 
+        sol_log_data(&[b"EXIT", b"STOP"]);
         Ok(Action::Continue)
     }
 }

@@ -1,10 +1,11 @@
 use std::{
     alloc::{Layout, GlobalAlloc},
+    ops::Range
 };
 use solana_program::program_memory::{sol_memset, sol_memcpy};
 
 use crate::error::Error;
-use super::tracing_event;
+use super::{tracing_event, Buffer};
 
 const MAX_MEMORY_SIZE: usize = 64 * 1024;
 const MEMORY_ALIGN: usize = 32;
@@ -203,6 +204,17 @@ impl Memory {
         }
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn write_range(&mut self, range: &Range<usize>, source: &[u8]) -> Result<(), Error> {
+        self.write_buffer(range.start, range.len(), source, 0)
+    }
+
+    #[inline]
+    pub fn read_buffer(&mut self, offset: usize, length: usize) -> Result<Buffer, Error> {
+        let slice = self.read(offset, length)?;
+        Ok(Buffer::new(slice))
     }
 }
 
