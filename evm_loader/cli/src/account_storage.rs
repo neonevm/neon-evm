@@ -21,7 +21,7 @@ use evm_loader::{
     config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
     executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, ether_storage::EthereumStorageAddress},
-    account_storage::{AccountStorage}, evm::is_precompile_address,
+    account_storage::{AccountStorage},
     types::Address,
     gasometer::LAMPORTS_PER_SIGNATURE
 };
@@ -167,10 +167,6 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 
     fn add_ethereum_account(&self, address: &Address, writable: bool) -> bool {
-        if is_precompile_address(address) {
-            return true;
-        }
-
         let mut accounts = self.accounts.borrow_mut();
 
         if let Some(ref mut account) = accounts.get_mut(address) {
