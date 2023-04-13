@@ -6,7 +6,6 @@ use crate::{
 };
 use clap::ArgMatches;
 use hex::FromHex;
-use log::error;
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::normalize_to_url_if_moniker,
@@ -18,7 +17,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::{fmt, fmt::Debug, process::exit, str::FromStr};
+use std::{fmt, fmt::Debug, str::FromStr};
 
 pub struct Config {
     pub rpc_client: Box<dyn rpc::Rpc>,
@@ -39,19 +38,18 @@ impl Debug for Config {
 }
 
 /// # Panics
-pub fn create(options: &ArgMatches) -> Config {
+/// # Errors
+/// `EvmLoaderNotSpecified` - if `evm_loader` is not specified
+/// `KeypairNotSpecified` - if `signer` is not specified
+pub fn create(options: &ArgMatches) -> Result<Config, NeonCliError> {
     let cli_config = options
         .value_of("config_file")
         .map_or_else(solana_cli_config::Config::default, |config_file| {
             solana_cli_config::Config::load(config_file).unwrap_or_default()
         });
 
-    let commitment = CommitmentConfig::from_str(
-        options
-            .value_of("commitment")
-            .expect("commitment parse error"),
-    )
-    .expect("CommitmentConfig ctor error");
+    let commitment =
+        CommitmentConfig::from_str(options.value_of("commitment").unwrap_or("confirmed")).unwrap();
 
     let json_rpc_url = normalize_to_url_if_moniker(
         options
@@ -62,9 +60,7 @@ pub fn create(options: &ArgMatches) -> Config {
     let evm_loader = if let Some(value) = pubkey_of(options, "evm_loader") {
         value
     } else {
-        let e = NeonCliError::EvmLoaderNotSpecified;
-        error!("{}", e);
-        exit(e.error_code());
+        return Err(NeonCliError::EvmLoaderNotSpecified);
     };
 
     let mut wallet_manager = None;
@@ -77,11 +73,7 @@ pub fn create(options: &ArgMatches) -> Config {
         "keypair",
         &mut wallet_manager,
     )
-    .unwrap_or_else(|_| {
-        let e = NeonCliError::KeypairNotSpecified;
-        error!("{}", e);
-        exit(e.error_code());
-    });
+    .map_err(|_| NeonCliError::KeypairNotSpecified)?;
 
     let fee_payer = keypair_from_path(
         options,
@@ -122,11 +114,11 @@ pub fn create(options: &ArgMatches) -> Config {
         }
     };
 
-    Config {
+    Ok(Config {
         rpc_client,
         evm_loader,
         signer,
         fee_payer,
         commitment,
-    }
+    })
 }

@@ -68,7 +68,7 @@ pub enum NeonCliError {
 
     /// Environment Error
     #[error("Environment error {0:?}")]
-    EnvironmentError(EnvironmentError),
+    EnvironmentError(#[from] EnvironmentError),
 
     /// Environment incomplete and should be corrected (some item missed or can be fixed)
     #[error("Incomplete environment")]
@@ -77,6 +77,9 @@ pub enum NeonCliError {
     /// Environment in wrong state (some item in wrong state)
     #[error("Wrong environment")]
     WrongEnvironment,
+
+    #[error("Panic: {0}")]
+    Panic(String),
 }
 
 impl NeonCliError {
@@ -85,29 +88,24 @@ impl NeonCliError {
             NeonCliError::IncompleteEnvironment => 50,
             NeonCliError::WrongEnvironment => 51,
             NeonCliError::EnvironmentError(_) => 52,
-            NeonCliError::StdIoError(_) => 102,     // => 1002,
-            NeonCliError::ProgramError(_) => 111,   // => 1011,
-            NeonCliError::SignerError(_) => 112,    // => 1012,
-            NeonCliError::ClientError(_) => 113,    // => 1013,
-            NeonCliError::CliError(_) => 114,       // => 1014,
-            NeonCliError::TpuSenderError(_) => 115, // => 1015,
+            NeonCliError::Panic(_) => 101,
+            NeonCliError::StdIoError(_) => 102,
+            NeonCliError::ProgramError(_) => 111,
+            NeonCliError::SignerError(_) => 112,
+            NeonCliError::ClientError(_) => 113,
+            NeonCliError::CliError(_) => 114,
+            NeonCliError::TpuSenderError(_) => 115,
             NeonCliError::PubkeyError(_) => 116,
             NeonCliError::EvmError(_) => 117,
-            NeonCliError::EvmLoaderNotSpecified => 201, // => 4001,
-            NeonCliError::KeypairNotSpecified => 202,   // => 4002,
+            NeonCliError::EvmLoaderNotSpecified => 201,
+            NeonCliError::KeypairNotSpecified => 202,
             NeonCliError::IncorrectProgram(_) => 203,
-            NeonCliError::AccountNotFound(_) => 205, // => 4005,
-            NeonCliError::AccountIsNotBpf(_) => 226, // => 4026,
-            NeonCliError::AccountIsNotUpgradeable(_) => 227, // => 4027,
-            NeonCliError::AssociatedPdaNotFound(_, _) => 241, // => 4041,
-            NeonCliError::InvalidAssociatedPda(_, _) => 242, // => 4042,
+            NeonCliError::AccountNotFound(_) => 205,
+            NeonCliError::AccountIsNotBpf(_) => 226,
+            NeonCliError::AccountIsNotUpgradeable(_) => 227,
+            NeonCliError::AssociatedPdaNotFound(_, _) => 241,
+            NeonCliError::InvalidAssociatedPda(_, _) => 242,
             NeonCliError::TooManySteps => 245,
         }
-    }
-}
-
-impl From<EnvironmentError> for NeonCliError {
-    fn from(e: EnvironmentError) -> NeonCliError {
-        NeonCliError::EnvironmentError(e)
     }
 }

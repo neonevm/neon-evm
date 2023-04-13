@@ -10,7 +10,6 @@ use evm_loader::{
     },
     account_storage::AccountStorage,
     config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
-    evm::is_precompile_address,
     executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
     gasometer::LAMPORTS_PER_SIGNATURE,
     types::Address,
@@ -188,10 +187,6 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 
     fn add_ethereum_account(&self, address: &Address, writable: bool) -> bool {
-        if is_precompile_address(address) {
-            return true;
-        }
-
         let mut accounts = self.accounts.borrow_mut();
 
         if let Some(ref mut account) = accounts.get_mut(address) {
