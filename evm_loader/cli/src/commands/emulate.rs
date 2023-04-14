@@ -26,12 +26,13 @@ pub fn execute(
     chain: u64,
     steps: u64,
     accounts: &[Address],
+    solana_accounts: &[Pubkey],
 ) -> NeonCliResult {
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
     let storage = EmulatorAccountStorage::new(config, token, chain);
-    storage.initialize_cached_accounts(accounts);
+    storage.initialize_cached_accounts(accounts, solana_accounts);
 
     let trx = Transaction {
         nonce: storage.nonce(&tx_params.from),

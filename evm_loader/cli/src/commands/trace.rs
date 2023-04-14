@@ -14,11 +14,12 @@ pub fn execute(
     chain: u64,
     steps: u64,
     accounts: &[Address],
+    solana_accounts: &[Pubkey],
 ) -> NeonCliResult {
     let mut tracer = Tracer::new();
 
     evm_loader::evm::tracing::using(&mut tracer, || {
-        emulate::execute(config, tx, token, chain, steps, accounts)
+        emulate::execute(config, tx, token, chain, steps, accounts, solana_accounts)
     })?;
 
     let (vm_trace, full_trace_data) = tracer.into_traces();
