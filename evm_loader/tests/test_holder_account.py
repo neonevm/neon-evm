@@ -134,8 +134,7 @@ def test_write_to_finalized_holder(rw_lock_contract, session_user, evm_loader, o
         "Account data is not correct"
 
 
-# https://neonlabs.atlassian.net/browse/NDEV-1514 : TODO add overflow_offset = int(0x20000 - 65) after fixing
-@pytest.mark.parametrize("overflow_offset", [int(0xFFFFFFFFFFFFFFFF - 64)])
+@pytest.mark.parametrize("overflow_offset", [int(0xFFFFFFFFFFFFFFFF - 64), int(0xFFFFFFFFFFFFFFFF - 65)])
 def test_holder_write_overflow(operator_keypair, treasury_pool, evm_loader,
                                sender_with_tokens, session_user, holder_acc, overflow_offset):
     trx = Transaction()
