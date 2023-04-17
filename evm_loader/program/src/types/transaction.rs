@@ -13,8 +13,8 @@ pub struct Transaction {
     pub value: U256,
     pub call_data: crate::evm::Buffer,
     pub v: U256,
-    pub r: [u8; 32],
-    pub s: [u8; 32],
+    pub r: U256,
+    pub s: U256,
     pub chain_id: Option<U256>,
     pub recovery_id: u8,
     pub rlp_len: usize,
@@ -31,7 +31,7 @@ impl Transaction {
         use solana_program::keccak::{hash, Hash};
         use solana_program::secp256k1_recover::secp256k1_recover;
 
-        let signature = [self.r, self.s].concat();
+        let signature = [self.r.to_be_bytes(), self.s.to_be_bytes()].concat();
         let public_key = secp256k1_recover(&self.signed_hash, self.recovery_id, &signature)?;
     
         let Hash(address) = hash(&public_key.to_bytes());
@@ -43,23 +43,17 @@ impl Transaction {
 
 impl rlp::Decodable for Transaction {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
-        #[inline]
-        fn u256(rlp: &rlp::Rlp) -> Result<U256, rlp::DecoderError> {
-            rlp.decoder().decode_value(|bytes| {
-                if !bytes.is_empty() && bytes[0] == 0 {
-                    Err(rlp::DecoderError::RlpInvalidIndirection)
-                } else if bytes.len() <= 32 {
-                    let mut buffer = [0_u8; 32];
-                    buffer[(32 - bytes.len())..].copy_from_slice(bytes);
-                    Ok(U256::from_be_bytes(buffer))
-                } else {
-                    Err(rlp::DecoderError::RlpIsTooBig)
-                }
-            })
+        if !rlp.is_list() {
+            return Err(rlp::DecoderError::RlpExpectedToBeList);
         }
 
-        let info = rlp.payload_info()?;
-        let payload_size = info.header_len + info.value_len;
+        let rlp_len = {
+            let info = rlp.payload_info()?;
+            info.header_len + info.value_len
+        };
+
+        // Discard trailing data
+        let rlp = rlp::Rlp::new(&rlp.as_raw()[..rlp_len]);
 
         let nonce: u64 = rlp.val_at(0)?;
         let gas_price: U256 = u256(&rlp.at(1)?)?;
@@ -79,16 +73,12 @@ impl rlp::Decodable for Transaction {
         let value: U256 = u256(&rlp.at(4)?)?;
         let call_data = crate::evm::Buffer::new(rlp.at(5)?.data()?);
         let v: U256 = u256(&rlp.at(6)?)?;
+        let r: U256 = u256(&rlp.at(7)?)?;
+        let s: U256 = u256(&rlp.at(8)?)?;
 
-        let mut r: [u8; 32] = [0_u8; 32];
-        let r_src: &[u8] = rlp.at(7)?.data()?;
-        let r_pos: usize = r.len() - r_src.len();
-        r[r_pos..].copy_from_slice(r_src);
-
-        let mut s: [u8; 32] = [0_u8; 32];
-        let s_src: &[u8] = rlp.at(8)?.data()?;
-        let s_pos: usize = s.len() - s_src.len();
-        s[s_pos..].copy_from_slice(s_src);
+        if rlp.at(9).is_ok() {
+            return Err(rlp::DecoderError::RlpIncorrectListLen);
+        }
 
         let (chain_id, recovery_id) = if v >= 35 {
             let chain_id = (v - 1) / 2 - 17;
@@ -102,13 +92,12 @@ impl rlp::Decodable for Transaction {
             return Err(rlp::DecoderError::RlpExpectedToBeData)
         };
 
-        let raw = rlp.as_raw();
-        let hash = solana_program::keccak::hash(&raw[..payload_size]).to_bytes();
-        let signed_hash = signed_hash(rlp, chain_id)?;
+        let hash = solana_program::keccak::hash(rlp.as_raw()).to_bytes();
+        let signed_hash = signed_hash(&rlp, chain_id)?;
 
         let tx = Self {
             nonce, gas_price, gas_limit, target, value, call_data, v, r, s,
-            chain_id, recovery_id, rlp_len: payload_size, hash, signed_hash
+            chain_id, recovery_id, rlp_len, hash, signed_hash
         };
 
         Ok(tx)
@@ -181,4 +170,19 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
     ).to_bytes();
 
     Ok(hash)
+}
+
+#[inline]
+fn u256(rlp: &rlp::Rlp) -> Result<U256, rlp::DecoderError> {
+    rlp.decoder().decode_value(|bytes| {
+        if !bytes.is_empty() && bytes[0] == 0 {
+            Err(rlp::DecoderError::RlpInvalidIndirection)
+        } else if bytes.len() <= 32 {
+            let mut buffer = [0_u8; 32];
+            buffer[(32 - bytes.len())..].copy_from_slice(bytes);
+            Ok(U256::from_be_bytes(buffer))
+        } else {
+            Err(rlp::DecoderError::RlpIsTooBig)
+        }
+    })
 }
