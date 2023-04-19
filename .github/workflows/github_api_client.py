@@ -13,7 +13,7 @@ class GithubClient():
         response = requests.get(
             f"{self.PROXY_ENDPOINT}/actions/workflows/pipeline.yml/runs?branch={proxy_branch}", headers=self.headers)
         if response.status_code != 200:
-            raise f"Can't get proxy runs list. Error: {response.json()}"
+            raise RuntimeError(f"Can't get proxy runs list. Error: {response.json()}")
         runs = [item['id'] for item in response.json()['workflow_runs']]
         return runs
 
@@ -33,7 +33,7 @@ class GithubClient():
         click.echo(f"Sent data: {data}")
         click.echo(f"Status code: {response.status_code}")
         if response.status_code != 204:
-            raise "proxy-model.py action is not triggered"
+            raise RuntimeError("proxy-model.py action is not triggered")
 
     def get_proxy_branches(self):
         proxy_branches_obj = requests.get(
