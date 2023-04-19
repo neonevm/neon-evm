@@ -197,22 +197,62 @@ macro_rules! E {
 }
 
 #[must_use]
-pub fn format_revert_message(msg: &[u8]) -> &str {
+fn format_revert_error(msg: &[u8]) -> Option<&str> {
     if msg.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
         // Error(string) function selector
         let msg = &msg[4..];
+        if msg.len() < 64 {
+            return None;
+        }
 
         let offset = U256::from_be_bytes(*arrayref::array_ref![msg, 0, 32]);
-        let length = U256::from_be_bytes(*arrayref::array_ref![msg, offset.as_usize(), 32]);
+        if offset != 32 {
+            return None;
+        }
 
-        let begin = offset.as_usize() + 32/* length */;
-        let end = begin + length.as_usize();
-        let reason = &msg[begin..end];
+        let length = U256::from_be_bytes(*arrayref::array_ref![msg, 32, 32]);
+        let length: usize = length.try_into().ok()?;
 
-        std::str::from_utf8(reason).unwrap_or("<invalid revert mesage format>")
+        let begin = 64_usize;
+        let end = begin.checked_add(length)?;
+
+        let reason = msg.get(begin..end)?;
+        std::str::from_utf8(reason).ok()
     } else {
-        "<revert object>"
+        None
     }
+}
+
+#[must_use]
+fn format_revert_panic(msg: &[u8]) -> Option<U256> {
+    if msg.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
+        // Panic(uint256) function selector
+        let msg = &msg[4..];
+        if msg.len() != 32 {
+            return None;
+        }
+
+        let value = arrayref::array_ref![msg, 0, 32];
+        Some(U256::from_be_bytes(*value))
+    } else {
+        None
+    }
+}
+
+pub fn print_revert_message(msg: &[u8]) {
+    if msg.is_empty() {
+        return solana_program::msg!("Revert");
+    }
+
+    if let Some(reason) = format_revert_error(msg) {
+        return solana_program::msg!("Revert: Error(\"{}\")", reason);
+    }
+
+    if let Some(reason) = format_revert_panic(msg) {
+        return solana_program::msg!("Revert: Panic({:#x})", reason);
+    }
+
+    solana_program::msg!("Revert: {}", hex::encode(msg));
 }
 
 #[must_use]

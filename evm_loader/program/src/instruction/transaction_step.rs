@@ -4,7 +4,7 @@ use solana_program::account_info::AccountInfo;
 use crate::account::{program, EthereumAccount, Operator, State, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
 use crate::config::{EVM_STEPS_LAST_ITERATION_MAX, EVM_STEPS_MIN, PAYMENT_TO_TREASURE};
-use crate::error::{format_revert_message, Error, Result};
+use crate::error::{Error, Result};
 use crate::evm::{ExitStatus, Machine};
 use crate::executor::{Action, ExecutorState};
 use crate::gasometer::Gasometer;
@@ -199,7 +199,7 @@ pub fn log_return_value(status: &ExitStatus) {
 
     solana_program::msg!("exit_status={:#04X}", code); // Tests compatibility
     if let ExitStatus::Revert(msg) = status {
-        solana_program::msg!("Revert: {}", format_revert_message(msg));
+        crate::error::print_revert_message(msg);
     }
 
     sol_log_data(&[b"RETURN", &[code]]);
