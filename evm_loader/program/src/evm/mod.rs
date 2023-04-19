@@ -220,7 +220,7 @@ impl<B: Database> Machine<B> {
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(),
-            memory: Memory::with_capacity(trx.call_data.len()),
+            memory: Memory::new(),
             pc: 0_usize,
             is_static: false,
             reason: Reason::Create,

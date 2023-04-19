@@ -10,7 +10,8 @@ use super::utils::checked_next_multiple_of_32;
 
 
 const MAX_MEMORY_SIZE: usize = 64 * 1024;
-const MEMORY_ALIGN: usize = 32;
+const MEMORY_CAPACITY: usize = 1024;
+const MEMORY_ALIGN: usize = 1;
 
 static_assertions::const_assert!(MEMORY_ALIGN.is_power_of_two());
 
@@ -22,9 +23,7 @@ pub struct Memory {
 
 impl Memory {
     pub fn new() -> Self {
-        const DEFAULT_CAPACITY: usize = 1024; 
-
-        Self::with_capacity(DEFAULT_CAPACITY)
+        Self::with_capacity(MEMORY_CAPACITY)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
@@ -40,7 +39,7 @@ impl Memory {
     }
 
     pub fn from_buffer(v: &[u8]) -> Self {
-        let capacity = v.len().next_power_of_two();
+        let capacity = v.len().next_power_of_two().max(MEMORY_CAPACITY);
 
         unsafe {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
@@ -84,17 +83,18 @@ impl Memory {
 
         unsafe {
             let old_layout = Layout::from_size_align_unchecked(self.capacity, MEMORY_ALIGN);
-            self.data = crate::allocator::EVM.realloc(self.data, old_layout, new_capacity);
-            if self.data.is_null() {
+            let new_data = crate::allocator::EVM.realloc(self.data, old_layout, new_capacity);
+            if new_data.is_null() {
                 let layout = Layout::from_size_align_unchecked(new_capacity, MEMORY_ALIGN);
                 std::alloc::handle_alloc_error(layout);
             }
 
-            let slice = core::slice::from_raw_parts_mut(self.data, new_capacity);
+            let slice = core::slice::from_raw_parts_mut(new_data, new_capacity);
             sol_memset(&mut slice[self.capacity..], 0, new_capacity - self.capacity);
-        }
 
-        self.capacity = new_capacity;
+            self.data = new_data;
+            self.capacity = new_capacity;
+        }
 
         Ok(())
     }
