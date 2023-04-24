@@ -1,5 +1,6 @@
 use crate::types::Address;
 use crate::evm::{database::Database, Machine};
+use crate::error::{Error, Result};
 
 mod ecrecover;
 mod sha256;
@@ -41,17 +42,17 @@ pub fn is_precompile_address(address: &Address) -> bool {
 
 impl<B: Database> Machine<B> {
     #[must_use]
-    pub fn precompile(address: &Address, data: &[u8]) -> Option<Vec<u8>> {
+    pub fn precompile(address: &Address, data: &[u8]) -> Option<Result<Vec<u8>>> {
         match *address {
-            SYSTEM_ACCOUNT_ECRECOVER => Some(ecrecover::ecrecover(data)),
-            SYSTEM_ACCOUNT_SHA_256 => Some(sha256::sha256(data)),
-            SYSTEM_ACCOUNT_RIPEMD160 => Some(ripemd160::ripemd160(data)),
-            SYSTEM_ACCOUNT_DATACOPY => Some(datacopy::datacopy(data)),
-            SYSTEM_ACCOUNT_BIGMODEXP => Some(big_mod_exp::big_mod_exp(data)),
-            SYSTEM_ACCOUNT_BN256_ADD => Some(bn256::bn256_add(data)),
-            SYSTEM_ACCOUNT_BN256_SCALAR_MUL => Some(bn256::bn256_scalar_mul(data)),
-            SYSTEM_ACCOUNT_BN256_PAIRING => Some(bn256::bn256_pairing(data)),
-            SYSTEM_ACCOUNT_BLAKE2F => Some(blake2_f::blake2_f(data)),
+            SYSTEM_ACCOUNT_ECRECOVER => Some(Ok(ecrecover::ecrecover(data))),
+            SYSTEM_ACCOUNT_SHA_256 => Some(Ok(sha256::sha256(data))),
+            SYSTEM_ACCOUNT_RIPEMD160 => Some(Ok(ripemd160::ripemd160(data))),
+            SYSTEM_ACCOUNT_DATACOPY => Some(Ok(datacopy::datacopy(data))),
+            SYSTEM_ACCOUNT_BIGMODEXP 
+            | SYSTEM_ACCOUNT_BN256_ADD 
+            | SYSTEM_ACCOUNT_BN256_SCALAR_MUL 
+            | SYSTEM_ACCOUNT_BN256_PAIRING => Some(Err(Error::UnimplementedPrecompile(*address))),
+            SYSTEM_ACCOUNT_BLAKE2F => Some(Ok(blake2_f::blake2_f(data))),
             _ => None,
         }
     } 

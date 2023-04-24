@@ -1160,7 +1160,7 @@ impl<B: Database> Machine<B> {
         backend: &mut B,
         address: &Address,
     ) -> Result<Action> {
-        let result = Self::precompile(address, &self.call_data).map(Ok);
+        let result = Self::precompile(address, &self.call_data);
         let result = result.or_else(|| {
             backend.precompile_extension(&self.context, address, &self.call_data, self.is_static)
         });
