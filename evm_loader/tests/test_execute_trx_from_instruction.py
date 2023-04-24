@@ -13,11 +13,10 @@ from spl.token.instructions import get_associated_token_address
 
 from .solana_utils import execute_trx_from_instruction, solana_client, get_neon_balance, neon_cli
 from .utils.assert_messages import InstructionAsserts
-from .utils.constants import NEON_TOKEN_MINT_ID, TAG_FINALIZED_STATE
-from .utils.contract import make_deployment_transaction, deploy_contract, make_contract_call_trx
-from .utils.ethereum import make_eth_transaction, create_contract_address
-from .utils.layouts import FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
-from .utils.transaction_checks import check_transaction_logs_have_text, check_holder_account_tag
+from .utils.constants import NEON_TOKEN_MINT_ID
+from .utils.contract import deploy_contract, make_contract_call_trx
+from .utils.ethereum import make_eth_transaction
+from .utils.transaction_checks import check_transaction_logs_have_text
 from .utils.types import Caller
 
 

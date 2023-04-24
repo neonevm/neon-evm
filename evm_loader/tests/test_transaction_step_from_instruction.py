@@ -5,12 +5,16 @@ import time
 
 import eth_abi
 import pytest
+import rlp
 import solana
+from eth_account.datastructures import SignedTransaction
 from eth_keys import keys as eth_keys
 from eth_utils import abi, to_text, to_int
+from hexbytes import HexBytes
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
+from solana.rpc.core import RPCException
 
 from .solana_utils import get_neon_balance, solana_client, execute_transaction_steps_from_instruction, neon_cli, \
     create_treasury_pool_address, send_transaction_step_from_instruction
@@ -461,3 +465,51 @@ class TestStepFromInstructionChangingOperatorsDuringTrxRun:
                                                       [user_account.solana_account_address,
                                                        rw_lock_contract.solana_address], 1, second_operator_keypair)
         check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+
+
+class TestStepFromInstructionWithChangedRLPTrx:
+    def test_add_waste_to_trx(self, sender_with_tokens, operator_keypair, treasury_pool, evm_loader, holder_acc,
+                              string_setter_contract):
+        text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
+        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
+        decoded_tx = rlp.decode(signed_tx.rawTransaction)
+        decoded_tx.insert(6, HexBytes(b'\x19p\x16l\xc0'))
+        new_trx = HexBytes(rlp.encode(decoded_tx))
+
+        signed_tx_new = SignedTransaction(
+            rawTransaction=new_trx,
+            hash=signed_tx.hash,
+            r=signed_tx.r,
+            s=signed_tx.s,
+            v=signed_tx.v,
+        )
+        with pytest.raises(RPCException, match="Program log: RLP error: RlpIncorrectListLen"):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx_new, [sender_with_tokens.solana_account_address,
+                                                                       string_setter_contract.solana_address])
+
+    def test_add_waste_to_trx_without_decoding(self, sender_with_tokens, operator_keypair, treasury_pool, evm_loader,
+                                               holder_acc,
+                                               string_setter_contract):
+        text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
+        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
+        signed_tx_new = SignedTransaction(
+            rawTransaction=signed_tx.rawTransaction + HexBytes(b'\x19p\x16l\xc0'),
+            hash=signed_tx.hash,
+            r=signed_tx.r,
+            s=signed_tx.s,
+            v=signed_tx.v,
+        )
+        resp = execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                          signed_tx_new, [sender_with_tokens.solana_account_address,
+                                                                          string_setter_contract.solana_address])
+
+        receipt = solana_client.get_transaction(resp.value)
+        check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
+        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, str(signed_tx.hash))
+        trx_accounts = [str(item) for item in receipt.value.transaction.transaction.message.account_keys]
+        assert str(sender_with_tokens.solana_account_address) in trx_accounts
+        assert text in to_text(
+            neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
+                                                  "get()"))

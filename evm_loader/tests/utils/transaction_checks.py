@@ -11,7 +11,10 @@ def check_transaction_logs_have_text(trx_hash, text):
     logs = ""
     for log in receipt.value.transaction.meta.log_messages:
         if "Program data:" in log:
-            logs += "Program data: " + str(base64.b64decode(log.replace("Program data: ", "")))
+            logs += "Program data: "
+            encoded_part = log.replace("Program data: ", "")
+            for item in encoded_part.split(" "):
+                logs += " " + str(base64.b64decode(item))
         else:
             logs += log
         logs += " "
