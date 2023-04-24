@@ -23,6 +23,10 @@ pub struct Data {
     pub slot: u64,
     /// Stored accounts length
     pub accounts_len: usize,
+    /// Stored EVM State length
+    pub evm_state_len: usize,
+    /// Stored EVM Machine length
+    pub evm_machine_len: usize,
 }
 
 /// Storage account data for the finalized transaction state
@@ -36,15 +40,26 @@ impl Packable for Data {
     /// Storage struct tag
     const TAG: u8 = super::TAG_STATE;
     /// Storage struct serialized size
-    const SIZE: usize = 32 + 32 + 20 + 32 + 32 + 32 + 32 + 8 + 8;
+    const SIZE: usize = 32 + 32 + 20 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
     fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Data::SIZE];
-        let (owner, hash, caller, gas_limit, gas_price, gas_used, operator, slot, accounts_len) =
-            array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
+        let (
+            owner,
+            hash,
+            caller,
+            gas_limit,
+            gas_price,
+            gas_used,
+            operator,
+            slot,
+            accounts_len,
+            evm_state_len,
+            evm_machine_len,
+        ) = array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8, 8, 8];
 
         Self {
             owner: Pubkey::new_from_array(*owner),
@@ -56,6 +71,8 @@ impl Packable for Data {
             operator: Pubkey::new_from_array(*operator),
             slot: u64::from_le_bytes(*slot),
             accounts_len: usize::from_le_bytes(*accounts_len),
+            evm_state_len: usize::from_le_bytes(*evm_state_len),
+            evm_machine_len: usize::from_le_bytes(*evm_machine_len),
         }
     }
 
@@ -63,8 +80,19 @@ impl Packable for Data {
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
-        let (owner, hash, caller, gas_limit, gas_price, gas_used, operator, slot, accounts_len) =
-            mut_array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
+        let (
+            owner,
+            hash,
+            caller,
+            gas_limit,
+            gas_price,
+            gas_used,
+            operator,
+            slot,
+            accounts_len,
+            evm_state_len,
+            evm_machine_len,
+        ) = mut_array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8, 8, 8];
 
         owner.copy_from_slice(self.owner.as_ref());
         hash.copy_from_slice(&self.transaction_hash);
@@ -75,6 +103,8 @@ impl Packable for Data {
         operator.copy_from_slice(self.operator.as_ref());
         *slot = self.slot.to_le_bytes();
         *accounts_len = self.accounts_len.to_le_bytes();
+        *evm_state_len = self.evm_state_len.to_le_bytes();
+        *evm_machine_len = self.evm_machine_len.to_le_bytes();
     }
 }
 

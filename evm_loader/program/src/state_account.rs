@@ -73,6 +73,8 @@ impl<'a> State<'a> {
             operator: *accounts.operator.key,
             slot: Clock::get()?.slot,
             accounts_len: accounts.remaining_accounts.len(),
+            evm_state_len: 0,
+            evm_machine_len: 0,
         };
 
         info.data.borrow_mut()[0] = 0_u8;
@@ -243,7 +245,7 @@ impl<'a> State<'a> {
     }
 
     #[must_use]
-    pub fn evm_state_data(&self) -> Ref<[u8]> {
+    pub fn evm_data(&self) -> Ref<[u8]> {
         let (_, accounts_region_end) = self.blocked_accounts_region();
 
         let data = self.info.data.borrow();
@@ -251,7 +253,7 @@ impl<'a> State<'a> {
     }
 
     #[must_use]
-    pub fn evm_state_mut_data(&mut self) -> RefMut<[u8]> {
+    pub fn evm_data_mut(&mut self) -> RefMut<[u8]> {
         let (_, accounts_region_end) = self.blocked_accounts_region();
 
         let data = self.info.data.borrow_mut();

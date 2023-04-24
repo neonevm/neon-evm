@@ -1,14 +1,11 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use bincode::Options;
 use ethnum::U256;
-use serde::de::DeserializeSeed;
-use serde::Serialize;
 use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
 
-use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::account_storage::AccountStorage;
 use crate::error::{Error, Result};
 use crate::evm::database::Database;
 use crate::evm::{Context, ExitStatus};
@@ -29,6 +26,26 @@ pub struct ExecutorState<'a, B: AccountStorage> {
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
+    pub fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize> {
+        let mut cursor = std::io::Cursor::new(buffer);
+
+        let value = (&self.cache, &self.actions, &self.stack, &self.exit_status);
+        bincode::serialize_into(&mut cursor, &value)?;
+
+        cursor.position().try_into().map_err(Error::from)
+    }
+
+    pub fn deserialize_from(buffer: &[u8], backend: &'a B) -> Result<Self> {
+        let (cache, actions, stack, exit_status) = bincode::deserialize(buffer)?;
+        Ok(Self {
+            backend,
+            cache,
+            actions,
+            stack,
+            exit_status,
+        })
+    }
+
     #[must_use]
     pub fn new(backend: &'a B) -> Self {
         let cache = Cache {
@@ -407,97 +424,5 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         is_static: bool,
     ) -> Option<Result<Vec<u8>>> {
         self.call_precompile_extension(context, address, data, is_static)
-    }
-}
-
-impl<'a> Serialize for ExecutorState<'_, ProgramAccountStorage<'a>> {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeSeq;
-
-        let mut seq = serializer.serialize_seq(Some(4))?;
-        seq.serialize_element(&self.cache)?;
-        seq.serialize_element(&self.actions)?;
-        seq.serialize_element(&self.stack)?;
-        seq.serialize_element(&self.exit_status)?;
-
-        seq.end()
-    }
-}
-
-impl<'de, 'a> DeserializeSeed<'de> for &'de ProgramAccountStorage<'a> {
-    type Value = ExecutorState<'de, ProgramAccountStorage<'a>>;
-
-    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct SeqVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for SeqVisitor {
-            type Value = (RefCell<Cache>, Vec<Action>, Vec<usize>, Option<ExitStatus>);
-
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("Iterative Executor State")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let cache = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-                let actions = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                let stack = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
-                let exit_status = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
-
-                Ok((cache, actions, stack, exit_status))
-            }
-        }
-
-        let (cache, actions, stack, exit_status) = deserializer.deserialize_seq(SeqVisitor)?;
-
-        Ok(ExecutorState {
-            backend: self,
-            cache,
-            actions,
-            stack,
-            exit_status,
-        })
-    }
-}
-
-impl<'de, 'a> ExecutorState<'de, ProgramAccountStorage<'a>> {
-    pub fn serialize_into<W>(&self, writer: &mut W) -> Result<()>
-    where
-        W: std::io::Write,
-    {
-        let bincode = bincode::DefaultOptions::new()
-            .with_fixint_encoding()
-            .allow_trailing_bytes();
-
-        bincode.serialize_into(writer, &self).map_err(Error::from)
-    }
-
-    pub fn deserialize_from(
-        buffer: &mut &[u8],
-        backend: &'de ProgramAccountStorage<'a>,
-    ) -> Result<Self> {
-        let bincode = bincode::DefaultOptions::new()
-            .with_fixint_encoding()
-            .allow_trailing_bytes();
-
-        bincode
-            .deserialize_from_seed(backend, buffer)
-            .map_err(Error::from)
     }
 }
