@@ -180,7 +180,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         for action in &self.actions {
             if let Action::EvmIncrementNonce { address } = action {
                 if from_address == address {
-                    nonce += 1;
+                    nonce = nonce.checked_add(1).ok_or(Error::IntegerOverflow)?;
                 }
             }
         }
@@ -202,16 +202,16 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             match action {
                 Action::NeonTransfer { source, target, value } => {
                     if from_address == source {
-                        balance -= value;
+                        balance = balance.checked_sub(*value).ok_or(Error::IntegerOverflow)?;
                     }
 
                     if from_address == target {
-                        balance += value;
+                        balance = balance.checked_add(*value).ok_or(Error::IntegerOverflow)?;
                     }
                 }
                 Action::NeonWithdraw { source, value } => {
                     if from_address == source {
-                        balance -= value;
+                        balance = balance.checked_sub(*value).ok_or(Error::IntegerOverflow)?;
                     }
                 }
                 _ => {}
