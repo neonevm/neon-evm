@@ -39,9 +39,12 @@ pub struct SolanaAllocator;
 
 unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        heap()
-            .allocate_first_fit(layout)
-            .map_or(core::ptr::null_mut(), NonNull::as_ptr)
+        if let Ok(non_null) = heap().allocate_first_fit(layout) {
+            non_null.as_ptr()
+        } else {
+            solana_program::log::sol_log("EVM Allocator out of memory");
+            std::ptr::null_mut()
+        }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
@@ -51,12 +54,11 @@ unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let ptr = self.alloc(layout);
 
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "solana")] {
-                solana_program::syscalls::sol_memset_(ptr, 0, layout.size() as u64);
-            } else {
-                std::ptr::write_bytes(ptr, 0, layout.size());
-            }
+        if !ptr.is_null() {
+            #[cfg(target_os = "solana")]
+            solana_program::syscalls::sol_memset_(ptr, 0, layout.size() as u64);
+            #[cfg(not(target_os = "solana"))]
+            std::ptr::write_bytes(ptr, 0, layout.size());
         }
 
         ptr
@@ -66,15 +68,16 @@ unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
         let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
         let new_ptr = self.alloc(new_layout);
 
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "solana")] {
-                solana_program::syscalls::sol_memcpy_(new_ptr, ptr, std::cmp::min(layout.size(), new_size) as u64);
-            } else {
-                std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
-            }
-        }
+        if !new_ptr.is_null() {
+            let copy_bytes = std::cmp::min(layout.size(), new_size);
 
-        self.dealloc(ptr, layout);
+            #[cfg(target_os = "solana")]
+            solana_program::syscalls::sol_memcpy_(new_ptr, ptr, copy_bytes as u64);
+            #[cfg(not(target_os = "solana"))]
+            std::ptr::copy_nonoverlapping(ptr, new_ptr, copy_bytes);
+
+            self.dealloc(ptr, layout);
+        }
 
         new_ptr
     }
@@ -114,6 +117,7 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
             core::ptr::write(Self::POSITION_PTR, top);
             position as *mut u8
         } else {
+            solana_program::log::sol_log("Bump Allocator out of memory");
             std::ptr::null_mut()
         }
     }
@@ -132,12 +136,13 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
         let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
         let new_ptr = self.alloc(new_layout);
 
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "solana")] {
-                solana_program::syscalls::sol_memcpy_(new_ptr, ptr, std::cmp::min(layout.size(), new_size) as u64);
-            } else {
-                std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
-            }
+        if !new_ptr.is_null() {
+            let copy_bytes = std::cmp::min(layout.size(), new_size);
+
+            #[cfg(target_os = "solana")]
+            solana_program::syscalls::sol_memcpy_(new_ptr, ptr, copy_bytes as u64);
+            #[cfg(not(target_os = "solana"))]
+            std::ptr::copy_nonoverlapping(ptr, new_ptr, copy_bytes);
         }
 
         new_ptr
