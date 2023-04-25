@@ -68,7 +68,9 @@ fn withdraw<B: AccountStorage>(
         return Err(Error::Custom("Neon Withdraw: value == 0".to_string()));
     }
 
-    let min_amount = u128::pow(10, u32::from(crate::config::token_mint::decimals()));
+    let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
+    let min_amount: u128 = u128::pow(10, additional_decimals);
+
     let spl_amount = value / min_amount;
     let remainder = value % min_amount;
 
@@ -79,9 +81,9 @@ fn withdraw<B: AccountStorage>(
     }
 
     if remainder != 0 {
-        return Err(Error::Custom(
-            "Neon Withdraw: value must be divisible by 10^9".to_string(),
-        ));
+        return Err(Error::Custom(std::format!(
+            "Neon Withdraw: value must be divisible by 10^{additional_decimals}"
+        )));
     }
 
     let target_token = get_associated_token_address(&target, state.backend.neon_token_mint());

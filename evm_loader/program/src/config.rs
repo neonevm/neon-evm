@@ -7,6 +7,7 @@ use evm_loader_macro::{
     common_config_parser, declare_param_id, elf_config_parser, neon_elf_param,
     net_specific_config_parser, operators_whitelist,
 };
+use static_assertions::const_assert;
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
@@ -33,3 +34,5 @@ cfg_if! {
 }
 
 elf_config_parser!("config/elf_params.toml");
+
+const_assert!(token_mint::decimals() <= 18);

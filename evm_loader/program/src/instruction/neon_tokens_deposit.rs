@@ -163,10 +163,8 @@ fn execute(
         )?;
     }
 
-    assert!(crate::config::token_mint::decimals() <= 18);
     let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
-    let deposit =
-        U256::from(accounts.source.delegated_amount) * U256::from(10_u64.pow(additional_decimals));
+    let deposit = U256::from(accounts.source.delegated_amount) * 10_u128.pow(additional_decimals);
     let mut ethereum_account =
         EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
     ethereum_account.balance = ethereum_account
