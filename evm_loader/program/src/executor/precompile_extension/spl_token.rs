@@ -1,8 +1,8 @@
-use std::convert::{TryInto};
+use std::convert::{Into, TryInto};
 
 use ethnum::U256;
 use solana_program::{
-    pubkey::Pubkey, rent::Rent, sysvar::Sysvar, 
+    program_error::ProgramError, pubkey::Pubkey, rent::Rent, sysvar::Sysvar, 
     system_instruction, program_pack::Pack, system_program
 };
 
@@ -15,20 +15,20 @@ use crate::{
 };
 
 // [0xa9, 0xc1, 0x58, 0x06] : "approve(bytes32,bytes32,uint64)",
-// [0xe3, 0x41, 0x08, 0x55] : "burn(bytes32,uint64)",
+// [0xc0, 0x67, 0xee, 0xbb] : "burn(bytes32,bytes32,uint64)",
 // [0x57, 0x82, 0xa0, 0x43] : "closeAccount(bytes32)",
-// [0x38, 0xa6, 0x99, 0xa4] : "exists(bytes32)",
+// [0x6d, 0xa9, 0xde, 0x75] : "isSystemAccount(bytes32)",
 // [0xeb, 0x7d, 0xa7, 0x8c] : "findAccount(bytes32)",
-// [0xec, 0x13, 0xcc, 0x7b] : "freeze(bytes32)",
+// [0x44, 0xef, 0x32, 0x44] : "freeze(bytes32)",
 // [0xd1, 0xde, 0x50, 0x11] : "getAccount(bytes32)",
 // [0xa2, 0xce, 0x9c, 0x1f] : "getMint(bytes32)",
 // [0xda, 0xa1, 0x2c, 0x5c] : "initializeAccount(bytes32,bytes32)",
 // [0xfc, 0x86, 0xb7, 0x17] : "initializeAccount(bytes32,bytes32,bytes32)",
 // [0xb1, 0x1e, 0xcc, 0x50] : "initializeMint(bytes32,uint8)",
 // [0xc3, 0xf3, 0xf2, 0xf2] : "initializeMint(bytes32,uint8,bytes32,bytes32)",
-// [0xa9, 0x05, 0x74, 0x01] : "mintTo(bytes32,uint64)",
+// [0xc9, 0xd0, 0xe2, 0xfd] : "mintTo(bytes32,bytes32,uint64)",
 // [0xb7, 0x5c, 0x7d, 0xc6] : "revoke(bytes32)",
-// [0xc2, 0x59, 0xdd, 0xfe] : "thaw(bytes32)",
+// [0x3d, 0x71, 0x8c, 0x9a] : "thaw(bytes32,bytes32)",
 // [0x78, 0x42, 0x3b, 0xcf] : "transfer(bytes32,bytes32,uint64)"
 // [0x7c, 0x0e, 0xb8, 0x10] : "transferWithSeed(bytes32,bytes32,bytes32,uint64)"
 
@@ -41,17 +41,14 @@ pub fn spl_token<B: AccountStorage>(
     is_static: bool,
 ) -> Result<Vec<u8>> {
     if context.value != 0 {
-        return Err(Error::Custom("SplToken: value != 0".to_string()))
-    }
-
-    if context.contract == context.caller { 
-        return Err(Error::Custom("SplToken: callcode is not allowed".to_string()))
+        return Err(Error::Custom("SplToken: value != 0".to_string()));
     }
 
     if &context.contract != address {
-        return Err(Error::Custom("SplToken: delegatecall is not allowed".to_string()))
+        return Err(Error::Custom(
+            "SplToken: callcode or delegatecall is not allowed".to_string(),
+        ));
     }
-
 
     let (selector, input) = input.split_at(4);
     let selector: [u8; 4] = selector.try_into()?;
@@ -60,114 +57,139 @@ pub fn spl_token<B: AccountStorage>(
         [0xb1, 0x1e, 0xcc, 0x50] => { // initializeMint(bytes32 seed, uint8 decimals)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let seed = read_salt(input);
-            let decimals = read_u8(&input[32..]);
+            let seed = read_salt(input)?;
+            let decimals = read_u8(&input[32..])?;
 
             initialize_mint(context, state, seed, decimals, None, None)
         }
         [0xc3, 0xf3, 0xf2, 0xf2] => { // initializeMint(bytes32 seed, uint8 decimals, bytes32 mint_authority, bytes32 freeze_authority)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
-            
-            let seed = read_salt(input);
-            let decimals = read_u8(&input[32..]);
-            let mint_authority = read_pubkey(&input[64..]);
-            let freeze_authority = read_pubkey(&input[96..]);
-            initialize_mint(context, state, seed, decimals, Some(mint_authority), Some(freeze_authority))
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
+
+            let seed = read_salt(input)?;
+            let decimals = read_u8(&input[32..])?;
+            let mint_authority = read_pubkey(&input[64..])?;
+            let freeze_authority = read_pubkey(&input[96..])?;
+            initialize_mint(
+                context,
+                state,
+                seed,
+                decimals,
+                Some(mint_authority),
+                Some(freeze_authority),
+            )
         }
         [0xda, 0xa1, 0x2c, 0x5c] => { // initializeAccount(bytes32 seed, bytes32 mint)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
-            
-            let seed = read_salt(input);
-            let mint = read_pubkey(&input[32..]);
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
+
+            let seed = read_salt(input)?;
+            let mint = read_pubkey(&input[32..])?;
 
             initialize_account(context, state, seed, mint, None)
         }
         [0xfc, 0x86, 0xb7, 0x17] => { // initializeAccount(bytes32 seed, bytes32 mint, bytes32 owner)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
-            
-            let seed = read_salt(input);
-            let mint = read_pubkey(&input[32..]);
-            let owner = read_pubkey(&input[64..]);
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
+
+            let seed = read_salt(input)?;
+            let mint = read_pubkey(&input[32..])?;
+            let owner = read_pubkey(&input[64..])?;
             initialize_account(context, state, seed, mint, Some(owner))
         }
         [0x57, 0x82, 0xa0, 0x43] => { // closeAccount(bytes32 account)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let account = read_pubkey(input);
+            let account = read_pubkey(input)?;
             close_account(context, state, account)
         }
         [0xa9, 0xc1, 0x58, 0x06] => { // approve(bytes32 source, bytes32 target, uint64 amount)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let source = read_pubkey(input);
-            let target = read_pubkey(&input[32..]);
-            let amount = read_u64(&input[64..]);
+            let source = read_pubkey(input)?;
+            let target = read_pubkey(&input[32..])?;
+            let amount = read_u64(&input[64..])?;
             approve(context, state, source, target, amount)
         }
         [0xb7, 0x5c, 0x7d, 0xc6] => { // revoke(bytes32 source)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let source = read_pubkey(input);
+            let source = read_pubkey(input)?;
             revoke(context, state, source)
         }
         [0x78, 0x42, 0x3b, 0xcf] => { // transfer(bytes32 source, bytes32 target, uint64 amount)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let source = read_pubkey(input);
-            let target = read_pubkey(&input[32..]);
-            let amount = read_u64(&input[64..]);
+            let source = read_pubkey(input)?;
+            let target = read_pubkey(&input[32..])?;
+            let amount = read_u64(&input[64..])?;
             transfer(context, state, source, target, amount)
         }
         [0x7c, 0x0e, 0xb8, 0x10] => { // transferWithSeed(bytes32,bytes32,bytes32,uint64)
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let seed = arrayref::array_ref![input, 0, 32];
-            let source = read_pubkey(&input[32..]);
-            let target = read_pubkey(&input[64..]);
-            let amount = read_u64(&input[96..]);
+            let seed = read_salt(input)?;
+            let source = read_pubkey(&input[32..])?;
+            let target = read_pubkey(&input[64..])?;
+            let amount = read_u64(&input[96..])?;
 
             transfer_with_seed(context, state, seed, source, target, amount)
         }
-        [0xa9, 0x05, 0x74, 0x01] => { // mintTo(bytes32 account, uint64 amount)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
+        [0xc9, 0xd0, 0xe2, 0xfd] => { // mintTo(bytes32 mint, bytes32 account, uint64 amount)
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
 
-            let account = read_pubkey(input);
-            let amount = read_u64(&input[32..]);
-            mint(context, state, account, amount)
+            let mint = read_pubkey(input)?;
+            let account = read_pubkey(&input[32..])?;
+            let amount = read_u64(&input[64..])?;
+            mint_to(context, state, mint, account, amount)
         }
-        [0xe3, 0x41, 0x08, 0x55] => { // burn(bytes32 account, uint64 amount)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
+        [0xc0, 0x67, 0xee, 0xbb] => { // burn(bytes32 mint, bytes32 account, uint64 amount)
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
 
-            let account = read_pubkey(input);
-            let amount = read_u64(&input[32..]);
-            burn(context, state, account, amount)
+            let mint = read_pubkey(input)?;
+            let account = read_pubkey(&input[32..])?;
+            let amount = read_u64(&input[64..])?;
+            burn(context, state, mint, account, amount)
         }
-        [0xec, 0x13, 0xcc, 0x7b] => { // freeze(bytes32 account)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
+        [0x44, 0xef, 0x32, 0x44] => { // freeze(bytes32 mint, bytes32 account)
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
 
-            let account = read_pubkey(input);
-            freeze(context, state, account)
+            let mint = read_pubkey(input)?;
+            let account = read_pubkey(&input[32..])?;
+            freeze(context, state, mint, account)
         }
-        [0xc2, 0x59, 0xdd, 0xfe] => { // thaw(bytes32 account)
-            if is_static { return Err(Error::StaticModeViolation(*address)); }
+        [0x3d, 0x71, 0x8c, 0x9a] => { // thaw(bytes32 mint, bytes32 account)
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
 
-            let account = read_pubkey(input);
-            thaw(context, state, account)
+            let mint = read_pubkey(input)?;
+            let account = read_pubkey(&input[32..])?;
+            thaw(context, state, mint, account)
         }
         [0xeb, 0x7d, 0xa7, 0x8c] => { // findAccount(bytes32 seed)
-            let seed = read_salt(input);
+            let seed = read_salt(input)?;
             find_account(context, state, seed)
         }
-        [0x38, 0xa6, 0x99, 0xa4] => { // exists(bytes32 account)
-            let account = read_pubkey(input);
-            exists(context, state, account)
+        [0x6d, 0xa9, 0xde, 0x75] => { // isSystemAccount(bytes32 account)
+            let account = read_pubkey(input)?;
+            is_system_account(context, state, account)
         }
         [0xd1, 0xde, 0x50, 0x11] => { // getAccount(bytes32 account)
-            let account = read_pubkey(input);
+            let account = read_pubkey(input)?;
             get_account(context, state, account)
         }
         [0xa2, 0xce, 0x9c, 0x1f] => { // getMint(bytes32 account)
-            let account = read_pubkey(input);
+            let account = read_pubkey(input)?;
             get_mint(context, state, account)
         }
         _ => {
@@ -176,25 +198,34 @@ pub fn spl_token<B: AccountStorage>(
     }
 }
 
-
 #[inline]
-fn read_u8(input: &[u8]) -> u8 {
-    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32]).as_u8()
+fn read_u8(input: &[u8]) -> Result<u8> {
+    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32])
+        .try_into()
+        .map_err(Into::into)
 }
 
 #[inline]
-fn read_u64(input: &[u8]) -> u64 {
-    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32]).as_u64()
+fn read_u64(input: &[u8]) -> Result<u64> {
+    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32])
+        .try_into()
+        .map_err(Into::into)
 }
 
 #[inline]
-fn read_pubkey(input: &[u8]) -> Pubkey {
-    Pubkey::new_from_array(*arrayref::array_ref![input, 0, 32])
+fn read_pubkey(input: &[u8]) -> Result<Pubkey> {
+    if input.len() < 32 {
+        return Err(Error::OutOfBounds);
+    }
+    Ok(Pubkey::new_from_array(*arrayref::array_ref![input, 0, 32]))
 }
 
 #[inline]
-fn read_salt(input: &[u8]) -> &[u8; 32] {
-    arrayref::array_ref![input, 0, 32]
+fn read_salt(input: &[u8]) -> Result<&[u8; 32]> {
+    if input.len() < 32 {
+        return Err(Error::OutOfBounds);
+    }
+    Ok(arrayref::array_ref![input, 0, 32])
 }
 
 
@@ -207,29 +238,19 @@ fn create_account<B: AccountStorage>(
     let rent = Rent::get()?;
     let minimum_balance = rent.minimum_balance(space);
 
-    if account.lamports > 0 {
-        let required_lamports = minimum_balance.saturating_sub(account.lamports);
-        
-        if required_lamports > 0 {
-            let transfer = system_instruction::transfer(state.backend.operator(), &account.key, required_lamports);
-            state.queue_external_instruction(transfer, vec![], 0);
-        }
+    let required_lamports = minimum_balance.saturating_sub(account.lamports);
 
-        let allocate = system_instruction::allocate(&account.key, space.try_into().unwrap());
-        state.queue_external_instruction(allocate, seeds.clone(), space);
-
-        let assign = system_instruction::assign(&account.key, &spl_token::ID);
-        state.queue_external_instruction(assign, seeds, 0);
-    } else {
-        let create_account = system_instruction::create_account(
-            state.backend.operator(),
-            &account.key,
-            minimum_balance,
-            space.try_into().unwrap(),
-            &spl_token::ID,
-        );
-        state.queue_external_instruction(create_account, seeds, space);
+    if required_lamports > 0 {
+        let transfer =
+            system_instruction::transfer(state.backend.operator(), &account.key, required_lamports);
+        state.queue_external_instruction(transfer, vec![], 0);
     }
+
+    let allocate = system_instruction::allocate(&account.key, space.try_into().unwrap());
+    state.queue_external_instruction(allocate, seeds.clone(), space);
+
+    let assign = system_instruction::assign(&account.key, &spl_token::ID);
+    state.queue_external_instruction(assign, seeds, 0);
 
     Ok(())
 }
@@ -439,9 +460,10 @@ fn transfer_with_seed<B: AccountStorage>(
     Ok(vec![])
 }
 
-fn mint<B: AccountStorage>(
+fn mint_to<B: AccountStorage>(
     context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
+    mint: Pubkey,
     target: Pubkey,
     amount: u64,
 ) -> Result<Vec<u8>>
@@ -449,16 +471,15 @@ fn mint<B: AccountStorage>(
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
-    let account = state.external_account(target)?;
-    spl_token::check_program_account(&account.owner)?;
-
-    let token_account = spl_token::state::Account::unpack(&account.data)?;
-
-    let seeds = vec![ vec![ACCOUNT_SEED_VERSION], signer.as_bytes().to_vec(), vec![bump_seed] ];
+    let seeds = vec![
+        vec![ACCOUNT_SEED_VERSION],
+        signer.as_bytes().to_vec(),
+        vec![bump_seed],
+    ];
 
     let mint_to = spl_token::instruction::mint_to(
         &spl_token::ID,
-        &token_account.mint,
+        &mint,
         &target,
         &signer_pubkey,
         &[],
@@ -472,24 +493,25 @@ fn mint<B: AccountStorage>(
 fn burn<B: AccountStorage>(
     context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
+    mint: Pubkey,
     source: Pubkey,
     amount: u64,
 ) -> Result<Vec<u8>>
 {
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
-    
-    let account = state.external_account(source)?;
-    spl_token::check_program_account(&account.owner)?;
-    
-    let token_account = spl_token::state::Account::unpack(&account.data)?;
-    
-    let seeds = vec![ vec![ACCOUNT_SEED_VERSION], signer.as_bytes().to_vec(), vec![bump_seed] ];
 
+    let seeds = vec![
+        vec![ACCOUNT_SEED_VERSION],
+        signer.as_bytes().to_vec(),
+        vec![bump_seed],
+    ];
+
+    #[rustfmt::skip]
     let burn = spl_token::instruction::burn(
         &spl_token::ID,
         &source,
-        &token_account.mint,
+        &mint,
         &signer_pubkey,
         &[],
         amount
@@ -502,23 +524,23 @@ fn burn<B: AccountStorage>(
 fn freeze<B: AccountStorage>(
     context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
+    mint: Pubkey,
     target: Pubkey,
 ) -> Result<Vec<u8>>
 {
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
-    
-    let account = state.external_account(target)?;
-    spl_token::check_program_account(&account.owner)?;
-    
-    let token_account = spl_token::state::Account::unpack(&account.data)?;
-    
-    let seeds = vec![ vec![ACCOUNT_SEED_VERSION], signer.as_bytes().to_vec(), vec![bump_seed] ];
+
+    let seeds = vec![
+        vec![ACCOUNT_SEED_VERSION],
+        signer.as_bytes().to_vec(),
+        vec![bump_seed],
+    ];
 
     let freeze = spl_token::instruction::freeze_account(
         &spl_token::ID,
         &target,
-        &token_account.mint,
+        &mint,
         &signer_pubkey,
         &[],
     )?;
@@ -530,25 +552,26 @@ fn freeze<B: AccountStorage>(
 fn thaw<B: AccountStorage>(
     context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
+    mint: Pubkey,
     target: Pubkey,
 ) -> Result<Vec<u8>>
 {
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
-    
-    let account = state.external_account(target)?;
-    spl_token::check_program_account(&account.owner)?;
-    
-    let token_account = spl_token::state::Account::unpack(&account.data)?;
-    
-    let seeds = vec![ vec![ACCOUNT_SEED_VERSION], signer.as_bytes().to_vec(), vec![bump_seed] ];
 
+    let seeds = vec![
+        vec![ACCOUNT_SEED_VERSION],
+        signer.as_bytes().to_vec(),
+        vec![bump_seed],
+    ];
+
+    #[rustfmt::skip]
     let thaw = spl_token::instruction::thaw_account(
         &spl_token::ID,
         &target,
-        &token_account.mint,
+        &mint,
         &signer_pubkey,
-        &[],
+        &[]
     )?;
     state.queue_external_instruction(thaw, seeds, 0);
 
@@ -572,7 +595,7 @@ fn find_account<B: AccountStorage>(
     Ok(account_key.to_bytes().to_vec())
 }
 
-fn exists<B: AccountStorage>(
+fn is_system_account<B: AccountStorage>(
     _context: &crate::evm::Context,
     state: &mut ExecutorState<B>,
     account: Pubkey,
@@ -580,12 +603,12 @@ fn exists<B: AccountStorage>(
 {
     let account = state.external_account(account)?;
     if system_program::check_id(&account.owner) {
-        Ok(vec![0_u8; 32])
-    } else {
         let mut result = vec![0_u8; 32];
         result[31] = 1; // return true
 
         Ok(result)
+    } else {
+        Ok(vec![0_u8; 32])
     }
 }
 
@@ -597,9 +620,11 @@ fn get_account<B: AccountStorage>(
 {
     let account = state.external_account(account)?;
     let token = if spl_token::check_id(&account.owner) {
-        spl_token::state::Account::unpack_unchecked(&account.data)?
-    } else {
+        spl_token::state::Account::unpack(&account.data)?
+    } else if system_program::check_id(&account.owner) {
         spl_token::state::Account::default()
+    } else {
+        return Err(ProgramError::IllegalOwner.into());
     };
 
     debug_print!("spl_token get_account: {:?}", token);
@@ -627,9 +652,11 @@ fn get_mint<B: AccountStorage>(
 {
     let account = state.external_account(account)?;
     let mint = if spl_token::check_id(&account.owner) {
-        spl_token::state::Mint::unpack_unchecked(&account.data)?
-    } else {
+        spl_token::state::Mint::unpack(&account.data)?
+    } else if system_program::check_id(&account.owner) {
         spl_token::state::Mint::default()
+    } else {
+        return Err(ProgramError::IllegalOwner.into());
     };
 
     debug_print!("spl_token get_mint: {:?}", mint);

@@ -123,6 +123,9 @@ pub enum Error {
     #[error("Checked Integer Math Overflow")]
     IntegerOverflow,
 
+    #[error("Index out of bounds")]
+    OutOfBounds,
+
     #[error("Precompile Contract {0} - is not implemented")]
     UnimplementedPrecompile(Address),
 }

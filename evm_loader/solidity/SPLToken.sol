@@ -31,8 +31,14 @@ interface SPLToken {
 
     function findAccount(bytes32 salt) external pure returns(bytes32);
 
-    function exists(bytes32 account) external view returns(bool);
+    function isSystemAccount(bytes32 account) external view returns(bool);
+
+    // Return spl_token account data. This function checks the account is owned by correct spl_token.
+    // Return default not initialized spl_token account data if corresponded Solana account doesn't exist.
     function getAccount(bytes32 account) external view returns(Account memory);
+
+    // Return spl_token mint data. This function checks the mint is owned by correct spl_token.
+    // Return default not initialized spl_token mint data if corresponded Solana account doesn't exist.
     function getMint(bytes32 account) external view returns(Mint memory);
 
     function initializeMint(bytes32 salt, uint8 decimals) external returns(bytes32);
@@ -43,8 +49,8 @@ interface SPLToken {
 
     function closeAccount(bytes32 account) external;
 
-    function mintTo(bytes32 account, uint64 amount) external;
-    function burn(bytes32 account, uint64 amount) external;
+    function mintTo(bytes32 mint, bytes32 account, uint64 amount) external;
+    function burn(bytes32 mint, bytes32 account, uint64 amount) external;
 
     function approve(bytes32 source, bytes32 target, uint64 amount) external;
     function revoke(bytes32 source) external;
@@ -55,6 +61,6 @@ interface SPLToken {
     // This method uses PDA[ACCOUNT_SEED_VERSION, b"AUTH", msg.sender, seed] to authorize transfer
     function transferWithSeed(bytes32 seed, bytes32 source, bytes32 target, uint64 amount) external;
 
-    function freeze(bytes32 account) external;
-    function thaw(bytes32 account) external;
+    function freeze(bytes32 mint, bytes32 account) external;
+    function thaw(bytes32 mint, bytes32 account) external;
 }
