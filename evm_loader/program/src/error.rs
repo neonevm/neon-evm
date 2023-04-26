@@ -131,6 +131,9 @@ pub enum Error {
     #[error("Checked Integer Math Overflow")]
     IntegerOverflow,
 
+    #[error("Index out of bounds")]
+    OutOfBounds,
+
     #[error("Holder Account - invalid owner {0}, expected = {1}")]
     HolderInvalidOwner(Pubkey, Pubkey),
 
