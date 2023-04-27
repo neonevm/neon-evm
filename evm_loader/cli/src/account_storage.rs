@@ -19,7 +19,7 @@ use solana_sdk::{
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
     config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
-    executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
+    executor::{Action, OwnedAccountInfo},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, ether_storage::EthereumStorageAddress},
     account_storage::{AccountStorage},
     types::Address,
@@ -551,23 +551,16 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         }
     }
 
-    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
-        info!("clone_solana_account_partial {}", address);
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&AccountInfo) -> R,
+    {
+        self.add_solana_account(*address, false);
 
-        let account = self.clone_solana_account(address);
+        let mut account = self.config.rpc_client.get_account(address).unwrap_or_default();
+        let info = account_info(address, &mut account);
 
-        Some(OwnedAccountInfoPartial {
-            key: account.key,
-            is_signer: account.is_signer,
-            is_writable: account.is_writable,
-            lamports: account.lamports,
-            data: account.data.get(offset .. offset + len).map(<[u8]>::to_vec)?,
-            data_offset: offset,
-            data_total_len: account.data.len(),
-            owner: account.owner,
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
-        })
+        action(&info)
     }
 }
 

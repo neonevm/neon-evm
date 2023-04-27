@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use crate::account::{EthereumAccount, EthereumStorage};
-use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
+use crate::executor::{Action, OwnedAccountInfo};
 use crate::types::Address;
 use ethnum::U256;
 use solana_program::{ pubkey::Pubkey, slot_history::Slot };
@@ -89,8 +89,10 @@ pub trait AccountStorage {
     /// Clone existing solana account
     fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo;
 
-    /// Clone part of existing solana account
-    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial>;
+    /// Map existing solana account
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&AccountInfo) -> R;
 
     /// Resolve account solana address and bump seed
     fn solana_address(&self, address: &Address) -> (Pubkey, u8) {

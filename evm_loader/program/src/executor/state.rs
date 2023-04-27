@@ -11,7 +11,7 @@ use crate::evm::{ExitStatus, Context};
 use crate::evm::database::Database;
 use crate::types::Address;
 
-use super::{OwnedAccountInfo, OwnedAccountInfoPartial};
+use super::{OwnedAccountInfo};
 use super::action::Action;
 use super::cache::{Cache};
 
@@ -51,7 +51,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn new(backend: &'a B) -> Self {
         let cache = Cache {
             solana_accounts: BTreeMap::new(),
-            solana_accounts_partial: BTreeMap::new(),
             block_number: backend.block_number(),
             block_timestamp: backend.block_timestamp(),
         };
@@ -142,28 +141,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         }
 
         Ok(accounts[&address].clone())
-    }
-
-    pub fn external_account_partial_cache(&mut self, address: Pubkey, offset: usize, len: usize) -> Result<()> {
-        if (len == 0) || (len > 8*1024) {
-            return Err(Error::Custom("Account cache: invalid data len".into()));
-        }
-        
-        if let Some(account) = self.backend.clone_solana_account_partial(&address, offset, len) {
-            let mut cache = self.cache.borrow_mut();
-            cache.solana_accounts_partial.insert(address, account);
-    
-            Ok(())
-        } else {
-            Err(Error::Custom("Account cache: invalid data offset".into()))
-        }
-    }
-
-    pub fn external_account_partial(&self, address: Pubkey) -> Result<OwnedAccountInfoPartial> {
-        let cache = self.cache.borrow();
-        cache.solana_accounts_partial.get(&address)
-            .cloned()
-            .ok_or_else(|| Error::Custom(format!("Account cache: account {} is not cached", address)))
     }
 }
 
