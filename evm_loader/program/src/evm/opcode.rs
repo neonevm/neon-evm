@@ -1243,11 +1243,9 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn opcode_revert_impl(&mut self, return_data: Buffer, backend: &mut B) -> Result<Action> {
-        backend.revert_snapshot()?;
-
         if self.parent.is_none() {
-            backend.commit_snapshot()?;
-            sol_log_data(&[b"EXIT", b"REVERT"]);
+            backend.revert_snapshot()?;
+            sol_log_data(&[b"EXIT", b"REVERT", &return_data]);
             return Ok(Action::Revert(return_data.to_vec()));
         }
 
@@ -1271,7 +1269,9 @@ impl<B: Database> Machine<B> {
 
         self.return_data = return_data;
 
-        sol_log_data(&[b"EXIT", b"REVERT"]);
+        backend.revert_snapshot()?;
+
+        sol_log_data(&[b"EXIT", b"REVERT", &self.return_data]);
         Ok(Action::Continue)
     }
 
@@ -1293,6 +1293,7 @@ impl<B: Database> Machine<B> {
         backend.selfdestruct(self.context.contract)?;
 
         if self.parent.is_none() {
+            backend.commit_snapshot()?;
             sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
             return Ok(Action::Suicide);
         }
@@ -1324,6 +1325,7 @@ impl<B: Database> Machine<B> {
     /// Halts execution of the contract
     pub fn opcode_stop(&mut self, backend: &mut B) -> Result<Action> {
         if self.parent.is_none() {
+            backend.commit_snapshot()?;
             sol_log_data(&[b"EXIT", b"STOP"]);
             return Ok(Action::Stop);
         }

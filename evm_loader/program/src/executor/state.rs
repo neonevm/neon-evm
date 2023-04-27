@@ -330,14 +330,20 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     fn revert_snapshot(&mut self) -> Result<()> {
-        let actions_len = self.stack.pop().unwrap_or(0);
+        let actions_len = self
+            .stack
+            .pop()
+            .expect("Fatal Error: Inconsistent EVM Call Stack");
+
         self.actions.truncate(actions_len);
 
         Ok(())
     }
 
     fn commit_snapshot(&mut self) -> Result<()> {
-        self.stack.pop();
+        self.stack
+            .pop()
+            .expect("Fatal Error: Inconsistent EVM Call Stack");
 
         Ok(())
     }
