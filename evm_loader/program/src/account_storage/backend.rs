@@ -1,9 +1,10 @@
 use crate::account::EthereumAccount;
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
-use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
+use crate::executor::OwnedAccountInfo;
 use crate::types::Address;
 use ethnum::U256;
+use solana_program::account_info::AccountInfo;
 use solana_program::sysvar::recent_blockhashes;
 use solana_program::{pubkey::Pubkey, sysvar::slot_hashes};
 use std::cmp::Ordering;
@@ -151,14 +152,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         OwnedAccountInfo::from_account_info(self.program_id, info)
     }
 
-    fn clone_solana_account_partial(
-        &self,
-        address: &Pubkey,
-        offset: usize,
-        len: usize,
-    ) -> Option<OwnedAccountInfoPartial> {
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&AccountInfo) -> R,
+    {
         let info = self.solana_accounts[address];
-        OwnedAccountInfoPartial::from_account_info(info, offset, len)
+        action(info)
     }
 
     fn solana_account_space(&self, address: &Address) -> Option<usize> {
