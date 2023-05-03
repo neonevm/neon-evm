@@ -33,7 +33,7 @@ IMAGE_NAME = 'neonlabsorg/evm_loader'
 SOLANA_NODE_VERSION = 'v1.14.16'
 SOLANA_BPF_VERSION = 'v1.14.13'
 
-VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
+VERSION_BRANCH_TEMPLATE = r"([vt]{1}\d{1,2}\.\d{1,2}\.)(x|\d{1,2})(.*)"
 docker_client = docker.APIClient()
 
 
@@ -136,25 +136,35 @@ def stop_containers():
 @click.option('--labels')
 def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sha, token, is_draft, labels):
     is_develop_branch = github_ref in ['refs/heads/develop', 'refs/heads/master']
-    is_tag_creating = 'refs/tags/' in github_ref
-    is_version_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/heads/", "")) is not None
+    is_tag_creating = github_ref.startswith('refs/tags/')
+    is_version_tag = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/tags/", ""))
+    is_version_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/heads/", ""))
     is_FTS_labeled_not_draft = 'FullTestSuit' in labels and is_draft != "true"
 
-    if is_develop_branch or is_tag_creating or is_version_branch or is_FTS_labeled_not_draft:
+    if is_develop_branch or is_version_tag or is_version_branch is not None or is_FTS_labeled_not_draft:
         full_test_suite = "true"
     else:
         full_test_suite = "false"
 
     github = GithubClient(token)
 
-    if head_ref_branch in github.get_proxy_branches():
+    proxy_branches = github.get_proxy_branches()
+    def find_proxy_version_branch(major,minor,suffix):
+        branch = ''.join((major,'x',suffix))
+        if suffix != '' and branch in proxy_branches:
+            return branch
+        return major + 'x'
+
+    if head_ref_branch in proxy_branches:
         proxy_branch = head_ref_branch
-    elif re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
-        proxy_branch = base_ref_branch
-    elif is_tag_creating:
-        proxy_branch = github_ref.replace("refs/tags/", "")
+    elif res := re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
+        proxy_branch = find_proxy_version_branch(*res.groups())
+    elif is_version_tag:
+        proxy_branch = find_proxy_version_branch(*is_version_tag.groups())
     elif is_version_branch:
-        proxy_branch = github_ref.replace("refs/heads/", "")
+        proxy_branch = find_proxy_version_branch(*is_version_branch.groups())
+    elif is_tag_creating:
+        raise RantimeError(f"Do not run tests for non-version tags")
     else:
         proxy_branch = 'develop'
     click.echo(f"Proxy branch: {proxy_branch}")
