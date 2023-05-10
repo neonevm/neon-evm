@@ -65,6 +65,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     pub fn into_actions(self) -> Vec<Action> {
+        assert!(self.stack.is_empty());
+
         self.actions
     }
 
@@ -337,13 +339,11 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(cache.block_timestamp)
     }
 
-    fn snapshot(&mut self) -> Result<()> {
+    fn snapshot(&mut self) {
         self.stack.push(self.actions.len());
-
-        Ok(())
     }
 
-    fn revert_snapshot(&mut self) -> Result<()> {
+    fn revert_snapshot(&mut self) {
         let actions_len = self
             .stack
             .pop()
@@ -351,15 +351,17 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
 
         self.actions.truncate(actions_len);
 
-        Ok(())
+        if self.stack.is_empty() {
+            // sanity check
+            assert_eq!(self.actions.len(), 1);
+            assert!(matches!(self.actions[0], Action::EvmIncrementNonce { .. }));
+        }
     }
 
-    fn commit_snapshot(&mut self) -> Result<()> {
+    fn commit_snapshot(&mut self) {
         self.stack
             .pop()
             .expect("Fatal Error: Inconsistent EVM Call Stack");
-
-        Ok(())
     }
 
     fn precompile_extension(

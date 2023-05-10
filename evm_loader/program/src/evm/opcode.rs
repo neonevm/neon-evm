@@ -978,7 +978,7 @@ impl<B: Database> Machine<B> {
         });
 
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
-        backend.snapshot()?;
+        backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
 
@@ -1025,7 +1025,7 @@ impl<B: Database> Machine<B> {
         });
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
-        backend.snapshot()?;
+        backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CALL", address.as_bytes()]);
 
@@ -1071,7 +1071,7 @@ impl<B: Database> Machine<B> {
         });
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
-        backend.snapshot()?;
+        backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CALLCODE", address.as_bytes()]);
 
@@ -1109,7 +1109,7 @@ impl<B: Database> Machine<B> {
         });
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
-        backend.snapshot()?;
+        backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"DELEGATECALL", address.as_bytes()]);
 
@@ -1147,7 +1147,7 @@ impl<B: Database> Machine<B> {
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
         self.is_static = true;
 
-        backend.snapshot()?;
+        backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"STATICCALL", address.as_bytes()]);
 
@@ -1192,14 +1192,15 @@ impl<B: Database> Machine<B> {
         mut return_data: Buffer,
         backend: &mut B,
     ) -> Result<Action> {
-        if self.parent.is_none() {
-            if self.reason == Reason::Create {
-                let code = std::mem::take(&mut return_data);
-                backend.set_code(self.context.contract, code)?;
-            }
+        if self.reason == Reason::Create {
+            let code = std::mem::take(&mut return_data);
+            backend.set_code(self.context.contract, code)?;
+        }
 
-            backend.commit_snapshot()?;
-            sol_log_data(&[b"EXIT", b"RETURN"]);
+        backend.commit_snapshot();
+        sol_log_data(&[b"EXIT", b"RETURN"]);
+
+        if self.parent.is_none() {
             return Ok(Action::Return(return_data.to_vec()));
         }
 
@@ -1220,16 +1221,10 @@ impl<B: Database> Machine<B> {
             },
             Reason::Create => {
                 let address = returned.context.contract;
-
-                backend.set_code(address, return_data)?;
-    
                 self.stack.push_address(&address)?;
             },
         }
 
-        backend.commit_snapshot()?;
-
-        sol_log_data(&[b"EXIT", b"RETURN"]);
         Ok(Action::Continue)
     }
 
@@ -1244,9 +1239,10 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn opcode_revert_impl(&mut self, return_data: Buffer, backend: &mut B) -> Result<Action> {
+        backend.revert_snapshot();
+        sol_log_data(&[b"EXIT", b"REVERT", &return_data]);
+
         if self.parent.is_none() {
-            backend.revert_snapshot()?;
-            sol_log_data(&[b"EXIT", b"REVERT", &return_data]);
             return Ok(Action::Revert(return_data.to_vec()));
         }
 
@@ -1270,9 +1266,6 @@ impl<B: Database> Machine<B> {
 
         self.return_data = return_data;
 
-        backend.revert_snapshot()?;
-
-        sol_log_data(&[b"EXIT", b"REVERT", &self.return_data]);
         Ok(Action::Continue)
     }
 
@@ -1293,9 +1286,10 @@ impl<B: Database> Machine<B> {
         backend.transfer(self.context.contract, address, value)?;
         backend.selfdestruct(self.context.contract)?;
 
+        backend.commit_snapshot();
+        sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
+
         if self.parent.is_none() {
-            backend.commit_snapshot()?;
-            sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
             return Ok(Action::Suicide);
         }
 
@@ -1317,17 +1311,15 @@ impl<B: Database> Machine<B> {
             },
         }
 
-        backend.commit_snapshot()?;
-
-        sol_log_data(&[b"EXIT", b"SELFDESTRUCT"]);
         Ok(Action::Continue)
     }
 
     /// Halts execution of the contract
     pub fn opcode_stop(&mut self, backend: &mut B) -> Result<Action> {
+        backend.commit_snapshot();
+        sol_log_data(&[b"EXIT", b"STOP"]);
+
         if self.parent.is_none() {
-            backend.commit_snapshot()?;
-            sol_log_data(&[b"EXIT", b"STOP"]);
             return Ok(Action::Stop);
         }
 
@@ -1349,9 +1341,6 @@ impl<B: Database> Machine<B> {
             }
         }
 
-        backend.commit_snapshot()?;
-
-        sol_log_data(&[b"EXIT", b"STOP"]);
         Ok(Action::Continue)
     }
 }
