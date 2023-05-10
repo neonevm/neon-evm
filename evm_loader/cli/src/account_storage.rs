@@ -1,7 +1,6 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
-    cmp::Ordering,
     rc::Rc,
     str::FromStr,
     convert::TryInto,
@@ -14,7 +13,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     pubkey::{Pubkey},
     pubkey,
-    sysvar::{recent_blockhashes, Sysvar, slot_hashes}, rent::Rent,
+    sysvar::{Sysvar, slot_hashes}, rent::Rent,
 };
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
@@ -26,7 +25,8 @@ use evm_loader::{
     gasometer::LAMPORTS_PER_SIGNATURE
 };
 use evm_loader::account::ether_contract;
-use evm_loader::account_storage::{generate_fake_block_hash, AccountOperation, AccountsOperations};
+use evm_loader::account_storage::{find_slot_hash, AccountOperation, AccountsOperations};
+
 
 use crate::Config;
 
@@ -357,55 +357,16 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         self.block_timestamp.try_into().unwrap()
     }
 
-    fn block_hash(&self, number: U256) -> [u8; 32] { 
-        info!("block_hash {}", number);
-
-        let number = number.as_u64();
+    fn block_hash(&self, slot: u64) -> [u8; 32] {
+        info!("block_hash {slot}");
 
         self.add_solana_account(slot_hashes::ID, false);
-        self.add_solana_account(recent_blockhashes::ID, false);
-
-        if self.block_number <= number {
-            return <[u8; 32]>::default();
-        }
 
         if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
-            if let Ok(recent_blockhashes_account) =
-                self.config.rpc_client.get_account(&recent_blockhashes::ID)
-            {
-                let slot_hashes_data = slot_hashes_account.data;
-                let slot_hashes_len = u64::from_le_bytes(slot_hashes_data[..8].try_into().unwrap());
-                let mut min: usize = 0;
-                let mut max = usize::try_from(slot_hashes_len).unwrap() - 1;
-                while min <= max {
-                    let i = (min + max) / 2;
-                    let offset = i * 40 + 8;
-                    let slot = u64::from_le_bytes(slot_hashes_data[offset..][..8].try_into().unwrap());
-                    match number.cmp(&slot) {
-                        Ordering::Equal => {
-                            let recent_blockhashes_data = recent_blockhashes_account.data;
-                            if offset + 32 > recent_blockhashes_data.len() {
-                                break;
-                            }
-                            return recent_blockhashes_data[offset..][..32].try_into().unwrap();
-                        }
-                        Ordering::Less => {
-                            min = i + 1;
-                        }
-                        Ordering::Greater => {
-                            max = i - 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Ok(timestamp) = self.config.rpc_client.get_block(number) {
-            let hash = bs58::decode(timestamp.blockhash).into_vec().unwrap();
-            hash.try_into().unwrap()
+            let slot_hashes_data = slot_hashes_account.data.as_slice();
+            find_slot_hash(slot, slot_hashes_data)
         } else {
-            warn!("Got error trying to get block hash");
-            generate_fake_block_hash(number)
+            panic!("Error querying account {} from Solana", slot_hashes::ID)
         }
     }
 
