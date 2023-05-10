@@ -15,24 +15,26 @@ use super::Packable;
 #[derive(Default, Debug)]
 pub struct Data {
     pub owner: Pubkey,
-    pub transaction_hash: [u8; 32]
+    pub transaction_hash: [u8; 32],
+    pub transaction_len: usize,
 }
 
 impl Packable for Data {
     /// Holder struct tag
     const TAG: u8 = super::TAG_HOLDER;
     /// Holder struct serialized size
-    const SIZE: usize = 64;
+    const SIZE: usize = 32 + 32 + 8;
 
     /// Deserialize `Holder` struct from input data
     #[must_use]
     fn unpack(src: &[u8]) -> Self {
         let data = array_ref![src, 0, Data::SIZE];
-        let (owner, hash) = array_refs![data, 32, 32];
+        let (owner, hash, len) = array_refs![data, 32, 32, 8];
 
         Self {
             owner: Pubkey::new_from_array(*owner),
-            transaction_hash: *hash
+            transaction_hash: *hash,
+            transaction_len: usize::from_le_bytes(*len),
         }
     }
 
@@ -40,10 +42,11 @@ impl Packable for Data {
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
-        let (owner, hash) = mut_array_refs![data, 32, 32];
+        let (owner, hash, len) = mut_array_refs![data, 32, 32, 8];
 
         owner.copy_from_slice(self.owner.as_ref());
         hash.copy_from_slice(&self.transaction_hash);
+        *len = self.transaction_len.to_le_bytes();
     }
 }
 
@@ -51,6 +54,7 @@ impl Packable for Data {
 impl<'a> Holder<'a> {
     pub fn clear(&mut self) {
         self.transaction_hash.fill(0);
+        self.transaction_len = 0;
         
         let mut data = self.info.data.borrow_mut();
         data[Self::SIZE..].fill(0);
@@ -65,6 +69,7 @@ impl<'a> Holder<'a> {
             .ok_or_else(|| E!(ProgramError::InvalidArgument; "Holder offset overflow"))?;
 
         data[begin..end].copy_from_slice(bytes);
+        self.transaction_len = std::cmp::max(self.transaction_len, offset + bytes.len());
 
         Ok(())
     }
@@ -72,7 +77,7 @@ impl<'a> Holder<'a> {
     #[must_use]
     pub fn transaction(&self) -> Ref<'a, [u8]> {
         let data = Ref::map(self.info.data.borrow(), |d| *d);
-        Ref::map(data, |d| &d[Self::SIZE..])
+        Ref::map(data, |d| &d[Self::SIZE..][..self.transaction_len])
     }
 
     pub fn validate_owner(&self, operator: &Operator) -> Result<(), ProgramError> {
