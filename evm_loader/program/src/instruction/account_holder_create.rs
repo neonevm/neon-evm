@@ -18,6 +18,7 @@ pub fn process<'a>(
         crate::account::holder::Data {
             owner: *operator.key,
             transaction_hash: [0_u8; 32],
+            transaction_len: 0,
         },
     )?;
 

@@ -52,8 +52,9 @@ impl rlp::Decodable for Transaction {
             info.header_len + info.value_len
         };
 
-        // Discard trailing data
-        let rlp = rlp::Rlp::new(&rlp.as_raw()[..rlp_len]);
+        if rlp.as_raw().len() != rlp_len {
+            return Err(rlp::DecoderError::RlpInconsistentLengthAndData);
+        }
 
         let nonce: u64 = rlp.val_at(0)?;
         let gas_price: U256 = u256(&rlp.at(1)?)?;
@@ -93,7 +94,7 @@ impl rlp::Decodable for Transaction {
         };
 
         let hash = solana_program::keccak::hash(rlp.as_raw()).to_bytes();
-        let signed_hash = signed_hash(&rlp, chain_id)?;
+        let signed_hash = signed_hash(rlp, chain_id)?;
 
         let tx = Self {
             nonce,

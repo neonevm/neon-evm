@@ -23,6 +23,7 @@ pub fn process<'a>(
             let holder_data = crate::account::holder::Data {
                 owner: finalized_state.owner,
                 transaction_hash,
+                transaction_len: 0,
             };
             unsafe { finalized_state.replace(holder_data) }
         }

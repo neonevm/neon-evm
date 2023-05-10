@@ -500,16 +500,7 @@ class TestStepFromInstructionWithChangedRLPTrx:
             s=signed_tx.s,
             v=signed_tx.v,
         )
-        resp = execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+        with pytest.raises(RPCException, match="Program log: RLP error: RlpInconsistentLengthAndData"):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                           signed_tx_new, [sender_with_tokens.solana_account_address,
                                                                           string_setter_contract.solana_address])
-
-        receipt = solana_client.get_transaction(resp.value)
-        check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
-        check_transaction_logs_have_text(resp.value, str(signed_tx.hash))
-        trx_accounts = [str(item) for item in receipt.value.transaction.transaction.message.account_keys]
-        assert str(sender_with_tokens.solana_account_address) in trx_accounts
-        assert text in to_text(
-            neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
-                                                  "get()"))
