@@ -616,6 +616,7 @@ impl<B: Database> Machine<B> {
     pub fn opcode_blockhash(&mut self, backend: &mut B) -> Result<Action> {
         let block_hash = {
             let block_number = self.stack.pop_u256()?;
+
             backend.block_hash(block_number)?
         };
 
