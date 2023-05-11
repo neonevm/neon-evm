@@ -322,7 +322,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             block_slot - 256
         };
 
-        if number > block_slot || lower_block_slot > number {
+        if number >= block_slot || lower_block_slot > number {
             return Ok(<[u8; 32]>::default());
         }
 
