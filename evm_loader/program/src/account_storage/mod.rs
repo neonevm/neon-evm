@@ -104,6 +104,7 @@ pub trait AccountStorage {
         for action in actions {
             let (address, code_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0),
+                Action::EvmSelfDestruct { address } => (address, 0),
                 Action::EvmSetCode { address, code, .. } => (address, code.len()),
                 _ => continue,
             };
