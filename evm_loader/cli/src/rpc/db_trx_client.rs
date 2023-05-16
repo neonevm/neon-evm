@@ -1,5 +1,5 @@
 use super::{e, Rpc};
-use crate::types::{DbConfig, IndexerDb, TracerDb, TxParams};
+use crate::types::{ChDbConfig, IndexerDb, TracerDb, TxParams};
 use solana_client::{
     client_error::Result as ClientResult,
     client_error::{ClientError, ClientErrorKind},
@@ -20,7 +20,6 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
-#[derive(Debug)]
 pub struct TrxDbClient {
     pub hash: [u8; 32],
     sol_sig: [u8; 64],
@@ -29,7 +28,7 @@ pub struct TrxDbClient {
 }
 
 impl TrxDbClient {
-    pub fn new(config: &DbConfig, hash: [u8; 32]) -> Self {
+    pub fn new(config: &ChDbConfig, hash: [u8; 32]) -> Self {
         let tracer_db = TracerDb::new(config);
         let indexer_db = IndexerDb::new(config);
         let sol_sig = indexer_db
@@ -109,21 +108,8 @@ impl Rpc for TrxDbClient {
         Ok(self.get_account(key)?.data)
     }
 
-    fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
-        let hash = self
-            .tracer_db
-            .get_block_hash(slot)
-            .map_err(|e| e!("get_block error", slot, e))?;
-
-        Ok(EncodedConfirmedBlock {
-            previous_blockhash: String::default(),
-            blockhash: hash,
-            parent_slot: u64::default(),
-            transactions: vec![],
-            rewards: vec![],
-            block_time: None,
-            block_height: None,
-        })
+    fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
+        Err(e!("get_block() not implemented for db_trx_client"))
     }
 
     fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
@@ -133,12 +119,9 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_latest_blockhash(&self) -> ClientResult<Hash> {
-        let hash = self
-            .tracer_db
-            .get_latest_blockhash()
-            .map_err(|e| e!("get_latest_blockhash error", e))?;
-        hash.parse::<Hash>()
-            .map_err(|e| e!("get_latest_blockhash parse error", e))
+        Err(e!(
+            "get_latest_blockhash() not implemented for db_trx_client"
+        ))
     }
 
     fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64> {

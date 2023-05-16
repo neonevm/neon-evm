@@ -2,10 +2,9 @@ mod indexer_db;
 #[allow(clippy::all)]
 pub mod trace;
 mod tracer_ch_db;
-mod tracer_pg_db;
 
 pub use indexer_db::IndexerDb;
-pub use tracer_pg_db::TracerDb;
+pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
 
 use {
     ethnum::U256,
@@ -19,12 +18,10 @@ use {
 type Bytes = Vec<u8>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct DbConfig {
-    pub tracer_host: String,
-    pub tracer_port: String,
-    pub tracer_database: String,
-    pub tracer_user: String,
-    pub tracer_password: String,
+pub struct ChDbConfig {
+    pub clickhouse_url: Vec<String>,
+    pub clickhouse_user: Option<String>,
+    pub clickhouse_password: Option<String>,
     pub indexer_host: String,
     pub indexer_port: String,
     pub indexer_database: String,
