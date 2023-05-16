@@ -62,6 +62,8 @@ pub enum NeonCliError {
     /// Program data account not found
     #[error("Invalid Associated PDA {0:?} for Program {1:?}.")]
     InvalidAssociatedPda(Pubkey, Pubkey),
+    #[error("")]
+    InvalidChDbConfig,
     /// too many steps
     #[error("Too many steps")]
     TooManySteps,
@@ -77,6 +79,9 @@ pub enum NeonCliError {
     /// Environment in wrong state (some item in wrong state)
     #[error("Wrong environment")]
     WrongEnvironment,
+
+    #[error("Hex Error. {0}")]
+    FromHexError(#[from] hex::FromHexError),
 
     #[error("Panic: {0}")]
     Panic(String),
@@ -106,6 +111,15 @@ impl NeonCliError {
             NeonCliError::AssociatedPdaNotFound(_, _) => 241,
             NeonCliError::InvalidAssociatedPda(_, _) => 242,
             NeonCliError::TooManySteps => 245,
+            NeonCliError::FromHexError(_) => 246,
+            NeonCliError::InvalidChDbConfig => 247,
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum NeonAPIError {
+    /// Std IO Error
+    #[error("Std I/O error. {0:?}")]
+    StdIoError(#[from] std::io::Error),
 }

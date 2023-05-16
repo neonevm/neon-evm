@@ -252,16 +252,25 @@ impl ClickHouseDb {
             let time_start = Instant::now();
             let result = block(|| async {
                 let query = r#"
-                SELECT owner, lamports, executable, rent_epoch, data
-                FROM events.update_account_distributed
-                WHERE
-                    pubkey = ?
-                    AND slot in (SELECT slot FROM events.update_slot WHERE status = 'Rooted' AND slot <= ?)
-                ORDER BY pubkey DESC, slot DESC, write_version DESC
-                LIMIT 1
+                    SELECT owner, lamports, executable, rent_epoch, data
+                    FROM events.update_account_distributed
+                    WHERE pubkey = ?
+                        AND slot = (
+                        SELECT max(b.slot)
+                        FROM events.update_slot AS b
+                        WHERE (b.slot IN (
+                            SELECT a.slot
+                            FROM events.update_account_distributed AS a
+                            WHERE (a.pubkey = ?)
+                                AND (a.slot <= ?)
+                            ORDER BY a.slot DESC
+                            LIMIT 1000
+                        )) AND (b.status = 'Rooted')
+                    )
                 "#;
                 self.client
                     .query(query)
+                    .bind(key_.clone())
                     .bind(key_.clone())
                     .bind(root)
                     .fetch_one::<AccountRow>()

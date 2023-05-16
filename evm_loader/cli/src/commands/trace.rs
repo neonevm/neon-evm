@@ -1,5 +1,6 @@
 use crate::{
     commands::emulate,
+    context::Context,
     event_listener::tracer::Tracer,
     types::{trace::TracedCall, TxParams},
     Config, NeonCliResult,
@@ -7,8 +8,10 @@ use crate::{
 use evm_loader::types::Address;
 use solana_sdk::pubkey::Pubkey;
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     config: &Config,
+    context: &Context,
     tx: TxParams,
     token: Pubkey,
     chain: u64,
@@ -19,7 +22,16 @@ pub fn execute(
     let mut tracer = Tracer::new();
 
     evm_loader::evm::tracing::using(&mut tracer, || {
-        emulate::execute(config, tx, token, chain, steps, accounts, solana_accounts)
+        emulate::execute(
+            config,
+            context,
+            tx,
+            token,
+            chain,
+            steps,
+            accounts,
+            solana_accounts,
+        )
     })?;
 
     let (vm_trace, full_trace_data) = tracer.into_traces();

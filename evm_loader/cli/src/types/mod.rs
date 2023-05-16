@@ -4,6 +4,9 @@ pub mod trace;
 mod tracer_ch_db;
 
 pub use indexer_db::IndexerDb;
+use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
+use tokio::runtime::Runtime;
 pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
 
 use {
@@ -11,13 +14,13 @@ use {
     evm_loader::types::Address,
     postgres::NoTls,
     thiserror::Error,
-    tokio::task::block_in_place,
+    // tokio::task::block_in_place,
     tokio_postgres::{connect, Client},
 };
 
 type Bytes = Vec<u8>;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Default)]
 pub struct ChDbConfig {
     pub clickhouse_url: Vec<String>,
     pub clickhouse_user: Option<String>,
@@ -29,7 +32,7 @@ pub struct ChDbConfig {
     pub indexer_password: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TxParams {
     pub from: Address,
     pub to: Option<Address>,
@@ -68,15 +71,16 @@ pub fn do_connect(
     client
 }
 
+lazy_static! {
+    pub static ref RT: Runtime = tokio::runtime::Runtime::new().unwrap();
+}
+
 pub fn block<F, Fu, R>(f: F) -> R
 where
     F: FnOnce() -> Fu,
     Fu: std::future::Future<Output = R>,
 {
-    block_in_place(|| {
-        let handle = tokio::runtime::Handle::current();
-        handle.block_on(f())
-    })
+    RT.block_on(f())
 }
 
 #[derive(Error, Debug)]

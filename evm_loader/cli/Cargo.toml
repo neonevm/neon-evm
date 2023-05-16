@@ -39,6 +39,17 @@ postgres = { version = "0.19", features = ["with-chrono-0_4", "array-impls"] }
 tokio-postgres = {version="0.7", features=["with-uuid-0_8"]}
 lazy_static = "1.4"
 clickhouse = "0.11.2"
+tide = "0.16.0"
+femme = "2.1.1"
+
+
+[[bin]]
+name = "neon-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "neon-api"
+path = "src/api.rs"
 
 [lib]
 name = "neon_cli"

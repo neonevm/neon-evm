@@ -76,6 +76,7 @@ COPY evm_loader/solana-run-neon.sh \
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader-dump.txt /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-api /opt/
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc

@@ -26,7 +26,7 @@ use solana_sdk::{
     sysvar::{slot_hashes, Sysvar},
 };
 
-use crate::Config;
+use crate::{Config, Context};
 
 const FAKE_OPERATOR: Pubkey = pubkey!("neonoperator1111111111111111111111111111111");
 
@@ -107,11 +107,11 @@ impl NeonAccount {
         }
     }
 
-    pub fn rpc_load(config: &Config, address: Address, writable: bool) -> Self {
+    pub fn rpc_load(config: &Config, context: &Context, address: Address, writable: bool) -> Self {
         let (key, _) = make_solana_program_address(&address, &config.evm_loader);
         info!("get_account_from_solana {} => {}", address, key);
 
-        let account = config.rpc_client.get_account(&key).ok();
+        let account = context.rpc_client.get_account(&key).ok();
         Self::new(address, key, account, writable)
     }
 }
@@ -130,6 +130,7 @@ pub struct EmulatorAccountStorage<'a> {
     pub accounts: RefCell<HashMap<Address, NeonAccount>>,
     pub solana_accounts: RefCell<HashMap<Pubkey, SolanaAccount>>,
     config: &'a Config,
+    context: &'a Context,
     block_number: u64,
     block_timestamp: i64,
     neon_token_mint: Pubkey,
@@ -137,16 +138,22 @@ pub struct EmulatorAccountStorage<'a> {
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config, token_mint: Pubkey, chain_id: u64) -> EmulatorAccountStorage {
+    pub fn new(
+        config: &'a Config,
+        context: &'a Context,
+        token_mint: Pubkey,
+        chain_id: u64,
+    ) -> EmulatorAccountStorage<'a> {
         trace!("backend::new");
 
-        let slot = config.rpc_client.get_slot().unwrap_or_default();
-        let timestamp = config.rpc_client.get_block_time(slot).unwrap_or_default();
+        let slot = context.rpc_client.get_slot().unwrap_or_default();
+        let timestamp = context.rpc_client.get_block_time(slot).unwrap_or_default();
 
         Self {
             accounts: RefCell::new(HashMap::new()),
             solana_accounts: RefCell::new(HashMap::new()),
             config,
+            context,
             block_number: slot,
             block_timestamp: timestamp,
             neon_token_mint: token_mint,
@@ -161,7 +168,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             .chain(solana_accounts.iter().copied())
             .collect();
 
-        if let Ok(accounts) = self.config.rpc_client.get_multiple_accounts(&pubkeys) {
+        if let Ok(accounts) = self.context.rpc_client.get_multiple_accounts(&pubkeys) {
             let entries = addresses
                 .iter()
                 .zip(accounts.iter().take(addresses.len()))
@@ -199,7 +206,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
 
         let result = self
-            .config
+            .context
             .rpc_client
             .get_account_with_commitment(pubkey, self.config.commitment)?;
 
@@ -217,13 +224,14 @@ impl<'a> EmulatorAccountStorage<'a> {
 
     pub fn get_account_from_solana(
         config: &'a Config,
+        context: &'a Context,
         address: &Address,
     ) -> (Pubkey, Option<Account>) {
         let (solana_address, _solana_nonce) =
             make_solana_program_address(address, &config.evm_loader);
         info!("get_account_from_solana {} => {}", address, solana_address);
 
-        if let Ok(acc) = config.rpc_client.get_account(&solana_address) {
+        if let Ok(acc) = context.rpc_client.get_account(&solana_address) {
             trace!("Account found");
             trace!("Account data len {}", acc.data.len());
             trace!("Account owner {}", acc.owner);
@@ -244,7 +252,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
             true
         } else {
-            let account = NeonAccount::rpc_load(self.config, *address, writable);
+            let account = NeonAccount::rpc_load(self.config, self.context, *address, writable);
             accounts.insert(*address, account);
 
             false

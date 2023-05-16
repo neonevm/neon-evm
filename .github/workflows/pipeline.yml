@@ -23,8 +23,6 @@ jobs:
     runs-on: build-runner
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: "true"
 
       - name: build docker image
         run: |
@@ -41,8 +39,6 @@ jobs:
       - deploy-neon-evm
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: "true"
       - name: Run tests
         run: |
           python3 ./.github/workflows/deploy.py run_tests \

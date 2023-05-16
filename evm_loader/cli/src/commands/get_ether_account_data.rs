@@ -3,11 +3,11 @@ use evm_loader::{account::EthereumAccount, types::Address};
 use crate::{
     account_storage::{account_info, EmulatorAccountStorage},
     errors::NeonCliError,
-    Config, NeonCliResult,
+    Config, Context, NeonCliResult,
 };
 
-pub fn execute(config: &Config, ether_address: &Address) -> NeonCliResult {
-    match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
+pub fn execute(config: &Config, context: &Context, ether_address: &Address) -> NeonCliResult {
+    match EmulatorAccountStorage::get_account_from_solana(config, context, ether_address) {
         (solana_address, Some(mut acc)) => {
             let acc_info = account_info(&solana_address, &mut acc);
             let account_data =

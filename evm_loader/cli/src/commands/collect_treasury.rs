@@ -1,6 +1,6 @@
 use crate::{
     commands::get_neon_elf::read_elf_parameters_from_account, errors::NeonCliError, Config,
-    NeonCliResult,
+    Context, NeonCliResult,
 };
 use evm_loader::account::{MainTreasury, Treasury};
 use log::{info, warn};
@@ -14,8 +14,8 @@ use solana_sdk::{
 };
 use spl_token::instruction::sync_native;
 
-pub fn execute(config: &Config) -> NeonCliResult {
-    let neon_params = read_elf_parameters_from_account(config)?;
+pub fn execute(config: &Config, context: &Context) -> NeonCliResult {
+    let neon_params = read_elf_parameters_from_account(config, context)?;
 
     let pool_count: u32 = neon_params
         .get("NEON_POOL_COUNT")
@@ -26,7 +26,7 @@ pub fn execute(config: &Config) -> NeonCliResult {
 
     info!("Main pool balance: {}", main_balance_address);
 
-    let client = config
+    let client = context
         .rpc_client
         .as_any()
         .downcast_ref::<RpcClient>()
@@ -35,12 +35,12 @@ pub fn execute(config: &Config) -> NeonCliResult {
     for i in 0..pool_count {
         let (aux_balance_address, _) = Treasury::address(&config.evm_loader, i);
 
-        if let Some(aux_balance_account) = config
+        if let Some(aux_balance_account) = context
             .rpc_client
             .get_account_with_commitment(&aux_balance_address, config.commitment)?
             .value
         {
-            let minimal_balance = config
+            let minimal_balance = context
                 .rpc_client
                 .get_minimum_balance_for_rent_exemption(aux_balance_account.data.len())?;
             let available_lamports = aux_balance_account.lamports.saturating_sub(minimal_balance);
@@ -59,16 +59,16 @@ pub fn execute(config: &Config) -> NeonCliResult {
                             AccountMeta::new_readonly(system_program::id(), false),
                         ],
                     )],
-                    Some(&config.signer.pubkey()),
+                    Some(&context.signer.pubkey()),
                 );
-                let blockhash = config.rpc_client.get_latest_blockhash()?;
+                let blockhash = context.rpc_client.get_latest_blockhash()?;
                 message.recent_blockhash = blockhash;
 
-                check_account_for_fee(client, &config.signer.pubkey(), &message)?;
+                check_account_for_fee(client, &context.signer.pubkey(), &message)?;
 
                 let mut trx = Transaction::new_unsigned(message);
-                trx.try_sign(&[&*config.signer], blockhash)?;
-                config
+                trx.try_sign(&[&*context.signer], blockhash)?;
+                context
                     .rpc_client
                     .send_and_confirm_transaction_with_spinner(&trx)?;
             } else {
@@ -80,20 +80,20 @@ pub fn execute(config: &Config) -> NeonCliResult {
     }
     let mut message = Message::new(
         &[sync_native(&spl_token::id(), &main_balance_address)?],
-        Some(&config.signer.pubkey()),
+        Some(&context.signer.pubkey()),
     );
-    let blockhash = config.rpc_client.get_latest_blockhash()?;
+    let blockhash = context.rpc_client.get_latest_blockhash()?;
     message.recent_blockhash = blockhash;
 
-    check_account_for_fee(client, &config.signer.pubkey(), &message)?;
+    check_account_for_fee(client, &context.signer.pubkey(), &message)?;
 
     let mut trx = Transaction::new_unsigned(message);
-    trx.try_sign(&[&*config.signer], blockhash)?;
-    config
+    trx.try_sign(&[&*context.signer], blockhash)?;
+    context
         .rpc_client
         .send_and_confirm_transaction_with_spinner(&trx)?;
 
-    let main_balance_account = config.rpc_client.get_account(&main_balance_address)?;
+    let main_balance_account = context.rpc_client.get_account(&main_balance_address)?;
     Ok(serde_json::json!({
         "pool_address": main_balance_address.to_string(),
         "balance": main_balance_account.lamports
