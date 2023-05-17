@@ -80,7 +80,7 @@ where
     F: FnOnce() -> Fu,
     Fu: std::future::Future<Output = R>,
 {
-    block_in_place(|| RT.block_on(f()))
+    RT.block_on(f())
 }
 
 #[derive(Error, Debug)]
