@@ -161,6 +161,7 @@ impl<'a> EthereumAccount<'a> {
         )?;
 
         EthereumAccount::init(
+            program_id,
             info,
             Data {
                 address,

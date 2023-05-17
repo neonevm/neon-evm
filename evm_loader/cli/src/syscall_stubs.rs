@@ -1,16 +1,16 @@
 use log::info;
 use solana_sdk::{program_error::ProgramError, program_stubs::SyscallStubs, sysvar::rent::Rent};
 
-use crate::{errors::NeonCliError, Config};
+use crate::{context::Context, errors::NeonCliError};
 
 pub struct Stubs {
     rent: Rent,
 }
 
 impl Stubs {
-    pub fn new(config: &Config) -> Result<Box<Stubs>, NeonCliError> {
+    pub fn new(context: &Context) -> Result<Box<Stubs>, NeonCliError> {
         let rent_pubkey = solana_sdk::sysvar::rent::id();
-        let data = config.rpc_client.get_account_data(&rent_pubkey)?;
+        let data = context.rpc_client.get_account_data(&rent_pubkey)?;
         let rent = bincode::deserialize(&data).map_err(|_| ProgramError::InvalidArgument)?;
 
         Ok(Box::new(Self { rent }))

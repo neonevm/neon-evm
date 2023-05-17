@@ -11,13 +11,13 @@ mod trace;
 mod transaction_executor;
 
 use crate::{
-    commands::get_neon_elf::CachedElfParams, program_options::truncate, types::TxParams, Config,
-    NeonCliResult,
+    commands::get_neon_elf::CachedElfParams, context::Context, program_options::truncate,
+    types::TxParams, Config, NeonCliResult,
 };
 use clap::ArgMatches;
 use ethnum::U256;
 use evm_loader::types::Address;
-use solana_clap_utils::input_parsers::{pubkey_of, value_of};
+use solana_clap_utils::input_parsers::{pubkey_of, value_of, values_of};
 use solana_client::{
     client_error::Result as SolanaClientResult, rpc_config::RpcSendTransactionConfig,
 };
@@ -31,62 +31,107 @@ use solana_sdk::{
 };
 use std::str::FromStr;
 
-pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult {
+pub fn execute(
+    cmd: &str,
+    params: Option<&ArgMatches>,
+    config: &Config,
+    context: &Context,
+) -> NeonCliResult {
     match (cmd, params) {
         ("emulate", Some(params)) => {
             let tx = parse_tx(params);
-            let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, tx, token, chain, steps)
+            let (token, chain, steps, accounts, solana_accounts) =
+                parse_tx_params(config, context, params);
+            emulate::execute(
+                config,
+                context,
+                tx,
+                token,
+                chain,
+                steps,
+                &accounts,
+                &solana_accounts,
+            )
         }
         ("emulate_hash", Some(params)) => {
-            let tx = config.rpc_client.get_transaction_data()?;
-            let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, tx, token, chain, steps)
+            let tx = context.rpc_client.get_transaction_data()?;
+            let (token, chain, steps, accounts, solana_accounts) =
+                parse_tx_params(config, context, params);
+            emulate::execute(
+                config,
+                context,
+                tx,
+                token,
+                chain,
+                steps,
+                &accounts,
+                &solana_accounts,
+            )
         }
         ("trace", Some(params)) => {
             let tx = parse_tx(params);
-            let (token, chain, steps) = parse_tx_params(config, params);
-            trace::execute(config, tx, token, chain, steps)
+            let (token, chain, steps, accounts, solana_accounts) =
+                parse_tx_params(config, context, params);
+            trace::execute(
+                config,
+                context,
+                tx,
+                token,
+                chain,
+                steps,
+                &accounts,
+                &solana_accounts,
+            )
         }
         ("trace_hash", Some(params)) => {
-            let tx = config.rpc_client.get_transaction_data()?;
-            let (token, chain, steps) = parse_tx_params(config, params);
-            trace::execute(config, tx, token, chain, steps)
+            let tx = context.rpc_client.get_transaction_data()?;
+            let (token, chain, steps, accounts, solana_accounts) =
+                parse_tx_params(config, context, params);
+            trace::execute(
+                config,
+                context,
+                tx,
+                token,
+                chain,
+                steps,
+                &accounts,
+                &solana_accounts,
+            )
         }
         ("create-ether-account", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
-            create_ether_account::execute(config, &ether)
+            create_ether_account::execute(config, context, &ether)
         }
         ("deposit", Some(params)) => {
             let amount = value_of(params, "amount").expect("amount parse error");
             let ether = address_of(params, "ether").expect("ether parse error");
-            deposit::execute(config, amount, &ether)
+            deposit::execute(config, context, amount, &ether)
         }
         ("get-ether-account-data", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
-            get_ether_account_data::execute(config, &ether)
+            get_ether_account_data::execute(config, context, &ether)
         }
         ("cancel-trx", Some(params)) => {
             let storage_account =
                 pubkey_of(params, "storage_account").expect("storage_account parse error");
-            cancel_trx::execute(config, &storage_account)
+            cancel_trx::execute(config, context, &storage_account)
         }
         ("neon-elf-params", Some(params)) => {
             let program_location = params.value_of("program_location");
-            get_neon_elf::execute(config, program_location)
+            get_neon_elf::execute(config, context, program_location)
         }
-        ("collect-treasury", Some(_)) => collect_treasury::execute(config),
+        ("collect-treasury", Some(_)) => collect_treasury::execute(config, context),
         ("init-environment", Some(params)) => {
             let file = params.value_of("file");
             let send_trx = params.is_present("send-trx");
             let force = params.is_present("force");
             let keys_dir = params.value_of("keys-dir");
-            init_environment::execute(config, send_trx, force, keys_dir, file)
+            init_environment::execute(config, context, send_trx, force, keys_dir, file)
         }
         ("get-storage-at", Some(params)) => {
             let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
             let index = u256_of(params, "index").expect("index parse error");
-            get_storage_at::execute(config, contract_id, &index)
+            get_storage_at::execute(config, context, contract_id, &index)
         }
         _ => unreachable!(),
     }
@@ -131,18 +176,18 @@ fn read_stdin() -> Option<Vec<u8>> {
 }
 
 pub fn send_transaction(
-    config: &Config,
+    context: &Context,
     instructions: &[Instruction],
 ) -> SolanaClientResult<Signature> {
-    let message = Message::new(instructions, Some(&config.signer.pubkey()));
+    let message = Message::new(instructions, Some(&context.signer.pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
-    let signers = [&*config.signer];
-    let (blockhash, _last_valid_slot) = config
+    let signers = [&*context.signer];
+    let (blockhash, _last_valid_slot) = context
         .rpc_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
     transaction.try_sign(&signers, blockhash)?;
 
-    config
+    context
         .rpc_client
         .send_and_confirm_transaction_with_spinner_and_config(
             &transaction,
@@ -170,12 +215,16 @@ fn parse_tx(params: &ArgMatches) -> TxParams {
     }
 }
 
-pub fn parse_tx_params(config: &Config, params: &ArgMatches) -> (Pubkey, u64, u64) {
+pub fn parse_tx_params(
+    config: &Config,
+    context: &Context,
+    params: &ArgMatches,
+) -> (Pubkey, u64, u64, Vec<Address>, Vec<Pubkey>) {
     // Read ELF params only if token_mint or chain_id is not set.
     let mut token = pubkey_of(params, "token_mint");
     let mut chain = value_of(params, "chain_id");
     if token.is_none() || chain.is_none() {
-        let cached_elf_params = CachedElfParams::new(config);
+        let cached_elf_params = CachedElfParams::new(config, context);
         token = token.or_else(|| {
             Some(
                 Pubkey::from_str(
@@ -202,5 +251,9 @@ pub fn parse_tx_params(config: &Config, params: &ArgMatches) -> (Pubkey, u64, u6
     let max_steps =
         value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
 
-    (token, chain, max_steps)
+    let accounts = values_of::<Address>(params, "cached_accounts").unwrap_or_default();
+
+    let solana_accounts = values_of::<Pubkey>(params, "solana_accounts").unwrap_or_default();
+
+    (token, chain, max_steps, accounts, solana_accounts)
 }

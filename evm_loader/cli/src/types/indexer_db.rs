@@ -1,5 +1,5 @@
 use {
-    super::{block, do_connect, DbConfig, PgError, PgResult, TxParams},
+    super::{block, do_connect, ChDbConfig, PgError, PgResult, TxParams},
     ethnum::U256,
     evm_loader::types::Address,
     solana_sdk::clock::Slot,
@@ -16,7 +16,7 @@ pub struct IndexerDb {
 }
 
 impl IndexerDb {
-    pub fn new(config: &DbConfig) -> Self {
+    pub fn new(config: &ChDbConfig) -> Self {
         let client = do_connect(
             &config.indexer_host,
             &config.indexer_port,

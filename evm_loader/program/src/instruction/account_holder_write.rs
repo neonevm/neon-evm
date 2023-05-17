@@ -1,15 +1,13 @@
 use crate::account::{FinalizedState, Holder, Operator};
+use crate::error::{Error, Result};
 use arrayref::array_ref;
-use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
-    pubkey::Pubkey,
-};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 pub fn process<'a>(
     program_id: &'a Pubkey,
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
-) -> ProgramResult {
+) -> Result<()> {
     solana_program::msg!("Instruction: Write To Holder");
 
     let transaction_hash = *array_ref![instruction, 0, 32];
@@ -25,11 +23,12 @@ pub fn process<'a>(
             let holder_data = crate::account::holder::Data {
                 owner: finalized_state.owner,
                 transaction_hash,
+                transaction_len: 0,
             };
             unsafe { finalized_state.replace(holder_data) }
         }
         _ => {
-            Err!(ProgramError::InvalidAccountData; "Account {} - expected Holder or Finalized", holder_info.key)
+            return Err(Error::AccountInvalidTag(*holder_info.key, Holder::TAG));
         }
     }?;
 
@@ -38,13 +37,13 @@ pub fn process<'a>(
     holder.validate_owner(&operator)?;
 
     if holder.transaction_hash != transaction_hash {
-        holder.clear();
+        holder.clear()?;
         holder.transaction_hash = transaction_hash;
     }
 
     solana_program::log::sol_log_data(&[b"HASH", &transaction_hash]);
 
-    holder.write(offset, data);
+    holder.write(offset, data)?;
 
     Ok(())
 }

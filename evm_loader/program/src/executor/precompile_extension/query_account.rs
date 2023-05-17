@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use arrayref::{array_ref, array_refs};
 use ethnum::U256;
-use solana_program::pubkey::Pubkey;
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 use crate::{
     account_storage::AccountStorage,
@@ -11,7 +11,7 @@ use crate::{
     types::Address,
 };
 
-// QueryAccount method ids:
+// QueryAccount method DEPRECATED ids:
 //-------------------------------------------
 // cache(uint256,uint64,uint64) => 0x2b3c8322
 // owner(uint256)               => 0xa123c33e
@@ -21,14 +21,14 @@ use crate::{
 // rent_epoch(uint256)          => 0xc4d369b5
 // data(uint256,uint64,uint64)  => 0x43ca5161
 //-------------------------------------------
-
-const QUERY_ACCOUNT_METHOD_CACHE_ID: &[u8; 4] = &[0x2b, 0x3c, 0x83, 0x22];
-const QUERY_ACCOUNT_METHOD_OWNER_ID: &[u8; 4] = &[0xa1, 0x23, 0xc3, 0x3e];
-const QUERY_ACCOUNT_METHOD_LENGTH_ID: &[u8; 4] = &[0xaa, 0x8b, 0x99, 0xd2];
-const QUERY_ACCOUNT_METHOD_LAMPORTS_ID: &[u8; 4] = &[0x74, 0x8f, 0x2d, 0x8a];
-const QUERY_ACCOUNT_METHOD_EXECUTABLE_ID: &[u8; 4] = &[0xc2, 0x19, 0xa7, 0x85];
-const QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID: &[u8; 4] = &[0xc4, 0xd3, 0x69, 0xb5];
-const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0x43, 0xca, 0x51, 0x61];
+// QueryAccount method current ids:
+// "02571be3": "owner(bytes32)",
+// "6273448f": "lamports(bytes32)",
+// "e6bef488": "executable(bytes32)",
+// "8bb9e6f4": "rent_epoch(bytes32)"
+// "b64a097e": "info(bytes32)",
+// "a9dbaf25": "length(bytes32)",
+// "7dd6c1a0": "data(bytes32,uint64,uint64)",
 
 pub fn query_account<B: AccountStorage>(
     state: &mut ExecutorState<B>,
@@ -44,169 +44,179 @@ pub fn query_account<B: AccountStorage>(
     }
 
     let (method_id, rest) = input.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
+    let method_id: [u8; 4] = method_id.try_into()?;
 
     let (account_address, rest) = rest.split_at(32);
     let account_address = Pubkey::try_from(account_address)?;
 
     match method_id {
-        QUERY_ACCOUNT_METHOD_CACHE_ID => {
+        [0x2b, 0x3c, 0x83, 0x22] => {
+            // cache(uint256,uint64,uint64)
+            // deprecated
+            Ok(Vec::new())
+        }
+        [0xa1, 0x23, 0xc3, 0x3e] | [0x02, 0x57, 0x1b, 0xe3] => {
+            debug_print!("query_account.owner({})", &account_address);
+            account_owner(state, &account_address)
+        }
+        [0xaa, 0x8b, 0x99, 0xd2] | [0xa9, 0xdb, 0xaf, 0x25] => {
+            debug_print!("query_account.length({})", &account_address);
+            account_data_length(state, &account_address)
+        }
+        [0x74, 0x8f, 0x2d, 0x8a] | [0x62, 0x73, 0x44, 0x8f] => {
+            debug_print!("query_account.lamports({})", &account_address);
+            account_lamports(state, &account_address)
+        }
+        [0xc2, 0x19, 0xa7, 0x85] | [0xe6, 0xbe, 0xf4, 0x88] => {
+            debug_print!("query_account.executable({})", &account_address);
+            account_is_executable(state, &account_address)
+        }
+        [0xc4, 0xd3, 0x69, 0xb5] | [0x8b, 0xb9, 0xe6, 0xf4] => {
+            debug_print!("query_account.rent_epoch({})", &account_address);
+            account_rent_epoch(state, &account_address)
+        }
+        [0x43, 0xca, 0x51, 0x61] | [0x7d, 0xd6, 0xc1, 0xa0] => {
             let arguments = array_ref![rest, 0, 64];
             let (offset, length) = array_refs!(arguments, 32, 32);
-            let offset = U256::from_be_bytes(*offset).as_usize();
-            let length = U256::from_be_bytes(*length).as_usize();
-
-            debug_print!(
-                "query_account.cache({}, {}, {})",
-                account_address,
-                offset,
-                length
-            );
-            cache_account(state, account_address, offset, length)
-        }
-        QUERY_ACCOUNT_METHOD_OWNER_ID => {
-            debug_print!("query_account.owner({})", account_address);
-            account_owner(state, account_address)
-        }
-        QUERY_ACCOUNT_METHOD_LENGTH_ID => {
-            debug_print!("query_account.length({})", account_address);
-            account_data_length(state, account_address)
-        }
-        QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
-            debug_print!("query_account.lamports({})", account_address);
-            account_lamports(state, account_address)
-        }
-        QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
-            debug_print!("query_account.executable({})", account_address);
-            account_is_executable(state, account_address)
-        }
-        QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
-            debug_print!("query_account.rent_epoch({})", account_address);
-            account_rent_epoch(state, account_address)
-        }
-        QUERY_ACCOUNT_METHOD_DATA_ID => {
-            let arguments = array_ref![rest, 0, 64];
-            let (offset, length) = array_refs!(arguments, 32, 32);
-            let offset = U256::from_be_bytes(*offset).as_usize();
-            let length = U256::from_be_bytes(*length).as_usize();
+            let offset = U256::from_be_bytes(*offset).try_into()?;
+            let length = U256::from_be_bytes(*length).try_into()?;
             debug_print!(
                 "query_account.data({}, {}, {})",
                 account_address,
                 offset,
                 length
             );
-            account_data(state, account_address, offset, length)
+            account_data(state, &account_address, offset, length)
+        }
+        [0xb6, 0x4a, 0x09, 0x7e] => {
+            debug_print!("query_account.info({})", &account_address);
+            account_info(state, &account_address)
         }
         _ => {
             debug_print!("query_account UNKNOWN {:?}", method_id);
-            Err(Error::UnknownPrecompileMethodSelector(*address, *method_id))
+            Err(Error::UnknownPrecompileMethodSelector(*address, method_id))
         }
     }
 }
 
-fn cache_account<B: AccountStorage>(
-    state: &mut ExecutorState<B>,
-    account_address: Pubkey,
-    offset: usize,
-    length: usize,
-) -> Result<Vec<u8>> {
-    state.external_account_partial_cache(account_address, offset, length)?;
-
-    Ok(Vec::new())
-}
-
+#[allow(clippy::unnecessary_wraps)]
 fn account_owner<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    account_address: Pubkey,
+    address: &Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account_partial(account_address)?;
+    let owner = state
+        .backend
+        .map_solana_account(address, |info| info.owner.to_bytes());
 
-    Ok(account.owner.to_bytes().to_vec())
+    Ok(owner.to_vec())
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn account_lamports<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    account_address: Pubkey,
+    address: &Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account_partial(account_address)?;
+    let lamports: U256 = state
+        .backend
+        .map_solana_account(address, |info| **info.lamports.borrow())
+        .into();
 
-    let lamports: U256 = account.lamports.into(); // pad to 32 bytes
     let bytes = lamports.to_be_bytes().to_vec();
 
     Ok(bytes)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn account_rent_epoch<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    account_address: Pubkey,
+    address: &Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account_partial(account_address)?;
+    let epoch: U256 = state
+        .backend
+        .map_solana_account(address, |info| info.rent_epoch)
+        .into();
 
-    let epoch: U256 = account.rent_epoch.into(); // pad to 32 bytes
     let bytes = epoch.to_be_bytes().to_vec();
 
     Ok(bytes)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn account_is_executable<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    account_address: Pubkey,
+    address: &Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account_partial(account_address)?;
+    let executable: U256 = state
+        .backend
+        .map_solana_account(address, |info| info.executable)
+        .into();
 
-    let is_executable: U256 = if account.executable {
-        U256::ONE
-    } else {
-        U256::ZERO
-    };
-    let bytes = is_executable.to_be_bytes().to_vec();
+    let bytes = executable.to_be_bytes().to_vec();
 
     Ok(bytes)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn account_data_length<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    account_address: Pubkey,
+    address: &Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account_partial(account_address)?;
+    let length: U256 = state
+        .backend
+        .map_solana_account(address, |info| info.data.borrow().len())
+        .try_into()?;
 
-    let length: U256 = (account.data_total_len as u128).into(); // pad to 32 bytes
     let bytes = length.to_be_bytes().to_vec();
 
     Ok(bytes)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn account_data<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    account_address: Pubkey,
+    address: &Pubkey,
     offset: usize,
     length: usize,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account_partial(account_address)?;
-
     if length == 0 {
         return Err(Error::Custom(
             "Query Account: data() - length == 0".to_string(),
         ));
     }
 
-    if offset < account.data_offset {
-        return Err(Error::Custom(
-            "Query Account: data() - out of bounds".to_string(),
-        ));
+    state
+        .backend
+        .map_solana_account(address, |info| {
+            info.data
+                .borrow()
+                .get(offset..offset + length)
+                .map(<[u8]>::to_vec)
+        })
+        .ok_or_else(|| Error::Custom("Query Account: data() - out of bounds".to_string()))
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn account_info<B: AccountStorage>(
+    state: &mut ExecutorState<B>,
+    address: &Pubkey,
+) -> Result<Vec<u8>> {
+    fn to_solidity_account_value(info: &AccountInfo) -> Vec<u8> {
+        let mut buffer = [0_u8; 5 * 32];
+        let (key, _, lamports, owner, _, executable, _, rent_epoch) =
+            arrayref::mut_array_refs![&mut buffer, 32, 24, 8, 32, 31, 1, 24, 8];
+
+        *key = info.key.to_bytes();
+        *lamports = info.lamports().to_be_bytes();
+        *owner = info.owner.to_bytes();
+        executable[0] = info.executable.into();
+        *rent_epoch = info.rent_epoch.to_be_bytes();
+
+        buffer.to_vec()
     }
 
-    if offset.saturating_add(length) > account.data_offset.saturating_add(account.data.len()) {
-        return Err(Error::Custom(
-            "Query Account: data() - out of bounds".to_string(),
-        ));
-    }
+    let info = state
+        .backend
+        .map_solana_account(address, to_solidity_account_value);
 
-    debug_print!("query_account.data got {} bytes", length);
-
-    let begin = offset - account.data_offset;
-    let end = begin + length;
-    let data = &account.data[begin..end];
-
-    Ok(data.to_vec())
+    Ok(info)
 }

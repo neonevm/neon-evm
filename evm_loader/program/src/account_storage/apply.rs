@@ -59,6 +59,8 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
+        let actions = Self::rearrange_actions(actions);
+
         let accounts_operations = self.calc_accounts_operations(&actions);
         if self.process_accounts_operations(
             system_program,
@@ -76,7 +78,9 @@ impl<'a> ProgramAccountStorage<'a> {
         for action in &actions {
             let address = match action {
                 Action::NeonTransfer { target, .. } => target,
-                Action::EvmSetCode { address, .. } => address,
+                Action::EvmSelfDestruct { address, .. } | Action::EvmSetCode { address, .. } => {
+                    address
+                }
                 _ => continue,
             };
             self.create_account_if_not_exists(address)?;
@@ -157,6 +161,51 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("Applies done");
 
         Ok(AccountsReadiness::Ready)
+    }
+
+    fn rearrange_actions(actions: Vec<Action>) -> Vec<Action> {
+        // Find all the account addresses which are scheduled to EvmSelfDestruct
+        let accounts_to_destroy: std::collections::HashSet<_> = actions
+            .iter()
+            .filter_map(|action| match action {
+                Action::EvmSelfDestruct { address } => Some(*address),
+                _ => None,
+            })
+            .collect();
+
+        // For accounts scheduled to Self Destroy only leave NeonTransfer and NeonWithdraw actions
+        let mut rearranged_actions = Vec::with_capacity(actions.len());
+        let mut evm_self_destruct_actions = Vec::new();
+        for action in actions {
+            match action {
+                // We always apply ExternalInstruction for Solana accounts
+                // and NeonTransfer + NeonWithdraw
+                Action::ExternalInstruction { .. }
+                | Action::NeonTransfer { .. }
+                | Action::NeonWithdraw { .. } => {
+                    rearranged_actions.push(action);
+                }
+                // We remove EvmSetStorage|EvmIncrementNonce|EvmSetCode
+                // if account is scheduled for destroy
+                Action::EvmSetStorage { address, .. }
+                | Action::EvmSetCode { address, .. }
+                | Action::EvmIncrementNonce { address } => {
+                    if !accounts_to_destroy.contains(&address) {
+                        rearranged_actions.push(action);
+                    }
+                }
+                // Move EvmSelfDestruct to a separate Vec<Action>
+                Action::EvmSelfDestruct { .. } => {
+                    evm_self_destruct_actions.push(action);
+                }
+            }
+        }
+
+        // Constructing compound list of actions,
+        // first: we execute everything except SelfDestruct,
+        // second: execute all SelfDestructs
+        rearranged_actions.append(&mut evm_self_destruct_actions);
+        rearranged_actions
     }
 
     fn apply_storage(
@@ -301,7 +350,6 @@ impl<'a> ProgramAccountStorage<'a> {
     fn delete_account(&mut self, address: Address) -> ProgramResult {
         let account = self.ethereum_account_mut(&address);
 
-        assert_eq!(account.balance, U256::ZERO); // balance should be moved by executor
         account.trx_count = 0;
         account.generation = account.generation.checked_add(1)
             .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - generation overflow", address))?;
@@ -396,6 +444,7 @@ impl<'a> ProgramAccountStorage<'a> {
         })?;
 
         let ether_account = EthereumAccount::init(
+            self.program_id,
             info,
             ether_account::Data {
                 address: *address,

@@ -30,8 +30,8 @@ ERR_MSG_TPL = {
 DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
-SOLANA_NODE_VERSION = 'v1.14.14'
-SOLANA_BPF_VERSION = 'v1.15.0'
+SOLANA_NODE_VERSION = 'v1.14.16'
+SOLANA_BPF_VERSION = 'v1.14.16'
 
 VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
@@ -116,7 +116,7 @@ def run_tests(github_sha):
         click.echo(current_line)
         if 'ERROR ' in current_line or 'FAILED ' in current_line:
             tests_are_failed = True
-    if tests_are_failed:
+    if tests_are_failed or docker_client.exec_inspect(exec_id['Id'])["ExitCode"] == 1:
         print("Tests are failed")
         sys.exit(1)
 

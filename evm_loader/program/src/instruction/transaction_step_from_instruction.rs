@@ -82,10 +82,6 @@ pub fn process<'a>(
                 gasometer,
             )
         }
-        tag => Err(Error::AccountInvalidTag(
-            *storage_info.key,
-            tag,
-            Holder::TAG,
-        )),
+        _ => Err(Error::AccountInvalidTag(*storage_info.key, Holder::TAG)),
     }
 }

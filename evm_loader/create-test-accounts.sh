@@ -34,7 +34,7 @@ function createAccount() {
     fi
     ACCOUNT=$(solana address -k "${ID_FILE}")
     echo "$(date "+%F %X.%3N") I ${FILENAME}:${LINENO} $$ ${COMPONENT}:CreateTestAcc {} New account ${ACCOUNT}"
-    if ! solana account "${ACCOUNT}"; then
+    # if ! solana account "${ACCOUNT}"; then
       echo "$(date "+%F %X.%3N") I ${FILENAME}:${LINENO} $$ ${COMPONENT}:CreateTestAcc {} airdropping..."
       solana airdrop 5000 "${ACCOUNT}"
       # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
@@ -44,11 +44,14 @@ function createAccount() {
         sleep 1
         BALANCE=$(solana balance "${ACCOUNT}" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
       done
-    fi
+
+      TOKEN_ACCOUNT=$(spl-token create-account ${NEON_TOKEN_MINT} --owner ${ACCOUNT} --fee-payer ${ID_FILE} | grep -Po 'Creating account \K[^\n]*' || true)
+      spl-token mint ${NEON_TOKEN_MINT} 5000 --owner evm_loader-keypair.json --fee-payer ${ID_FILE} -- ${TOKEN_ACCOUNT}
+    # fi
 }
 
 NUM_ACCOUNTS=${1}
 createAccount 1
 for i in $(seq 2 ${NUM_ACCOUNTS}); do
-  createAccount ${i} &
+  createAccount ${i}
 done

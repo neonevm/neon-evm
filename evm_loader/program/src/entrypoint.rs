@@ -34,12 +34,15 @@ fn process_instruction<'a>(
     match EvmInstruction::parse(tag)? {
         EvmInstruction::HolderCreate => {
             instruction::account_holder_create::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::HolderDelete => {
             instruction::account_holder_delete::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::HolderWrite => {
             instruction::account_holder_write::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::DepositV03 => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
@@ -91,6 +94,10 @@ fn process_instruction<'a>(
         }
         EvmInstruction::CreateMainTreasury => {
             instruction::create_main_treasury::process(program_id, accounts, instruction)
+        }
+        EvmInstruction::AccountBlockAdd => {
+            instruction::account_block_add::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
     }
 }

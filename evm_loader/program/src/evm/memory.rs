@@ -1,11 +1,16 @@
 use solana_program::program_memory::{sol_memcpy, sol_memset};
 use std::alloc::{GlobalAlloc, Layout};
+use std::ops::Range;
 
-use super::tracing_event;
+use super::utils::checked_next_multiple_of_32;
+use super::{tracing_event, Buffer};
 use crate::error::Error;
 
 const MAX_MEMORY_SIZE: usize = 64 * 1024;
-const MEMORY_ALIGN: usize = 32;
+const MEMORY_CAPACITY: usize = 1024;
+const MEMORY_ALIGN: usize = 1;
+
+static_assertions::const_assert!(MEMORY_ALIGN.is_power_of_two());
 
 pub struct Memory {
     data: *mut u8,
@@ -15,15 +20,16 @@ pub struct Memory {
 
 impl Memory {
     pub fn new() -> Self {
-        const DEFAULT_CAPACITY: usize = 1024;
-
-        Self::with_capacity(DEFAULT_CAPACITY)
+        Self::with_capacity(MEMORY_CAPACITY)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         unsafe {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
             let data = crate::allocator::EVM.alloc_zeroed(layout);
+            if data.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
 
             Self {
                 data,
@@ -34,21 +40,22 @@ impl Memory {
     }
 
     pub fn from_buffer(v: &[u8]) -> Self {
-        let capacity = v.len().next_power_of_two();
-
-        let data = unsafe {
-            let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
-            crate::allocator::EVM.alloc_zeroed(layout)
-        };
+        let capacity = v.len().next_power_of_two().max(MEMORY_CAPACITY);
 
         unsafe {
-            std::ptr::copy_nonoverlapping(v.as_ptr(), data, v.len());
-        }
+            let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
+            let data = crate::allocator::EVM.alloc_zeroed(layout);
+            if data.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
 
-        Self {
-            data,
-            capacity,
-            size: v.len(),
+            std::ptr::copy_nonoverlapping(v.as_ptr(), data, v.len());
+
+            Self {
+                data,
+                capacity,
+                size: v.len(),
+            }
         }
     }
 
@@ -60,36 +67,44 @@ impl Memory {
 
     #[inline]
     fn realloc(&mut self, offset: usize, length: usize) -> Result<(), Error> {
-        let new_size = offset.saturating_add(length);
+        let required_size = offset
+            .checked_add(length)
+            .ok_or(Error::MemoryAccessOutOfLimits(offset, length))?;
+
+        let new_size = checked_next_multiple_of_32(required_size)
+            .ok_or(Error::MemoryAccessOutOfLimits(offset, length))?;
+
+        if new_size > self.size {
+            self.size = new_size;
+        }
 
         if new_size <= self.capacity {
             return Ok(());
         }
 
-        let size = new_size.next_power_of_two();
-        if size > MAX_MEMORY_SIZE {
+        let new_capacity = new_size
+            .checked_next_power_of_two()
+            .ok_or(Error::MemoryAccessOutOfLimits(offset, length))?;
+        if new_capacity > MAX_MEMORY_SIZE {
             return Err(Error::MemoryAccessOutOfLimits(offset, length));
         }
 
-        self.data = unsafe {
+        unsafe {
             let old_layout = Layout::from_size_align_unchecked(self.capacity, MEMORY_ALIGN);
-            crate::allocator::EVM.realloc(self.data, old_layout, size)
-        };
+            let new_data = crate::allocator::EVM.realloc(self.data, old_layout, new_capacity);
+            if new_data.is_null() {
+                let layout = Layout::from_size_align_unchecked(new_capacity, MEMORY_ALIGN);
+                std::alloc::handle_alloc_error(layout);
+            }
 
-        let slice = unsafe { core::slice::from_raw_parts_mut(self.data, size) };
-        sol_memset(&mut slice[self.capacity..], 0, size - self.capacity);
+            let slice = core::slice::from_raw_parts_mut(new_data, new_capacity);
+            sol_memset(&mut slice[self.capacity..], 0, new_capacity - self.capacity);
 
-        self.capacity = size;
+            self.data = new_data;
+            self.capacity = new_capacity;
+        }
 
         Ok(())
-    }
-
-    #[inline]
-    fn extend_size(&mut self, offset: usize, length: usize) {
-        let new_size = ((offset + length) + 31_usize) & !31_usize; // next multiple of 32
-        if new_size > self.size {
-            self.size = new_size;
-        }
     }
 
     #[inline]
@@ -104,7 +119,6 @@ impl Memory {
         }
 
         self.realloc(offset, length)?;
-        self.extend_size(offset, length);
 
         let slice = unsafe {
             let data = self.data.add(offset);
@@ -116,7 +130,6 @@ impl Memory {
 
     pub fn read_32(&mut self, offset: usize) -> Result<&[u8; 32], Error> {
         self.realloc(offset, 32)?;
-        self.extend_size(offset, 32);
 
         let array: &[u8; 32] = unsafe {
             let data = self.data.add(offset);
@@ -133,7 +146,6 @@ impl Memory {
         });
 
         self.realloc(offset, 32)?;
-        self.extend_size(offset, 32);
 
         unsafe {
             let data = self.data.add(offset);
@@ -150,7 +162,6 @@ impl Memory {
         });
 
         self.realloc(offset, 1)?;
-        self.extend_size(offset, 1);
 
         unsafe {
             let data = self.data.add(offset);
@@ -172,7 +183,6 @@ impl Memory {
         }
 
         self.realloc(offset, length)?;
-        self.extend_size(offset, length);
 
         let data = unsafe {
             let data = self.data.add(offset);
@@ -216,6 +226,17 @@ impl Memory {
         }
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn write_range(&mut self, range: &Range<usize>, source: &[u8]) -> Result<(), Error> {
+        self.write_buffer(range.start, range.len(), source, 0)
+    }
+
+    #[inline]
+    pub fn read_buffer(&mut self, offset: usize, length: usize) -> Result<Buffer, Error> {
+        let slice = self.read(offset, length)?;
+        Ok(Buffer::new(slice))
     }
 }
 

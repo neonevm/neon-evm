@@ -143,6 +143,26 @@ macro_rules! trx_params {
                     .validator(is_valid_u256)
                     .help("Gas limit"),
             )
+            .arg(
+                Arg::with_name("cached_accounts")
+                    .value_name("CACHED_ACCOUNTS")
+                    .long("cached_accounts")
+                    .takes_value(true)
+                    .required(false)
+                    .multiple(true)
+                    .validator(is_valid_address)
+                    .help("List of cached account addresses"),
+            )
+            .arg(
+                Arg::with_name("solana_accounts")
+                    .value_name("SOLANA_ACCOUNTS")
+                    .long("solana_accounts")
+                    .takes_value(true)
+                    .required(false)
+                    .multiple(true)
+                    .validator(is_valid_address)
+                    .help("List of cached solana account pubkeys"),
+            )
     };
 }
 

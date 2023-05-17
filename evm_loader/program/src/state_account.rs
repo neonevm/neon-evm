@@ -73,10 +73,12 @@ impl<'a> State<'a> {
             operator: *accounts.operator.key,
             slot: Clock::get()?.slot,
             accounts_len: accounts.remaining_accounts.len(),
+            evm_state_len: 0,
+            evm_machine_len: 0,
         };
 
         info.data.borrow_mut()[0] = 0_u8;
-        let mut storage = State::init(info, data)?;
+        let mut storage = State::init(program_id, info, data)?;
 
         storage.make_deposit(&accounts.system_program, &accounts.operator)?;
         storage.write_blocked_accounts(program_id, accounts.remaining_accounts)?;
@@ -209,6 +211,33 @@ impl<'a> State<'a> {
         Ok(())
     }
 
+    pub fn update_blocked_accounts<I>(&mut self, accounts: I) -> Result<(), Error>
+    where
+        I: ExactSizeIterator<Item = BlockedAccountMeta>,
+    {
+        let evm_data_len = self.evm_state_len + self.evm_machine_len;
+        let (evm_data_offset, _) = self.evm_data_region();
+        let evm_data_range = evm_data_offset..evm_data_offset + evm_data_len;
+
+        self.accounts_len = accounts.len();
+        let (accounts_begin, accounts_end) = self.blocked_accounts_region();
+
+        let mut data = self.info.try_borrow_mut_data()?;
+        // Move EVM data
+        data.copy_within(evm_data_range, accounts_end);
+
+        // Write accounts
+        let accounts_storage = &mut data[accounts_begin..accounts_end];
+        let accounts_storage = accounts_storage.chunks_exact_mut(ACCOUNT_CHUNK_LEN);
+        for (meta, account_storage) in accounts.zip(accounts_storage) {
+            account_storage[0] = u8::from(meta.is_writable);
+            account_storage[1] = u8::from(meta.exists);
+            account_storage[2..].copy_from_slice(meta.key.as_ref());
+        }
+
+        Ok(())
+    }
+
     fn check_blocked_accounts(
         &self,
         program_id: &Pubkey,
@@ -225,7 +254,7 @@ impl<'a> State<'a> {
                 return Err!(ProgramError::InvalidAccountData; "Expected account {}, found {}", blocked.key, info.key);
             }
 
-            if blocked.is_writable != info.is_writable {
+            if blocked.is_writable && !info.is_writable {
                 return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, blocked.is_writable);
             }
 
@@ -243,19 +272,29 @@ impl<'a> State<'a> {
     }
 
     #[must_use]
-    pub fn evm_state_data(&self) -> Ref<[u8]> {
-        let (_, accounts_region_end) = self.blocked_accounts_region();
+    pub fn evm_data(&self) -> Ref<[u8]> {
+        let (begin, end) = self.evm_data_region();
 
         let data = self.info.data.borrow();
-        Ref::map(data, |d| &d[accounts_region_end..])
+        Ref::map(data, |d| &d[begin..end])
     }
 
     #[must_use]
-    pub fn evm_state_mut_data(&mut self) -> RefMut<[u8]> {
-        let (_, accounts_region_end) = self.blocked_accounts_region();
+    pub fn evm_data_mut(&mut self) -> RefMut<[u8]> {
+        let (begin, end) = self.evm_data_region();
 
         let data = self.info.data.borrow_mut();
-        RefMut::map(data, |d| &mut d[accounts_region_end..])
+        RefMut::map(data, |d| &mut d[begin..end])
+    }
+
+    #[must_use]
+    fn evm_data_region(&self) -> (usize, usize) {
+        let (_, accounts_region_end) = self.blocked_accounts_region();
+
+        let begin = accounts_region_end;
+        let end = self.info.data_len();
+
+        (begin, end)
     }
 
     #[must_use]

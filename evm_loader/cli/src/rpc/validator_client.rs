@@ -47,6 +47,10 @@ impl Rpc for RpcClient {
         self.get_account_with_commitment(key, commitment)
     }
 
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
+        self.get_multiple_accounts(pubkeys)
+    }
+
     fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
         Ok(self.get_account(key)?.data)
     }

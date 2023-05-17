@@ -69,6 +69,9 @@ pub enum EvmInstruction {
     ///   5. `[]` wSOL mint
     ///   6. `[WRITE,SIGNER]` Payer
     CreateMainTreasury,
+
+    /// Block additional accounts
+    AccountBlockAdd,
 }
 
 impl EvmInstruction {
@@ -91,12 +94,14 @@ impl EvmInstruction {
             0x28 => Self::CreateAccountV03,                    // 40
             0x29 => Self::CreateMainTreasury,                  // 41
             0x2A => Self::TransactionExecuteFromAccount,       // 42
+            0x2B => Self::AccountBlockAdd,                     // 43
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
     }
 }
 
+pub mod account_block_add;
 pub mod account_create;
 pub mod account_holder_create;
 pub mod account_holder_delete;

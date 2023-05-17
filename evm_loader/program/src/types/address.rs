@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 use std::convert::{From, TryInto};
 use std::fmt::{Debug, Display};
+use std::str::FromStr;
 
 use crate::account::ACCOUNT_SEED_VERSION;
 use crate::error::Error;
@@ -55,6 +56,13 @@ impl Address {
     pub fn find_solana_address(&self, program_id: &Pubkey) -> (Pubkey, u8) {
         let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], &self.0];
         Pubkey::find_program_address(seeds, program_id)
+    }
+}
+
+impl FromStr for Address {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_hex(s)
     }
 }
 

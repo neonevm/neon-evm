@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info};
 
 use ethnum::U256;
 use evm_loader::{
@@ -7,39 +7,34 @@ use evm_loader::{
     evm::{ExitStatus, Machine},
     executor::ExecutorState,
     gasometer::LAMPORTS_PER_SIGNATURE,
-    types::Transaction,
+    types::{Address, Transaction},
 };
 
-use crate::types::TxParams;
 use crate::{
     account_storage::{EmulatorAccountStorage, NeonAccount, SolanaAccount},
     errors::NeonCliError,
     syscall_stubs::Stubs,
     Config, NeonCliResult,
 };
+use crate::{context::Context, types::TxParams};
 use solana_sdk::pubkey::Pubkey;
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     config: &Config,
+    context: &Context,
     tx_params: TxParams,
     token: Pubkey,
     chain: u64,
     steps: u64,
+    accounts: &[Address],
+    solana_accounts: &[Pubkey],
 ) -> NeonCliResult {
-    let data = tx_params.data.clone().unwrap_or_default();
-    debug!(
-        "command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
-        config,
-        tx_params.to,
-        tx_params.from,
-        &hex::encode(data),
-        tx_params.value
-    );
-
-    let syscall_stubs = Stubs::new(config)?;
+    let syscall_stubs = Stubs::new(context)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, token, chain);
+    let storage = EmulatorAccountStorage::new(config, context, token, chain);
+    storage.initialize_cached_accounts(accounts, solana_accounts);
 
     let trx = Transaction {
         nonce: storage.nonce(&tx_params.from),
@@ -73,9 +68,9 @@ pub fn execute(
     let max_iterations = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
     let steps_gas = max_iterations * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
     let begin_end_gas = 2 * LAMPORTS_PER_SIGNATURE;
-    let actions_gas = storage.apply_actions(actions);
+    let actions_gas = storage.apply_actions(&actions);
     let accounts_gas = storage.apply_accounts_operations(accounts_operations);
-    debug!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
+    info!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
 
     let (result, status) = match exit_status {
         ExitStatus::Return(v) => (v, "succeed"),
@@ -96,7 +91,8 @@ pub fn execute(
         "result": hex::encode(result),
         "exit_status": status,
         "steps_executed": steps_executed,
-        "used_gas": steps_gas + begin_end_gas + actions_gas + accounts_gas
+        "used_gas": steps_gas + begin_end_gas + actions_gas + accounts_gas,
+        "actions": actions
     });
 
     Ok(json)

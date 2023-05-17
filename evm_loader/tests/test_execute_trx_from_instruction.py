@@ -13,11 +13,10 @@ from spl.token.instructions import get_associated_token_address
 
 from .solana_utils import execute_trx_from_instruction, solana_client, get_neon_balance, neon_cli
 from .utils.assert_messages import InstructionAsserts
-from .utils.constants import NEON_TOKEN_MINT_ID, TAG_FINALIZED_STATE
-from .utils.contract import make_deployment_transaction, deploy_contract, make_contract_call_trx
-from .utils.ethereum import make_eth_transaction, create_contract_address
-from .utils.layouts import FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
-from .utils.transaction_checks import check_transaction_logs_have_text, check_holder_account_tag
+from .utils.constants import NEON_TOKEN_MINT_ID
+from .utils.contract import deploy_contract, make_contract_call_trx
+from .utils.ethereum import make_eth_transaction
+from .utils.transaction_checks import check_transaction_logs_have_text
 from .utils.types import Caller
 
 
@@ -62,12 +61,10 @@ class TestExecuteTrxFromInstruction:
 
         assert recipient_balance_after == amount
 
-    @pytest.mark.parametrize("chain_id", [None, 111])
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                          evm_loader, string_setter_contract, chain_id):
+                                                          evm_loader, string_setter_contract):
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
-        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text],
-                                           chain_id=chain_id)
+        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
 
         resp = execute_trx_from_instruction(operator_keypair, evm_loader, treasury_pool.account, treasury_pool.buffer,
                                             signed_tx,

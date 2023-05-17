@@ -8,14 +8,16 @@ use solana_sdk::{
 
 use evm_loader::account::State;
 
-use crate::{account_storage::account_info, commands::send_transaction, Config, NeonCliResult};
+use crate::{
+    account_storage::account_info, commands::send_transaction, Config, Context, NeonCliResult,
+};
 
-pub fn execute(config: &Config, storage_account: &Pubkey) -> NeonCliResult {
-    let mut acc = config.rpc_client.get_account(storage_account)?;
+pub fn execute(config: &Config, context: &Context, storage_account: &Pubkey) -> NeonCliResult {
+    let mut acc = context.rpc_client.get_account(storage_account)?;
     let storage_info = account_info(storage_account, &mut acc);
     let storage = State::from_account(&config.evm_loader, &storage_info)?;
 
-    let operator = &config.signer.pubkey();
+    let operator = &context.signer.pubkey();
 
     let mut accounts_meta: Vec<AccountMeta> = vec![
         AccountMeta::new(*storage_account, false),  // State account
@@ -43,7 +45,7 @@ pub fn execute(config: &Config, storage_account: &Pubkey) -> NeonCliResult {
 
     let instructions = vec![cancel_with_nonce_instruction];
 
-    let signature = send_transaction(config, &instructions)?;
+    let signature = send_transaction(context, &instructions)?;
 
     Ok(serde_json::json!({ "transaction": signature }))
 }

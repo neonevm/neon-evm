@@ -188,6 +188,7 @@ impl<'a> EthereumStorage<'a> {
         )?;
 
         let storage = Self::init(
+            contract.info.owner,
             storage_account,
             Data {
                 address: contract.address,

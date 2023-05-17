@@ -44,17 +44,26 @@ pub enum Error {
     #[error("Account {0} - blocked")]
     AccountBlocked(Address),
 
-    #[error("Account {0} - invalid tag {1}, expected {2}")]
-    AccountInvalidTag(Pubkey, u8, u8),
+    #[error("Account {0} - invalid tag, expected {1}")]
+    AccountInvalidTag(Pubkey, u8),
 
-    #[error("Account {0} - invalid owner {1}, expected {2}")]
-    AccountInvalidOwner(Pubkey, Pubkey, Pubkey),
+    #[error("Account {0} - invalid owner, expected {1}")]
+    AccountInvalidOwner(Pubkey, Pubkey),
 
     #[error("Account {0} - invalid public key, expected {1}")]
     AccountInvalidKey(Pubkey, Pubkey),
 
+    #[error("Account {0} - invalid data")]
+    AccountInvalidData(Pubkey),
+
     #[error("Account {0} - not writable")]
     AccountNotWritable(Pubkey),
+
+    #[error("Account {0} - not rent exempt")]
+    AccountNotRentExempt(Pubkey),
+
+    #[error("Account {0} - already initialized")]
+    AccountAlreadyInitialized(Pubkey),
 
     #[error("Operator is not authorized")]
     UnauthorizedOperator,
@@ -69,10 +78,7 @@ pub enum Error {
     UnknownPrecompileMethodSelector(Address, [u8; 4]),
 
     #[error("Insufficient balance for transfer, account = {0}, required = {1}")]
-    InsufficientBalanceForTransfer(Address, U256),
-
-    #[error("Insufficient balance for gas payment, account = {0}, required = {1}")]
-    InsufficientBalanceForGas(Address, U256),
+    InsufficientBalance(Address, U256),
 
     #[error("Out of Gas, limit = {0}, required = {1}")]
     OutOfGas(U256, U256),
@@ -89,8 +95,8 @@ pub enum Error {
     #[error("EVM Memory Access at offset = {0} with length = {1} is out of limits")]
     MemoryAccessOutOfLimits(usize, usize),
 
-    #[error("EVM (EXT)CODECOPY offset = {0} with length = {1} exceeds code size")]
-    CodeCopyOffsetExceedsCodeSize(usize, usize),
+    #[error("EVM RETURNDATACOPY offset = {0} with length = {1} exceeds data size")]
+    ReturnDataCopyOverflow(usize, usize),
 
     #[error("EVM static mode violation, contract = {0}")]
     StaticModeViolation(Address),
@@ -121,6 +127,18 @@ pub enum Error {
 
     #[error("New contract code size exceeds 24kb (EIP-170), contract = {0}, size = {1}")]
     ContractCodeSizeLimit(Address, usize),
+
+    #[error("Checked Integer Math Overflow")]
+    IntegerOverflow,
+
+    #[error("Index out of bounds")]
+    OutOfBounds,
+
+    #[error("Holder Account - invalid owner {0}, expected = {1}")]
+    HolderInvalidOwner(Pubkey, Pubkey),
+
+    #[error("Holder Account - invalid transaction hash {}, expected = {}", hex::encode(.0), hex::encode(.1))]
+    HolderInvalidHash([u8; 32], [u8; 32]),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -142,16 +160,16 @@ impl From<Error> for ProgramError {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    return Err!(ProgramError::InvalidArgument; "Caller pubkey: {} ", &caller_info.key.to_string());
 /// ```
 ///
 macro_rules! Err {
     ( $n:expr; $($args:expr),* ) => ({
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         solana_program::msg!("{}:{} : {}", file!(), line!(), &format!($($args),*));
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(all(not(target_os = "solana"), feature = "log"))]
         log::error!("{}", &format!($($args),*));
 
         Err($n)
@@ -165,16 +183,16 @@ macro_rules! Err {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
 /// ```
 ///
 macro_rules! E {
     ( $n:expr; $($args:expr),* ) => ({
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         solana_program::msg!("{}:{} : {}", file!(), line!(), &format!($($args),*));
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(all(not(target_os = "solana"), feature = "log"))]
         log::error!("{}", &format!($($args),*));
 
         $n
@@ -182,22 +200,62 @@ macro_rules! E {
 }
 
 #[must_use]
-pub fn format_revert_message(msg: &[u8]) -> &str {
+fn format_revert_error(msg: &[u8]) -> Option<&str> {
     if msg.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
         // Error(string) function selector
         let msg = &msg[4..];
+        if msg.len() < 64 {
+            return None;
+        }
 
         let offset = U256::from_be_bytes(*arrayref::array_ref![msg, 0, 32]);
-        let length = U256::from_be_bytes(*arrayref::array_ref![msg, offset.as_usize(), 32]);
+        if offset != 32 {
+            return None;
+        }
 
-        let begin = offset.as_usize() + 32/* length */;
-        let end = begin + length.as_usize();
-        let reason = &msg[begin..end];
+        let length = U256::from_be_bytes(*arrayref::array_ref![msg, 32, 32]);
+        let length: usize = length.try_into().ok()?;
 
-        std::str::from_utf8(reason).unwrap_or("<invalid revert mesage format>")
+        let begin = 64_usize;
+        let end = begin.checked_add(length)?;
+
+        let reason = msg.get(begin..end)?;
+        std::str::from_utf8(reason).ok()
     } else {
-        "<revert object>"
+        None
     }
+}
+
+#[must_use]
+fn format_revert_panic(msg: &[u8]) -> Option<U256> {
+    if msg.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
+        // Panic(uint256) function selector
+        let msg = &msg[4..];
+        if msg.len() != 32 {
+            return None;
+        }
+
+        let value = arrayref::array_ref![msg, 0, 32];
+        Some(U256::from_be_bytes(*value))
+    } else {
+        None
+    }
+}
+
+pub fn print_revert_message(msg: &[u8]) {
+    if msg.is_empty() {
+        return solana_program::msg!("Revert");
+    }
+
+    if let Some(reason) = format_revert_error(msg) {
+        return solana_program::msg!("Revert: Error(\"{}\")", reason);
+    }
+
+    if let Some(reason) = format_revert_panic(msg) {
+        return solana_program::msg!("Revert: Panic({:#x})", reason);
+    }
+
+    solana_program::msg!("Revert: {}", hex::encode(msg));
 }
 
 #[must_use]

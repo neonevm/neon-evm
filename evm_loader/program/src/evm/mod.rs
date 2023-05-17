@@ -2,14 +2,14 @@
 #![allow(clippy::type_repetition_in_bounds)]
 #![allow(clippy::unsafe_derive_deserialize)]
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Range};
 
 use ethnum::U256;
 use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
 use crate::{
-    error::{Error, Result},
+    error::{build_revert_message, Error, Result},
     evm::opcode::Action,
     types::{Address, Transaction},
 };
@@ -23,6 +23,7 @@ mod precompile;
 mod stack;
 #[cfg(feature = "tracing")]
 pub mod tracing;
+mod utils;
 
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;
@@ -81,6 +82,7 @@ pub struct Machine<B: Database> {
     execution_code: Buffer,
     call_data: Buffer,
     return_data: Buffer,
+    return_range: Range<usize>,
 
     stack: stack::Stack,
     memory: memory::Memory,
@@ -96,15 +98,16 @@ pub struct Machine<B: Database> {
 }
 
 impl<B: Database> Machine<B> {
-    pub fn serialize_into<W>(self, writer: &mut W) -> Result<()>
-    where
-        W: std::io::Write,
-    {
-        bincode::serialize_into(writer, &self).map_err(Error::from)
+    pub fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize> {
+        let mut cursor = std::io::Cursor::new(buffer);
+
+        bincode::serialize_into(&mut cursor, &self)?;
+
+        cursor.position().try_into().map_err(Error::from)
     }
 
-    pub fn deserialize_from(buffer: &mut &[u8], _backend: &B) -> Result<Self> {
-        bincode::deserialize_from(buffer).map_err(Error::from)
+    pub fn deserialize_from(buffer: &[u8], _backend: &B) -> Result<Self> {
+        bincode::deserialize(buffer).map_err(Error::from)
     }
 
     pub fn new(trx: Transaction, origin: Address, backend: &mut B) -> Result<Self> {
@@ -129,7 +132,7 @@ impl<B: Database> Machine<B> {
         }
 
         if backend.balance(&origin)? < trx.value {
-            return Err(Error::InsufficientBalanceForTransfer(origin, trx.value));
+            return Err(Error::InsufficientBalance(origin, trx.value));
         }
 
         if trx.target.is_some() {
@@ -146,7 +149,7 @@ impl<B: Database> Machine<B> {
         sol_log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
 
         backend.increment_nonce(origin)?;
-        backend.snapshot()?;
+        backend.snapshot();
 
         backend.transfer(origin, target, trx.value)?;
 
@@ -165,6 +168,7 @@ impl<B: Database> Machine<B> {
             execution_code,
             call_data: trx.call_data,
             return_data: Buffer::empty(),
+            return_range: 0..0,
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
@@ -186,8 +190,9 @@ impl<B: Database> Machine<B> {
         }
 
         backend.increment_nonce(origin)?;
-        backend.snapshot()?;
+        backend.snapshot();
 
+        backend.increment_nonce(target)?;
         backend.transfer(origin, target, trx.value)?;
 
         Ok(Self {
@@ -201,8 +206,9 @@ impl<B: Database> Machine<B> {
             gas_price: trx.gas_price,
             gas_limit: trx.gas_limit,
             return_data: Buffer::empty(),
+            return_range: 0..0,
             stack: Stack::new(),
-            memory: Memory::with_capacity(trx.call_data.len()),
+            memory: Memory::new(),
             pc: 0_usize,
             is_static: false,
             reason: Reason::Create,
@@ -238,7 +244,14 @@ impl<B: Database> Machine<B> {
 
             // SAFETY: OPCODES.len() == 256, opcode <= 255
             let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
-            let opcode_result = opcode_fn(self, backend)?;
+
+            let opcode_result = match opcode_fn(self, backend) {
+                Ok(result) => result,
+                Err(e) => {
+                    let message = build_revert_message(&e.to_string());
+                    self.opcode_revert_impl(Buffer::new(&message), backend)?
+                }
+            };
 
             tracing_event!(opcode_result != Action::Noop; tracing::Event::EndStep {
                 gas_used: 0_u64
@@ -278,6 +291,7 @@ impl<B: Database> Machine<B> {
             execution_code,
             call_data,
             return_data: Buffer::empty(),
+            return_range: 0..0,
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,

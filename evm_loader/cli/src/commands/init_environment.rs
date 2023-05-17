@@ -1,4 +1,4 @@
-use crate::NeonCliResult;
+use crate::{context::Context, NeonCliResult};
 
 use {
     crate::{
@@ -95,6 +95,7 @@ fn read_keys_dir(keys_dir: &str) -> Result<HashMap<Pubkey, Keypair>, NeonCliErro
 #[allow(clippy::too_many_lines)]
 pub fn execute(
     config: &Config,
+    context: &Context,
     send_trx: bool,
     force: bool,
     keys_dir: Option<&str>,
@@ -102,15 +103,15 @@ pub fn execute(
 ) -> NeonCliResult {
     info!(
         "Signer: {}, send_trx: {}, force: {}",
-        config.signer.pubkey(),
+        context.signer.pubkey(),
         send_trx,
         force
     );
     let fee_payer = config
         .fee_payer
         .as_ref()
-        .map_or_else(|| config.signer.as_ref(), |v| v);
-    let executor = TransactionExecutor::new(config.rpc_client.as_ref(), fee_payer, send_trx);
+        .map_or_else(|| context.signer.as_ref(), |v| v);
+    let executor = TransactionExecutor::new(context.rpc_client.as_ref(), fee_payer, send_trx);
     let keys = keys_dir.map_or(Ok(HashMap::new()), read_keys_dir)?;
 
     let program_data_address = Pubkey::find_program_address(
@@ -119,7 +120,7 @@ pub fn execute(
     )
     .0;
     let (program_upgrade_authority, program_data) =
-        read_program_data_from_account(config, &config.evm_loader)?;
+        read_program_data_from_account(config, context, &config.evm_loader)?;
     let data = file.map_or(Ok(program_data), read_program_data)?;
     let program_parameters = Parameters::new(read_elf_parameters(config, &data));
 
@@ -143,7 +144,7 @@ pub fn execute(
             .get(mint)
             .ok_or(EnvironmentError::MissingPrivateKey(*mint))?;
         let data_len = spl_token::state::Mint::LEN;
-        let lamports = config
+        let lamports = context
             .rpc_client
             .get_minimum_balance_for_rent_exemption(data_len)?;
         let transaction = executor.create_transaction(
@@ -158,7 +159,7 @@ pub fn execute(
                 spl_token::instruction::initialize_mint2(
                     &spl_token::id(),
                     mint,
-                    &config.signer.pubkey(),
+                    &context.signer.pubkey(),
                     None,
                     decimals,
                 )?,
@@ -228,7 +229,7 @@ pub fn execute(
         executor.get_account(&main_balance_address),
         |_| Ok(None),
         || {
-            if program_upgrade_authority != Some(config.signer.pubkey()) {
+            if program_upgrade_authority != Some(context.signer.pubkey()) {
                 return Err(EnvironmentError::IncorrectProgramAuthority.into());
             }
             let transaction = executor.create_transaction(
@@ -238,14 +239,14 @@ pub fn execute(
                     vec![
                         AccountMeta::new(main_balance_address, false),
                         AccountMeta::new_readonly(program_data_address, false),
-                        AccountMeta::new_readonly(config.signer.pubkey(), true),
+                        AccountMeta::new_readonly(context.signer.pubkey(), true),
                         AccountMeta::new_readonly(spl_token::id(), false),
                         AccountMeta::new_readonly(system_program::id(), false),
                         AccountMeta::new_readonly(native_mint::id(), false),
                         AccountMeta::new(executor.fee_payer.pubkey(), true),
                     ],
                 )],
-                &[config.signer.as_ref()],
+                &[context.signer.as_ref()],
             )?;
             Ok(Some(transaction))
         },
@@ -254,7 +255,7 @@ pub fn execute(
     //====================== Create auxiliary treasury balances =======================================================
     let treasury_pool_count = program_parameters.get::<u32>("NEON_POOL_COUNT")?;
     for i in 0..treasury_pool_count {
-        let minimum_balance = config
+        let minimum_balance = context
             .rpc_client
             .get_minimum_balance_for_rent_exemption(0)?;
         let aux_balance_address = Treasury::address(&config.evm_loader, i).0;
@@ -288,7 +289,7 @@ pub fn execute(
         )?;
     }
 
-    executor.checkpoint(config.rpc_client.commitment())?;
+    executor.checkpoint(context.rpc_client.commitment())?;
 
     let stats = executor.stats.take();
     info!("Stats: {:?}", stats);

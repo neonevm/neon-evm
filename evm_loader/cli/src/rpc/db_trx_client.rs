@@ -1,5 +1,5 @@
 use super::{e, Rpc};
-use crate::types::{DbConfig, IndexerDb, TracerDb, TxParams};
+use crate::types::{ChDbConfig, IndexerDb, TracerDb, TxParams};
 use solana_client::{
     client_error::Result as ClientResult,
     client_error::{ClientError, ClientErrorKind},
@@ -20,20 +20,24 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
-#[derive(Debug)]
 pub struct TrxDbClient {
     pub hash: [u8; 32],
+    sol_sig: [u8; 64],
     tracer_db: TracerDb,
     indexer_db: IndexerDb,
 }
 
 impl TrxDbClient {
-    pub fn new(config: &DbConfig, hash: [u8; 32]) -> Self {
+    pub fn new(config: &ChDbConfig, hash: [u8; 32]) -> Self {
         let tracer_db = TracerDb::new(config);
         let indexer_db = IndexerDb::new(config);
+        let sol_sig = indexer_db
+            .get_sol_sig(&hash)
+            .unwrap_or_else(|_| panic!("get_sol_sig error, hash: 0x{}", hex::encode(hash)));
 
         Self {
             hash,
+            sol_sig,
             tracer_db,
             indexer_db,
         }
@@ -57,13 +61,8 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
-        let sol_sig = self
-            .indexer_db
-            .get_sol_sig(&self.hash)
-            .map_err(|e| e!("get_sol_sig error", e))?;
-
         self.tracer_db
-            .get_account_by_sol_sig(key, &sol_sig)
+            .get_account_by_sol_sig(key, &self.sol_sig)
             .map_err(|e| e!("load account error", key, e))?
             .ok_or_else(|| e!("account not found", key))
     }
@@ -73,7 +72,11 @@ impl Rpc for TrxDbClient {
         key: &Pubkey,
         _commitment: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
-        let account = self.get_account(key)?;
+        let account = self
+            .tracer_db
+            .get_account_by_sol_sig(key, &self.sol_sig)
+            .map_err(|e| e!("load account error", key, e))?;
+
         let slot = self
             .indexer_db
             .get_slot(&self.hash)
@@ -85,29 +88,28 @@ impl Rpc for TrxDbClient {
         };
         Ok(Response {
             context,
-            value: Some(account),
+            value: account,
         })
+    }
+
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
+        let mut result = Vec::new();
+        for key in pubkeys {
+            let account = self
+                .tracer_db
+                .get_account_by_sol_sig(key, &self.sol_sig)
+                .map_err(|e| e!("load account error", key, e))?;
+            result.push(account);
+        }
+        Ok(result)
     }
 
     fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
         Ok(self.get_account(key)?.data)
     }
 
-    fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
-        let hash = self
-            .tracer_db
-            .get_block_hash(slot)
-            .map_err(|e| e!("get_block error", slot, e))?;
-
-        Ok(EncodedConfirmedBlock {
-            previous_blockhash: String::default(),
-            blockhash: hash,
-            parent_slot: u64::default(),
-            transactions: vec![],
-            rewards: vec![],
-            block_time: None,
-            block_height: None,
-        })
+    fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
+        Err(e!("get_block() not implemented for db_trx_client"))
     }
 
     fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
@@ -117,12 +119,9 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_latest_blockhash(&self) -> ClientResult<Hash> {
-        let hash = self
-            .tracer_db
-            .get_latest_blockhash()
-            .map_err(|e| e!("get_latest_blockhash error", e))?;
-        hash.parse::<Hash>()
-            .map_err(|e| e!("get_latest_blockhash parse error", e))
+        Err(e!(
+            "get_latest_blockhash() not implemented for db_trx_client"
+        ))
     }
 
     fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64> {

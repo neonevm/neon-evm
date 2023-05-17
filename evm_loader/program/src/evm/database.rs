@@ -24,9 +24,9 @@ pub trait Database {
     fn block_number(&self) -> Result<U256>;
     fn block_timestamp(&self) -> Result<U256>;
 
-    fn snapshot(&mut self) -> Result<()>;
-    fn revert_snapshot(&mut self) -> Result<()>;
-    fn commit_snapshot(&mut self) -> Result<()>;
+    fn snapshot(&mut self);
+    fn revert_snapshot(&mut self);
+    fn commit_snapshot(&mut self);
 
     fn precompile_extension(
         &mut self,

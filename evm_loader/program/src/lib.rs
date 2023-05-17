@@ -3,7 +3,11 @@
 //! Neon EVM is an implementation of Ethereum Virtual Machine on Solana.
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(clippy::module_name_repetitions, clippy::missing_const_for_fn)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::missing_const_for_fn,
+    clippy::use_self
+)]
 #![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
 mod allocator;

@@ -5,5 +5,4 @@ mod state;
 
 pub use action::Action;
 pub use cache::OwnedAccountInfo;
-pub use cache::OwnedAccountInfoPartial;
 pub use state::ExecutorState;
