@@ -19,7 +19,7 @@ use std::{
 use thiserror::Error;
 
 const ROOT_BLOCK_DELAY: u8 = 100;
-const ROOT :u8 = 3;
+const ROOT: u8 = 3;
 
 #[derive(Error, Debug)]
 pub enum ChError {
