@@ -14,7 +14,7 @@ use evm_loader::types::Address;
 use ethnum::U256;
 use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl, e,};
 use crate::commands::TxParams;
-use std::{convert::{TryInto, TryFrom}, any::Any};
+use std::{convert::{TryFrom}, any::Any};
 
 
 impl TrxDbClient {
@@ -25,33 +25,38 @@ impl TrxDbClient {
         let indexer = do_connect(
             &config.indexer_host, &config.indexer_port, &config.indexer_database, &config.indexer_user, &config.indexer_password
         );
-        Self {hash, tracer_db: tracer, indexer_db: indexer}
-    }
 
-    fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
-
-        let hex = format!("0x{}", hex::encode(self.hash));
+        let hex = format!("0x{}", hex::encode(hash));
         let row = block(|| async {
-            self.indexer_db.query_one(
+            indexer.query_one(
                 "SELECT S.sol_sig from solana_neon_transactions S, solana_blocks B \
                 where S.block_slot = B.block_slot \
                 and B.is_active =  true \
                 and S.neon_sig = $1",
                 &[&hex]
             ).await
-        })?;
-        let sol_sig_b58: &str = row.try_get(0)?;
-        let sol_sig_b58 = sol_sig_b58.to_string();
-        let sol_sig = bs58::decode(sol_sig_b58).into_vec().expect("sol_sig base58 decode error");
-        let sol_sig: [u8; 64] = sol_sig.as_slice().try_into().unwrap();
+        }).expect("Failed to retrieve sol trx signature");
 
+        let sol_sig_b58: &str = row.try_get(0).expect("Failed to retrieve sol trx signature");
+        let sol_sig = bs58::decode(sol_sig_b58.to_string()).into_vec().expect("sol_sig base58 decode error");
+
+        Self {hash, tracer_db: tracer, indexer_db: indexer, sol_sig}
+    }
+
+    fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
         let pubkey_bytes = pubkey.to_bytes();
-        let row = block(|| async {
-            self.tracer_db.query_one(
+        let rows = block(|| async {
+            self.tracer_db.query(
                 "SELECT * FROM get_pre_accounts($1, $2)",
-                &[&sol_sig.as_slice(), &[&pubkey_bytes.as_slice()]]
+                &[&self.sol_sig.as_slice(), &[&pubkey_bytes.as_slice()]]
             ).await
         })?;
+
+        if rows.is_empty() {
+            return Ok(None);
+        }
+
+        let row = &rows[0];
         let lamports: i64 = row.try_get(0)?;
         let rent_epoch: i64 = row.try_get(4)?;
 

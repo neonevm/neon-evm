@@ -1,4 +1,5 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder, FinalizedState};
+use crate::config::{CHAIN_ID, GAS_LIMIT_MULTIPLIER_NO_CHAINID};
 use crate::error::{Error, Result};
 use crate::gasometer::Gasometer;
 use crate::types::{Transaction};
@@ -37,7 +38,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         accounts.remaining_accounts,
     )?;
 
-    execute(program_id, holder_or_storage_info, accounts, &mut account_storage, step_count, None)
+    execute(program_id, holder_or_storage_info, accounts, &mut account_storage, step_count, Some(CHAIN_ID.into()))
 }
 
 pub fn execute<'a>(
@@ -46,7 +47,7 @@ pub fn execute<'a>(
     accounts: Accounts<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     step_count: u64,
-    gas_multiplier: Option<U256>,
+    expected_chain_id: Option<U256>,
 ) -> Result<()> {
     match crate::account::tag(program_id, holder_or_storage_info)? {
         Holder::TAG => {
@@ -62,12 +63,17 @@ pub fn execute<'a>(
                 trx
             };
 
+            if trx.chain_id != expected_chain_id {
+                return Err(Error::InvalidChainId(trx.chain_id.unwrap_or(U256::ZERO)));
+            }
+
             solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
 
             let caller = trx.recover_caller_address()?;
             let mut storage = State::new(program_id, holder_or_storage_info, &accounts, caller, &trx)?;
 
-            if let Some(gas_multiplier) = gas_multiplier {
+            if expected_chain_id.is_none() {
+                let gas_multiplier = U256::from(GAS_LIMIT_MULTIPLIER_NO_CHAINID);
                 storage.gas_limit = storage.gas_limit.saturating_mul(gas_multiplier);
             }
 

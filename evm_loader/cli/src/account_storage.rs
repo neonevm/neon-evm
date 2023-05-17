@@ -13,19 +13,20 @@ use solana_sdk::{
     account_info::AccountInfo,
     pubkey::{Pubkey},
     pubkey,
-    sysvar::{recent_blockhashes, Sysvar}, rent::Rent,
+    sysvar::{Sysvar, slot_hashes}, rent::Rent,
 };
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
     config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
-    executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
+    executor::{Action, OwnedAccountInfo},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, ether_storage::EthereumStorageAddress},
-    account_storage::{AccountStorage}, evm::is_precompile_address,
+    account_storage::{AccountStorage},
     types::Address,
     gasometer::LAMPORTS_PER_SIGNATURE
 };
 use evm_loader::account::ether_contract;
-use evm_loader::account_storage::{AccountOperation, AccountsOperations};
+use evm_loader::account_storage::{find_slot_hash, AccountOperation, AccountsOperations};
+
 
 use crate::Config;
 
@@ -166,10 +167,6 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 
     fn add_ethereum_account(&self, address: &Address, writable: bool) -> bool {
-        if is_precompile_address(address) {
-            return true;
-        }
-
         let mut accounts = self.accounts.borrow_mut();
 
         if let Some(ref mut account) = accounts.get_mut(address) {
@@ -360,21 +357,16 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         self.block_timestamp.try_into().unwrap()
     }
 
-    fn block_hash(&self, number: U256) -> [u8; 32] { 
-        info!("block_hash {}", number);
+    fn block_hash(&self, slot: u64) -> [u8; 32] {
+        info!("block_hash {slot}");
 
-        self.add_solana_account(recent_blockhashes::ID, false);
+        self.add_solana_account(slot_hashes::ID, false);
 
-        if self.block_number <= number.as_u64() {
-            return <[u8; 32]>::default();
-        }
-
-        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
-            let hash = bs58::decode(timestamp.blockhash).into_vec().unwrap();
-            hash.try_into().unwrap()
+        if let Ok(slot_hashes_account) = self.config.rpc_client.get_account(&slot_hashes::ID) {
+            let slot_hashes_data = slot_hashes_account.data.as_slice();
+            find_slot_hash(slot, slot_hashes_data)
         } else {
-            warn!("Got error trying to get block hash");
-            <[u8; 32]>::default()
+            panic!("Error querying account {} from Solana", slot_hashes::ID)
         }
     }
 
@@ -520,23 +512,16 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         }
     }
 
-    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
-        info!("clone_solana_account_partial {}", address);
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&AccountInfo) -> R,
+    {
+        self.add_solana_account(*address, false);
 
-        let account = self.clone_solana_account(address);
+        let mut account = self.config.rpc_client.get_account(address).unwrap_or_default();
+        let info = account_info(address, &mut account);
 
-        Some(OwnedAccountInfoPartial {
-            key: account.key,
-            is_signer: account.is_signer,
-            is_writable: account.is_writable,
-            lamports: account.lamports,
-            data: account.data.get(offset .. offset + len).map(<[u8]>::to_vec)?,
-            data_offset: offset,
-            data_total_len: account.data.len(),
-            owner: account.owner,
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
-        })
+        action(&info)
     }
 }
 

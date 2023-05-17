@@ -1082,7 +1082,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "evm-loader"
-version = "0.15.2"
+version = "0.15.10"
 dependencies = [
  "arrayref",
  "bincode",
@@ -1327,24 +1327,24 @@ dependencies = [
 
 [[package]]
 name = "goblin"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32401e89c6446dcd28185931a01b1093726d0356820ac744023e6850689bf926"
-dependencies = [
- "log",
- "plain",
- "scroll 0.10.2",
-]
-
-[[package]]
-name = "goblin"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7666983ed0dd8d21a6f6576ee00053ca0926fb281a5522577a4dbd0f1b54143"
 dependencies = [
  "log",
  "plain",
- "scroll 0.11.0",
+ "scroll",
+]
+
+[[package]]
+name = "goblin"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d6b4de4a8eb6c46a8c77e1d3be942cb9a8bf073c22374578e5ba4b08ed0ff68"
+dependencies = [
+ "log",
+ "plain",
+ "scroll",
 ]
 
 [[package]]
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "neon-cli"
-version = "0.15.2"
+version = "0.15.10"
 dependencies = [
  "arrayref",
  "bincode",
@@ -1937,13 +1937,14 @@ dependencies = [
  "evm-loader",
  "fern",
  "getrandom 0.1.16",
- "goblin 0.4.3",
+ "goblin 0.6.1",
  "hex",
  "lazy_static",
  "log",
  "postgres",
  "rand 0.8.5",
  "rlp",
+ "scroll",
  "serde",
  "serde_json",
  "sha3 0.10.6",
@@ -2875,31 +2876,11 @@ checksum = "ddccb15bcce173023b3fedd9436f882a0739b8dfb45e4f6b6002bee5929f61b2"
 
 [[package]]
 name = "scroll"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fda28d4b4830b807a8b43f7b0e6b5df875311b3e7621d84577188c175b6ec1ec"
-dependencies = [
- "scroll_derive 0.10.5",
-]
-
-[[package]]
-name = "scroll"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
 dependencies = [
- "scroll_derive 0.11.0",
-]
-
-[[package]]
-name = "scroll_derive"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaaae8f38bb311444cfb7f1979af0bc9240d95795f75f9ceddf6a59b79ceffa0"
-dependencies = [
- "proc-macro2 1.0.50",
- "quote 1.0.23",
- "syn 1.0.107",
+ "scroll_derive",
 ]
 
 [[package]]
@@ -3884,7 +3865,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "rustc-demangle",
- "scroll 0.11.0",
+ "scroll",
  "thiserror",
 ]
 

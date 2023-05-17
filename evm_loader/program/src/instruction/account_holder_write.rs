@@ -24,6 +24,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
             let holder_data = crate::account::holder::Data {
                 owner: finalized_state.owner,
                 transaction_hash,
+                transaction_len: 0
             };
             unsafe { finalized_state.replace(holder_data) }
         },
@@ -41,7 +42,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     solana_program::log::sol_log_data(&[b"HASH", &transaction_hash]);
 
-    holder.write(offset, data);
+    holder.write(offset, data)?;
 
     Ok(())
 }

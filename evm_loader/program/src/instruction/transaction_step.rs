@@ -11,6 +11,8 @@ use crate::types::{Address, Transaction};
 use crate::gasometer::Gasometer;
 use crate::error::{Result, Error, format_revert_message};
 
+type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
+type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>>;
 
 pub struct Accounts<'a> {
     pub operator: Operator<'a>,
@@ -39,11 +41,7 @@ pub fn do_begin<'a>(
     let mut backend = ExecutorState::new(account_storage);
     let evm = Machine::new(trx, caller, &mut backend)?;
 
-    {   // Save EVM State into storage
-        let mut buffer: &mut [u8] = &mut storage.evm_state_mut_data();
-        backend.serialize_into(&mut buffer)?;
-        evm.serialize_into(&mut buffer)?;
-    }
+    serialize_evm_state(&mut storage, &backend, &evm)?;
 
     finalize(0, accounts, storage, account_storage, None, gasometer)
 }
@@ -61,12 +59,7 @@ pub fn do_continue<'a>(
         return Err(Error::Custom(format!("Step limit {step_count} below minimum {EVM_STEPS_MIN}")));
     }
 
-    let (mut backend, mut evm) = {
-        let mut buffer: &[u8] = &mut storage.evm_state_data();
-        let backend: ExecutorState<_> = ExecutorState::deserialize_from(&mut buffer, account_storage)?;
-        let evm: Machine<_> = Machine::deserialize_from(&mut buffer, &backend)?;
-        (backend, evm)
-    };
+    let (mut backend, mut evm) = deserialize_evm_state(&storage, account_storage)?;
 
     let (result, steps_executed) = {
         match backend.exit_status() {
@@ -80,9 +73,7 @@ pub fn do_continue<'a>(
     }
 
     if steps_executed > 0 {
-        let mut buffer: &mut [u8] = &mut storage.evm_state_mut_data();
-        backend.serialize_into(&mut buffer)?;
-        evm.serialize_into(&mut buffer)?;
+        serialize_evm_state(&mut storage, &backend, &evm)?;
     }
 
     let results = match result {
@@ -186,4 +177,40 @@ pub fn log_return_value(status: &ExitStatus) {
     }
 
     sol_log_data(&[b"RETURN", &[code]]);
+}
+
+fn serialize_evm_state<'a>(
+    state: &mut State<'a>,
+    backend: &EvmBackend,
+    machine: &Evm,
+) -> Result<()> {
+    let (evm_state_len, evm_machine_len) = {
+        let mut buffer = state.evm_data_mut();
+        let backend_bytes = backend.serialize_into(&mut buffer)?;
+
+        let buffer = &mut buffer[backend_bytes..];
+        let evm_bytes = machine.serialize_into(buffer)?;
+
+        (backend_bytes, evm_bytes)
+    };
+
+    state.evm_state_len = evm_state_len;
+    state.evm_machine_len = evm_machine_len;
+
+    Ok(())
+}
+
+fn deserialize_evm_state<'a, 'r>(
+    state: &State<'a>,
+    account_storage: &'r ProgramAccountStorage<'a>,
+) -> Result<(EvmBackend<'a, 'r>, Evm<'a, 'r>)> {
+    let buffer = state.evm_data();
+
+    let executor_state_data = &buffer[..state.evm_state_len];
+    let backend = ExecutorState::deserialize_from(executor_state_data, account_storage)?;
+
+    let evm_data = &buffer[state.evm_state_len..][..state.evm_machine_len];
+    let evm = Machine::deserialize_from(evm_data, &backend)?;
+
+    Ok((backend, evm))
 }

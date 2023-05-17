@@ -70,10 +70,7 @@ pub enum Error {
     UnknownPrecompileMethodSelector(Address, [u8; 4]),
 
     #[error("Insufficient balance for transfer, account = {0}, required = {1}")]
-    InsufficientBalanceForTransfer(Address, U256),
-
-    #[error("Insufficient balance for gas payment, account = {0}, required = {1}")]
-    InsufficientBalanceForGas(Address, U256),
+    InsufficientBalance(Address, U256),
 
     #[error("Out of Gas, limit = {0}, required = {1}")]
     OutOfGas(U256, U256),
@@ -90,8 +87,8 @@ pub enum Error {
     #[error("EVM Memory Access at offset = {0} with length = {1} is out of limits")]
     MemoryAccessOutOfLimits(usize, usize),
 
-    #[error("EVM (EXT)CODECOPY offset = {0} with length = {1} exceeds code size")]
-    CodeCopyOffsetExceedsCodeSize(usize, usize),
+    #[error("EVM RETURNDATACOPY offset = {0} with length = {1} exceeds data size")]
+    ReturnDataCopyOverflow(usize, usize),
 
     #[error("EVM static mode violation, contract = {0}")]
     StaticModeViolation(Address),
@@ -122,6 +119,15 @@ pub enum Error {
 
     #[error("New contract code size exceeds 24kb (EIP-170), contract = {0}, size = {1}")]
     ContractCodeSizeLimit(Address, usize),
+
+    #[error("Checked Integer Math Overflow")]
+    IntegerOverflow,
+
+    #[error("Index out of bounds")]
+    OutOfBounds,
+
+    #[error("Precompile Contract {0} - is not implemented")]
+    UnimplementedPrecompile(Address),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -143,7 +149,7 @@ impl From<Error> for ProgramError {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    return Err!(ProgramError::InvalidArgument; "Caller pubkey: {} ", &caller_info.key.to_string());
 /// ```
 ///
@@ -167,7 +173,7 @@ macro_rules! Err {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
 /// ```
 ///

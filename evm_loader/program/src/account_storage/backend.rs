@@ -2,13 +2,15 @@ use std::convert::TryInto;
 use ethnum::U256;
 use solana_program::{
     pubkey::Pubkey,
-    sysvar::recent_blockhashes
+    sysvar::slot_hashes, account_info::AccountInfo
 };
 use crate::account::{EthereumAccount};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
-use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
+use crate::executor::{OwnedAccountInfo};
 use crate::types::Address;
+
+use super::find_slot_hash;
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn neon_token_mint(&self) -> &Pubkey { 
@@ -31,20 +33,20 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         self.clock.unix_timestamp.try_into().expect("Timestamp is positive")
     }
 
-    fn block_hash(&self, number: U256) -> [u8; 32] {
-        if let Some(account) = self.solana_accounts.get(&recent_blockhashes::ID) {
-            let slot_hash_data = account.data.borrow();
-            let clock_slot = self.clock.slot;
-            if number >= U256::from(clock_slot) {
-                return <[u8; 32]>::default();
-            }
-            let offset: usize = (8 + (clock_slot - 1 - number.as_u64()) * 40).try_into().unwrap();
-            if offset + 32 > slot_hash_data.len() {
-                return <[u8; 32]>::default();
-            }
-            return slot_hash_data[offset..][..32].try_into().unwrap()
-        }
-        panic!("Trying to get blockhash info without providing sysvar account: {}", recent_blockhashes::ID);
+    fn block_hash(&self, slot: u64) -> [u8; 32] {
+        let slot_hashes_account = self
+            .solana_accounts
+            .get(&slot_hashes::ID)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Trying to get slot hash info without providing sysvar account: {}",
+                    slot_hashes::ID
+                )
+            });
+
+        let slot_hashes_data = slot_hashes_account.data.borrow();
+
+        find_slot_hash(slot, &slot_hashes_data[..])
     }
 
     fn exists(&self, address: &Address) -> bool {
@@ -110,9 +112,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         OwnedAccountInfo::from_account_info(self.program_id, info)
     }
 
-    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&AccountInfo) -> R,
+    {
         let info = self.solana_accounts[address];
-        OwnedAccountInfoPartial::from_account_info(info, offset, len)
+        action(info)
     }
 
     fn solana_account_space(&self, address: &Address) -> Option<usize> {

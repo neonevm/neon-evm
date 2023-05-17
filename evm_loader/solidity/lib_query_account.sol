@@ -1,69 +1,56 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.7.0;
+pragma solidity >= 0.7.0;
+pragma abicoder v2;
 
 /**
  * @title QueryAccount
  * @dev Wrappers around QueryAccount operations.
  */
-library QueryAccount {
-    address constant precompiled = 0xff00000000000000000000000000000000000002;
-
-    /**
-     * @dev Puts the metadata and a chunk of data into the cache.
-     * @param solana_address Address of an account.
-     * @param offset Offset in bytes from the beginning of the data.
-     * @param len Length in bytes of the chunk.
-     */
-    function cache(uint256 solana_address, uint64 offset, uint64 len) internal view returns (bool) {
-        (bool success,) = precompiled.staticcall(abi.encodeWithSignature("cache(uint256,uint64,uint64)", solana_address, offset, len));
-        return success;
+interface QueryAccount {
+    struct AccountInfo {
+        bytes32 pubkey;
+        uint64 lamports;
+        bytes32 owner;
+        bool executable;
+        uint64 rent_epoch;
     }
 
     /**
      * @dev Returns the account's owner Solana address.
      * @param solana_address Address of an account.
      */
-    function owner(uint256 solana_address) internal view returns (bool, uint256) {
-        (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("owner(uint256)", solana_address));
-        return (success, to_uint256(result));
-    }
-
-    /**
-     * @dev Returns full length of the account's data.
-     * @param solana_address Address of an account.
-     */
-    function length(uint256 solana_address) internal view returns (bool, uint256) {
-        (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("length(uint256)", solana_address));
-        return (success, to_uint256(result));
-    }
+    function owner(bytes32 solana_address) external view returns (uint256);
 
     /**
      * @dev Returns the funds in lamports of the account.
      * @param solana_address Address of an account.
      */
-    function lamports(uint256 solana_address) internal view returns (bool, uint256) {
-        (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("lamports(uint256)", solana_address));
-        return (success, to_uint256(result));
-    }
+    function lamports(bytes32 solana_address) external view returns (uint256);
 
     /**
      * @dev Returns the executable flag of the account.
      * @param solana_address Address of an account.
      */
-    function executable(uint256 solana_address) internal view returns (bool, bool) {
-        (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("executable(uint256)", solana_address));
-        return (success, to_bool(result));
-    }
+    function executable(bytes32 solana_address) external view returns (bool);
 
     /**
      * @dev Returns the rent epoch of the account.
      * @param solana_address Address of an account.
      */
-    function rent_epoch(uint256 solana_address) internal view returns (bool, uint256) {
-        (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("rent_epoch(uint256)", solana_address));
-        return (success, to_uint256(result));
-    }
+    function rent_epoch(bytes32 solana_address) external view returns (uint256);
+
+    /**
+     * @dev Returns full length of the account's data.
+     * @param solana_address Address of an account.
+     */
+    function info(bytes32 solana_address) external view returns (AccountInfo memory);
+
+    /**
+     * @dev Returns full length of the account's data.
+     * @param solana_address Address of an account.
+     */
+    function length(bytes32 solana_address) external view returns (uint256);
 
     /**
      * @dev Returns a chunk of the data.
@@ -71,19 +58,5 @@ library QueryAccount {
      * @param offset Offset in bytes from the beginning of the cached segment of data.
      * @param len Length in bytes of the returning chunk.
      */
-    function data(uint256 solana_address, uint64 offset, uint64 len) internal view returns (bool, bytes memory) {
-        return precompiled.staticcall(abi.encodeWithSignature("data(uint256,uint64,uint64)", solana_address, offset, len));
-    }
-
-    function to_uint256(bytes memory bb) private pure returns (uint256 result) {
-        assembly {
-            result := mload(add(bb, 32))
-        }
-    }
-
-    function to_bool(bytes memory bb) private pure returns (bool result) {
-        assembly {
-            result := mload(add(bb, 32))
-        }
-    }
+    function data(bytes32 solana_address, uint64 offset, uint64 len) external view returns (bytes memory);
 }

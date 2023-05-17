@@ -136,7 +136,10 @@ pub enum NeonCliError {
 
     /// Unknown Error.
     #[error("Unknown error.")]
-    UnknownError
+    UnknownError,
+
+    #[error("Panic: {0}")]
+    Panic(String),
 }
 
 impl NeonCliError {
@@ -145,6 +148,7 @@ impl NeonCliError {
             NeonCliError::IncompleteEnvironment             =>  50,
             NeonCliError::WrongEnvironment                  =>  51,
             NeonCliError::EnvironmentError(_)               =>  52,
+            NeonCliError::Panic(_)                          => 101,
             NeonCliError::StdIoError(_)                     => 102, // => 1002,
             NeonCliError::ProgramError(_)                   => 111, // => 1011,
             NeonCliError::SignerError(_)                    => 112, // => 1012,

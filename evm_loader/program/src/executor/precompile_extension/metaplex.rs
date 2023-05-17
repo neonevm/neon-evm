@@ -1,6 +1,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
-use std::convert::TryInto;
+use std::convert::{Into, TryInto};
 
 use ethnum::U256;
 use solana_program::{pubkey::Pubkey};
@@ -44,39 +44,39 @@ pub fn metaplex<B: AccountStorage>(
         [0xc5, 0x73, 0x50, 0xc6] => { // "createMetadata(bytes32,string,string,string)"
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let mint = read_pubkey(input);
-            let name = read_string(input, 32);
-            let symbol = read_string(input, 64);
-            let uri = read_string(input, 96);
+            let mint = read_pubkey(input)?;
+            let name = read_string(input, 32, 256)?;
+            let symbol = read_string(input, 64, 256)?;
+            let uri = read_string(input, 96, 1024)?;
 
             create_metadata(context, state, mint, name, symbol, uri)
         }
         [0x4a, 0xe8, 0xb6, 0x6b] => { // "createMasterEdition(bytes32,uint64)"
             if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-            let mint = read_pubkey(input);
-            let max_supply = read_u64(&input[32..]);
+            let mint = read_pubkey(input)?;
+            let max_supply = read_u64(&input[32..])?;
 
             create_master_edition(context, state, mint, Some(max_supply))
         }
         [0xf7, 0xb6, 0x37, 0xbb] => { // "isInitialized(bytes32)"
-            let mint = read_pubkey(input);
+            let mint = read_pubkey(input)?;
             is_initialized(context, state, mint)
         } 
         [0x23, 0x5b, 0x2b, 0x94] => { // "isNFT(bytes32)"
-            let mint = read_pubkey(input);
+            let mint = read_pubkey(input)?;
             is_nft(context, state, mint)
         }
         [0x9e, 0xd1, 0x9d, 0xdb] => { // "uri(bytes32)"
-            let mint = read_pubkey(input);
+            let mint = read_pubkey(input)?;
             uri(context, state, mint)
         }
         [0x69, 0x1f, 0x34, 0x31] => { // "name(bytes32)"
-            let mint = read_pubkey(input);
+            let mint = read_pubkey(input)?;
             token_name(context, state, mint)
         }
         [0x6b, 0xaa, 0x03, 0x30] => { // "symbol(bytes32)"
-            let mint = read_pubkey(input);
+            let mint = read_pubkey(input)?;
             symbol(context, state, mint)
         }
         _ => {
@@ -87,25 +87,46 @@ pub fn metaplex<B: AccountStorage>(
 
 
 #[inline]
-fn read_u64(input: &[u8]) -> u64 {
-    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32]).as_u64()
+fn read_u64(input: &[u8]) -> Result<u64> {
+    if input.len() < 32 {
+        return Err(Error::OutOfBounds);
+    }
+    U256::from_be_bytes(*arrayref::array_ref![input, 0, 32])
+        .try_into()
+        .map_err(Into::into)
 }
 
 #[inline]
-fn read_pubkey(input: &[u8]) -> Pubkey {
-    Pubkey::new_from_array(*arrayref::array_ref![input, 0, 32])
+fn read_pubkey(input: &[u8]) -> Result<Pubkey> {
+    if input.len() < 32 {
+        return Err(Error::OutOfBounds);
+    }
+    Ok(Pubkey::new_from_array(*arrayref::array_ref![input, 0, 32]))
 }
 
 #[inline]
-fn read_string(input: &[u8], offset_position: usize) -> String {
-    let offset = U256::from_be_bytes(*arrayref::array_ref![input, offset_position, 32]).as_usize();
-    let length = U256::from_be_bytes(*arrayref::array_ref![input, offset, 32]).as_usize();
+fn read_string(input: &[u8], offset_position: usize, max_length: usize) -> Result<String> {
+    if input.len() < offset_position + 32 {
+        return Err(Error::OutOfBounds);
+    }
+    let offset: usize =
+        U256::from_be_bytes(*arrayref::array_ref![input, offset_position, 32]).try_into()?;
+    if input.len() < offset.saturating_add(32) {
+        return Err(Error::OutOfBounds);
+    }
+    let length = U256::from_be_bytes(*arrayref::array_ref![input, offset, 32]).try_into()?;
+    if length > max_length {
+        return Err(Error::OutOfBounds);
+    }
 
-    let begin = offset + 32;
-    let end = begin + length;
+    let begin = offset.saturating_add(32);
+    let end = begin.saturating_add(length);
 
+    if input.len() < end {
+        return Err(Error::OutOfBounds);
+    }
     let data = input[begin..end].to_vec();
-    unsafe { String::from_utf8_unchecked(data) }
+    String::from_utf8(data).map_err(|_| Error::Custom("Invalid utf8 string".to_string()))
 }
 
 

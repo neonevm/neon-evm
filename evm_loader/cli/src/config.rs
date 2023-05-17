@@ -10,9 +10,8 @@ use solana_sdk::{
     signature::{Keypair, Signer,},
 };
 use solana_client::rpc_client::RpcClient;
-use std::{fmt, fmt::Debug, process::exit, str::FromStr,};
+use std::{fmt, fmt::Debug, str::FromStr,};
 use clap::ArgMatches;
-use log::error;
 use hex::FromHex;
 
 pub struct Config {
@@ -30,7 +29,10 @@ impl Debug for Config {
 }
 
 /// # Panics
-pub fn create(options: &ArgMatches) -> Config {
+/// # Errors
+/// `EvmLoaderNotSpecified` - if `evm_loader` is not specified
+/// `KeypairNotSpecified` - if `signer` is not specified
+pub fn create(options: &ArgMatches) -> Result<Config, NeonCliError> {
 
     let cli_config = options.value_of("config_file").map_or_else(
         solana_cli_config::Config::default,
@@ -49,9 +51,7 @@ pub fn create(options: &ArgMatches) -> Config {
         if let Some(evm_loader) = pubkey_of(options, "evm_loader") {
             evm_loader
         } else {
-            let e = NeonCliError::EvmLoaderNotSpecified;
-            error!("{}", e);
-            exit(e.error_code() as i32);
+            return Err(NeonCliError::EvmLoaderNotSpecified);
         };
 
     let mut wallet_manager = None;
@@ -63,13 +63,7 @@ pub fn create(options: &ArgMatches) -> Config {
             .unwrap_or(&cli_config.keypair_path),
         "keypair",
         &mut wallet_manager,
-    ).unwrap_or_else(
-        |_| {
-            let e = NeonCliError::KeypairNotSpecified;
-            error!("{}", e);
-            exit(e.error_code() as i32);
-        }
-    );
+    ).map_err(|_| NeonCliError::KeypairNotSpecified)?;
 
     let fee_payer = keypair_from_path(
         options,
@@ -103,13 +97,13 @@ pub fn create(options: &ArgMatches) -> Config {
         }
     };
 
-    Config {
+    Ok(Config {
         rpc_client,
         evm_loader,
         signer,
         fee_payer,
         commitment,
-    }
+    })
 }
 
 

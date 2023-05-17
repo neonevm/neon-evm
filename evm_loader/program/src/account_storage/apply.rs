@@ -271,7 +271,6 @@ impl<'a> ProgramAccountStorage<'a> {
     fn delete_account(&mut self, address: Address) -> ProgramResult {
         let account = self.ethereum_account_mut(&address);
 
-        assert_eq!(account.balance, U256::ZERO); // balance should be moved by executor
         account.trx_count = 0;
         account.generation = account.generation.checked_add(1)
             .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - generation overflow", address))?;

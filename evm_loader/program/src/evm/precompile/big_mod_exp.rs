@@ -1,5 +1,6 @@
 
 #[must_use]
+#[allow(unused)]
 pub fn big_mod_exp(
     _input: &[u8]
 ) -> Vec<u8> {

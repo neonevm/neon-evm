@@ -8,7 +8,7 @@ use spl_associated_token_account::get_associated_token_address;
 use crate::{
     account_storage::AccountStorage,
     executor::{ExecutorState},
-    error::{Result, Error}, types::Address, evm::database::Database,
+    error::{Result, Error}, types::Address,
 };
 
 
@@ -37,8 +37,7 @@ pub fn neon_token<B: AccountStorage>(
     if method_id == NEON_TOKEN_METHOD_WITHDRAW_ID  {
         if is_static { return Err(Error::StaticModeViolation(*address)); }
 
-        let source = context.caller; // caller contract
-
+        let source = context.contract;
         // owner of the associated token account
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
@@ -66,11 +65,9 @@ fn withdraw<B: AccountStorage>(
         return Err(Error::Custom("Neon Withdraw: value == 0".to_string()));
     }
 
-    if state.balance(&source)? < value {
-        return Err(Error::InsufficientBalanceForTransfer(source, value));
-    }
+    let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
+    let min_amount: u128 = u128::pow(10, additional_decimals);
 
-    let min_amount = u128::pow(10, u32::from(crate::config::token_mint::decimals()));
     let spl_amount = value / min_amount;
     let remainder = value % min_amount;
 
@@ -79,7 +76,9 @@ fn withdraw<B: AccountStorage>(
     }
 
     if remainder != 0 {
-        return Err(Error::Custom("Neon Withdraw: value must be divisible by 10^9".to_string()));
+        return Err(Error::Custom(std::format!(
+            "Neon Withdraw: value must be divisible by 10^{additional_decimals}"
+        )));
     }
 
 

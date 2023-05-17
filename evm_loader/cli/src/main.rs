@@ -13,47 +13,56 @@ pub mod config;
 mod event_listener;
 mod types;
 
+use clap::ArgMatches;
 pub use config::Config;
 
-use std::process::exit;
 use crate::errors::NeonCliError;
 
 type NeonCliResult = Result<serde_json::Value, NeonCliError>;
+
+fn run(options: &ArgMatches) -> NeonCliResult {
+    let (cmd, params) = options.subcommand();
+    let config = config::create(options)?;
+
+    commands::execute(cmd, params, &config)
+}
+
+fn print_result(result: &NeonCliResult) {
+    let logs = {
+        let context = crate::logs::CONTEXT.lock().unwrap();
+        context.clone()
+    };
+
+    let result = match result {
+        Ok(value) => serde_json::json!({
+            "result": "success",
+            "value": value,
+            "logs": logs
+        }),
+        Err(e) => serde_json::json!({
+            "result": "error",
+            "error": e.to_string(),
+            "logs": logs
+        }),
+    };
+
+    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+}
 
 #[tokio::main]
 async fn main() {
     let options = program_options::parse();
 
     logs::init(&options).expect("logs init error");
+    std::panic::set_hook(Box::new(|info| {
+        let message = std::format!("Panic: {}", info);
+        print_result(&Err(NeonCliError::Panic(message)));
+    }));
 
-    let config = config::create(&options);
+    let result = run(&options);
 
-    let (cmd, params) = options.subcommand();
-
-    let result = commands::execute(cmd, params, &config);
-    let logs = {
-        let context = crate::logs::CONTEXT.lock().unwrap();
-        context.clone()
+    print_result(&result);
+    if let Err(e) = result {
+        std::process::exit(e.error_code() as i32);
     };
-
-    let (result, exit_code) = match result {
-        Ok(result) => {
-            (serde_json::json!({
-                "result": "success",
-                "value": result,
-                "logs": logs
-            }), 0_i32)
-        }
-        Err(e) => {
-            let error_code = e.error_code() as i32;
-            (serde_json::json!({
-                "result": "error",
-                "error": e.to_string(),
-                "logs": logs
-            }), error_code)
-        }
-    };
-
-    println!("{}", serde_json::to_string_pretty(&result).unwrap());
-    exit(exit_code);
 }

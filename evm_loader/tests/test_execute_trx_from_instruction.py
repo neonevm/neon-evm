@@ -62,12 +62,10 @@ class TestExecuteTrxFromInstruction:
 
         assert recipient_balance_after == amount
 
-    @pytest.mark.parametrize("chain_id", [None, 111])
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                          evm_loader, string_setter_contract, chain_id):
+                                                          evm_loader, string_setter_contract):
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
-        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text],
-                                           chain_id=chain_id)
+        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
 
         resp = execute_trx_from_instruction(operator_keypair, evm_loader, treasury_pool.account, treasury_pool.buffer,
                                             signed_tx,

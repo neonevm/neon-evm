@@ -59,13 +59,18 @@ impl CallDbClient {
 
     fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
         let pubkey_bytes = pubkey.to_bytes();
-        let row = block(|| async {
-            self.tracer_db.query_one(
+        let rows = block(|| async {
+            self.tracer_db.query(
                 "SELECT * FROM get_account_at_slot($1, $2)",
                 &[&pubkey_bytes.as_slice(), &(self.slot as i64)]
             ).await
         })?;
 
+        if rows.is_empty() {
+            return Ok(None);
+        }
+
+        let row = &rows[0];
         let lamports: i64 = row.try_get(2)?;
         let rent_epoch: i64 = row.try_get(4)?;
         Ok(Some(Account {

@@ -13,6 +13,13 @@ STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "account_list_len" / Int64ul,
 )
 
+HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
+    "tag" / Int8ul,
+    "owner" / Bytes(32),
+    "hash" / Bytes(32),
+    "len" / Int64ul
+)
+
 
 FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
