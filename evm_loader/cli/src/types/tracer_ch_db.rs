@@ -131,7 +131,9 @@ impl ClickHouseDb {
             ChError::Db(err)
         })?;
 
-        let rows = if root.status != ROOT {
+        let rows = if root.status == ROOT {
+            rows
+        } else {
             let query = r#"
             SELECT distinct on (slot) slot, parent, status FROM events.update_slot
             WHERE slot >=
@@ -149,8 +151,6 @@ impl ClickHouseDb {
                     .fetch_all::<SlotParent>()
                     .await
             })?
-        } else {
-            rows
         };
 
         let execution_time = Instant::now().duration_since(time_start);
