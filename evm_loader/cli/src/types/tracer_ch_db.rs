@@ -113,14 +113,7 @@ impl ClickHouseDb {
     fn get_branch_slots(&self, slot: u64) -> ChResult<(u64, Vec<u64>)> {
         let query = r#"
             SELECT distinct on (slot) slot, parent, status FROM events.update_slot
-            WHERE slot >=
-                (
-                    SELECT slot from events.update_slot WHERE status = 'Rooted' and slot <=
-                    (
-	                    SELECT slot - ? FROM events.update_slot WHERE status = 'Rooted' ORDER BY slot DESC LIMIT 1
-                    )
-                    ORDER BY slot DESC LIMIT 1
-                )
+            WHERE slot >= (SELECT slot - ? FROM events.update_slot WHERE status = 'Rooted' ORDER BY slot DESC LIMIT 1)
                 and isNotNull(parent)
             ORDER BY slot DESC, status DESC
             "#;
@@ -132,6 +125,34 @@ impl ClickHouseDb {
                 .fetch_all::<SlotParent>()
                 .await
         })?;
+
+        let root = rows.last().ok_or_else(|| {
+            let err = clickhouse::error::Error::Custom("Rooted slot not found".to_string());
+            ChError::Db(err)
+        })?;
+
+        let rows = if root.status != ROOT {
+            let query = r#"
+            SELECT distinct on (slot) slot, parent, status FROM events.update_slot
+            WHERE slot >=
+                (
+                    SELECT slot from events.update_slot WHERE status = 'Rooted' and slot < ?
+                    ORDER BY slot DESC LIMIT 1
+                )
+                and isNotNull(parent)
+            ORDER BY slot DESC, status DESC
+            "#;
+            block(|| async {
+                self.client
+                    .query(query)
+                    .bind(root.slot)
+                    .fetch_all::<SlotParent>()
+                    .await
+            })?
+        } else {
+            rows
+        };
+
         let execution_time = Instant::now().duration_since(time_start);
         info!(
             "get_branch_slot sql(1) time: {} sec",
