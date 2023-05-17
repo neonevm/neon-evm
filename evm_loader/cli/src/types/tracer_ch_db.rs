@@ -116,7 +116,7 @@ impl ClickHouseDb {
                 (
                     SELECT slot from events.update_slot WHERE status = 'Rooted' and slot <=
                     (
-	                    SELECT slot - {} FROM events.update_slot WHERE status = 'Rooted' ORDER BY slot DESC LIMIT 1
+	                    SELECT slot - ? FROM events.update_slot WHERE status = 'Rooted' ORDER BY slot DESC LIMIT 1
                     )
                     ORDER BY slot DESC LIMIT 1
                 )
