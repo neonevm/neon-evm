@@ -142,7 +142,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     is_FTS_labeled_not_draft = 'FullTestSuit' in labels and is_draft != "true"
 
     if is_develop_branch or is_version_tag or is_version_branch is not None or is_FTS_labeled_not_draft:
-        full_test_suite = "true"
+        full_test_suite = "false"
     else:
         full_test_suite = "false"
 
