@@ -514,7 +514,18 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         info!("code_hash {address}");
 
-        self.ethereum_contract_map_or(address, <[u8; 32]>::default(), |c| {
+        // https://eips.ethereum.org/EIPS/eip-1052
+        // https://eips.ethereum.org/EIPS/eip-161
+        let is_non_existent_account = self.ethereum_account_map_or(address, true, |a| {
+            a.trx_count == 0 && a.balance == 0 && a.code_size == 0
+        });
+
+        if is_non_existent_account {
+            return <[u8; 32]>::default();
+        }
+
+        // return empty hash(&[]) as a default value, or code's hash if contract exists
+        self.ethereum_contract_map_or(address, hash(&[]).to_bytes(), |c| {
             hash(&c.code()).to_bytes()
         })
     }
