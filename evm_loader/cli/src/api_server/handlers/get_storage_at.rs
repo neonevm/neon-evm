@@ -1,27 +1,15 @@
-use crate::{
-    api_server::{request_models::GetStorageAtRequest, state::State},
-    context,
-};
-use evm_loader::types::Address;
+use crate::{api_server::state::State, context, types::request_models::GetStorageAtRequest};
 use tide::{Request, Result};
 
 use crate::commands::get_storage_at as GetStorageAtCommand;
 
-use super::{process_result, u256_of};
+use super::process_result;
 
 #[allow(clippy::unused_async)]
 pub async fn get_storage_at(req: Request<State>) -> Result<serde_json::Value> {
     let state = req.state();
 
     let req_params: GetStorageAtRequest = req.query().unwrap_or_default();
-
-    let address = Address::from_hex(req_params.contract_id.as_str())
-        .map_err(|_| tide::Error::from_str(400, "address is incorrect"))?;
-
-    let index = match u256_of(req_params.index.unwrap_or_default().as_str()) {
-        Some(index) => index,
-        None => return Err(tide::Error::from_str(400, "Index parse error")),
-    };
 
     let signer = context::build_singer(&state.config).map_err(|e| {
         tide::Error::from_str(
@@ -42,7 +30,7 @@ pub async fn get_storage_at(req: Request<State>) -> Result<serde_json::Value> {
     process_result(&GetStorageAtCommand::execute(
         &state.config,
         &context,
-        address,
-        &index,
+        req_params.contract_id,
+        &req_params.index,
     ))
 }

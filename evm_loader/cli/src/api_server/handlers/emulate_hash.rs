@@ -1,16 +1,15 @@
 use tide::{Request, Result};
 
 use crate::{
-    api_server::{request_models::TxParamsRequest, state::State},
-    context,
+    api_server::state::State, commands::emulate as EmulateCommand, context,
+    types::request_models::EmulateHashRequestModel,
 };
 
-use super::{parse_tx, parse_tx_params, process_result};
-use crate::commands::emulate as EmulateCommand;
+use super::{parse_emulation_params, process_result};
 
 #[allow(clippy::unused_async)]
 pub async fn emulate_hash(mut req: Request<State>) -> Result<serde_json::Value> {
-    let tx_params_request: TxParamsRequest = req.body_json().await.map_err(|e| {
+    let emulate_hash_request: EmulateHashRequestModel = req.body_json().await.map_err(|e| {
         tide::Error::from_str(
             400,
             format!(
@@ -22,8 +21,6 @@ pub async fn emulate_hash(mut req: Request<State>) -> Result<serde_json::Value> 
 
     let state = req.state();
 
-    let tx: crate::types::TxParams = parse_tx(&tx_params_request);
-
     let signer = context::build_singer(&state.config).map_err(|e| {
         tide::Error::from_str(
             400,
@@ -31,21 +28,23 @@ pub async fn emulate_hash(mut req: Request<State>) -> Result<serde_json::Value> 
         )
     })?;
 
-    let rpc_client = context::build_hash_rpc_client(
-        &state.config,
-        tx_params_request.hash.as_deref().unwrap_or_default(),
-    )
-    .map_err(|e| {
-        tide::Error::from_str(
-            400,
-            format!("Error on creating hash rpc client: {:?}", e.to_string()),
-        )
-    })?;
+    let rpc_client = context::build_hash_rpc_client(&state.config, &emulate_hash_request.hash)
+        .map_err(|e| {
+            tide::Error::from_str(
+                400,
+                format!("Error on creating hash rpc client: {:?}", e.to_string()),
+            )
+        })?;
+
+    let tx = rpc_client.get_transaction_data()?;
 
     let context = context::create(rpc_client, signer);
 
-    let (token, chain, steps, accounts, solana_accounts) =
-        parse_tx_params(&state.config, &context, &tx_params_request);
+    let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
+        &state.config,
+        &context,
+        &emulate_hash_request.emulation_params,
+    );
 
     process_result(&EmulateCommand::execute(
         &state.config,

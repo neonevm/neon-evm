@@ -1,16 +1,12 @@
 use tide::{Request, Result};
 
-use crate::{
-    api_server::{request_models::TxParamsRequest, state::State},
-    context,
-};
+use crate::{api_server::state::State, context, types::request_models::TraceRequestModel};
 
-use super::{parse_tx, parse_tx_params, process_result};
-use crate::commands::emulate as EmulateCommand;
+use super::{parse_emulation_params, process_result};
 
 #[allow(clippy::unused_async)]
 pub async fn trace(mut req: Request<State>) -> Result<serde_json::Value> {
-    let tx_params_request: TxParamsRequest = req.body_json().await.map_err(|e| {
+    let trace_request: TraceRequestModel = req.body_json().await.map_err(|e| {
         tide::Error::from_str(
             400,
             format!(
@@ -22,7 +18,7 @@ pub async fn trace(mut req: Request<State>) -> Result<serde_json::Value> {
 
     let state = req.state();
 
-    let tx: crate::types::TxParams = parse_tx(&tx_params_request);
+    let tx = trace_request.emulate_request.tx_params.into();
 
     let signer = context::build_singer(&state.config).map_err(|e| {
         tide::Error::from_str(
@@ -31,20 +27,23 @@ pub async fn trace(mut req: Request<State>) -> Result<serde_json::Value> {
         )
     })?;
 
-    let rpc_client =
-        context::build_rpc_client(&state.config, tx_params_request.slot).map_err(|e| {
-            tide::Error::from_str(
-                400,
-                format!("Error on creating rpc client: {:?}", e.to_string()),
-            )
-        })?;
+    let rpc_client = context::build_rpc_client(&state.config, trace_request.emulate_request.slot)
+        .map_err(|e| {
+        tide::Error::from_str(
+            400,
+            format!("Error on creating rpc client: {:?}", e.to_string()),
+        )
+    })?;
 
     let context = context::create(rpc_client, signer);
 
-    let (token, chain, steps, accounts, solana_accounts) =
-        parse_tx_params(&state.config, &context, &tx_params_request);
+    let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
+        &state.config,
+        &context,
+        &trace_request.emulate_request.emulation_params,
+    );
 
-    process_result(&EmulateCommand::execute(
+    process_result(&crate::commands::trace::execute(
         &state.config,
         &context,
         tx,
