@@ -1,6 +1,8 @@
 //! Error types
 #![allow(clippy::use_self)]
 
+use std::net::AddrParseError;
+
 use log::error;
 use solana_cli::cli::CliError as SolanaCliError;
 use solana_client::client_error::ClientError as SolanaClientError;
@@ -67,6 +69,21 @@ pub enum NeonCliError {
     /// too many steps
     #[error("Too many steps")]
     TooManySteps,
+    #[error("Incorrect address {0:?}.")]
+    IncorrectAddress(String),
+    #[error("Incorrect index {0:?}.")]
+    IncorrectIndex(String),
+    #[error("Tx parameters parsing error {0:?}.")]
+    TxParametersParsingError(String),
+
+    #[error("AddrParseError. {0:?}")]
+    AddrParseError(#[from] AddrParseError),
+
+    #[error("AxumError. {0:?}")]
+    AxumError(#[from] axum::Error),
+
+    #[error("SolanaClientError. {0:?}")]
+    SolanaClientError(solana_client::client_error::ClientError),
 
     /// Environment Error
     #[error("Environment error {0:?}")]
@@ -102,6 +119,9 @@ impl NeonCliError {
             NeonCliError::TpuSenderError(_) => 115,
             NeonCliError::PubkeyError(_) => 116,
             NeonCliError::EvmError(_) => 117,
+            NeonCliError::AddrParseError(_) => 118,
+            NeonCliError::AxumError(_) => 119,
+            NeonCliError::SolanaClientError(_) => 120,
             NeonCliError::EvmLoaderNotSpecified => 201,
             NeonCliError::KeypairNotSpecified => 202,
             NeonCliError::IncorrectProgram(_) => 203,
@@ -113,6 +133,9 @@ impl NeonCliError {
             NeonCliError::TooManySteps => 245,
             NeonCliError::FromHexError(_) => 246,
             NeonCliError::InvalidChDbConfig => 247,
+            NeonCliError::IncorrectAddress(_) => 248,
+            NeonCliError::IncorrectIndex(_) => 249,
+            NeonCliError::TxParametersParsingError(_) => 250,
         }
     }
 }

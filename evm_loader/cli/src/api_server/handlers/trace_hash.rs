@@ -1,42 +1,37 @@
-use tide::{Request, Result};
+use crate::NeonApiState;
+use axum::{http::StatusCode, Json};
 
-use crate::{api_server::state::State, context, types::request_models::TraceHashRequestModel};
+use crate::{context, types::request_models::TraceHashRequestModel};
 
-use super::{parse_emulation_params, process_result};
+use super::{parse_emulation_params, process_error, process_result};
 
 #[allow(clippy::unused_async)]
-pub async fn trace_hash(mut req: Request<State>) -> Result<serde_json::Value> {
-    let trace_hash_request: TraceHashRequestModel = req.body_json().await.map_err(|e| {
-        tide::Error::from_str(
-            400,
-            format!(
-                "Error on parsing transaction parameters request: {:?}",
-                e.to_string()
-            ),
-        )
-    })?;
+pub async fn trace_hash(
+    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    Json(trace_hash_request): Json<TraceHashRequestModel>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let signer = match context::build_signer(&state.config) {
+        Ok(signer) => signer,
+        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
+    };
 
-    let state = req.state();
-
-    let signer = context::build_singer(&state.config).map_err(|e| {
-        tide::Error::from_str(
-            400,
-            format!("Error on creating singer: {:?}", e.to_string()),
-        )
-    })?;
-
-    let rpc_client = context::build_hash_rpc_client(
+    let rpc_client = match context::build_hash_rpc_client(
         &state.config,
         &trace_hash_request.emulate_hash_request.hash,
-    )
-    .map_err(|e| {
-        tide::Error::from_str(
-            400,
-            format!("Error on creating hash rpc client: {:?}", e.to_string()),
-        )
-    })?;
+    ) {
+        Ok(rpc_client) => rpc_client,
+        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
+    };
 
-    let tx = rpc_client.get_transaction_data()?;
+    let tx = match rpc_client.get_transaction_data() {
+        Ok(tx) => tx,
+        Err(e) => {
+            return process_error(
+                StatusCode::BAD_REQUEST,
+                &crate::errors::NeonCliError::SolanaClientError(e),
+            )
+        }
+    };
 
     let context = context::create(rpc_client, signer);
 

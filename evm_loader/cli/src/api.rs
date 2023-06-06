@@ -14,56 +14,34 @@ mod rpc;
 mod syscall_stubs;
 mod types;
 
-use std::env;
+use std::{env, net::SocketAddr, str::FromStr, sync::Arc};
 
-use api_server::routes::register;
+use axum::Router;
 pub use config::Config;
 pub use context::Context;
 use errors::NeonCliError;
-use log::LevelFilter;
-use tide::{utils::After, Response, StatusCode};
+use tokio::signal::{self};
 
 type NeonCliResult = Result<serde_json::Value, NeonCliError>;
+type NeonApiResult<T> = Result<T, NeonCliError>;
+type NeonApiState = Arc<api_server::state::State>;
 
 #[tokio::main]
-async fn main() -> tide::Result<()> {
+async fn main() -> NeonApiResult<()> {
     let options = api_options::parse();
+
+    // initialize tracing
+    tracing_subscriber::fmt::init();
 
     let api_config = config::load_api_config_from_enviroment();
 
     let config = config::create_from_api_comnfig(&api_config)?;
 
-    let state = api_server::state::State::new(config);
+    let state: NeonApiState = Arc::new(api_server::state::State::new(config)) as NeonApiState;
 
-    let mut app = tide::with_state(state.clone());
-
-    femme::with_level(LevelFilter::Debug);
-
-    app.with(After(|mut res: Response| async {
-        let err = res.take_error();
-        if let Some(err) = err {
-            let err_string = err.to_string();
-            let value = serde_json::from_str(err_string.as_str())?;
-            if let serde_json::Value::Object(map) = value {
-                let err_result = serde_json::json!({
-                    "result": "error",
-                    "value": map.get("error"),
-                });
-                res.set_status(StatusCode::BadRequest);
-                res.set_body(serde_json::to_string_pretty(&err_result).unwrap());
-            } else {
-                let err_result = serde_json::json!({
-                    "result": "error",
-                    "value": &err_string,
-                });
-                res.set_status(StatusCode::BadRequest);
-                res.set_body(serde_json::to_string_pretty(&err_result).unwrap());
-            }
-        };
-        Ok(res)
-    }));
-
-    app.at("/api").nest(register(state));
+    let app = Router::new()
+        .nest("/api", api_server::routes::register(state.clone()))
+        .with_state(state.clone());
 
     let listener_addr = options
         .value_of("host")
@@ -73,9 +51,39 @@ async fn main() -> tide::Result<()> {
             |_| env::var("NEON_API_LISTENER_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_owned()),
         );
 
-    println!("API Server will be started on {}", listener_addr);
-
-    app.listen(listener_addr).await?;
+    let addr = SocketAddr::from_str(listener_addr.as_str())?;
+    tracing::debug!("listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    println!("signal received, starting graceful shutdown");
 }
