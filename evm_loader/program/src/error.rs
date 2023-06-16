@@ -128,6 +128,9 @@ pub enum Error {
     #[error("New contract code size exceeds 24kb (EIP-170), contract = {0}, size = {1}")]
     ContractCodeSizeLimit(Address, usize),
 
+    #[error("Transaction is rejected from a sender with deployed code (EIP-3607), contract = {0}")]
+    SenderHasDeployedCode(Address),
+
     #[error("Checked Integer Math Overflow")]
     IntegerOverflow,
 
