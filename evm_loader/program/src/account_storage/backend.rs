@@ -71,6 +71,18 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn code_hash(&self, address: &Address) -> [u8; 32] {
         use solana_program::keccak::hash;
 
+        // https://eips.ethereum.org/EIPS/eip-1052
+        // https://eips.ethereum.org/EIPS/eip-161
+        if self.code_size(address) == 0 {
+            if self.nonce(address) == 0 && self.balance(address) == 0 {
+                // non-existent account
+                return <[u8; 32]>::default();
+            }
+
+            // account without code
+            return hash(&[]).to_bytes();
+        }
+
         self.ethereum_account(address)
             .and_then(EthereumAccount::contract_data)
             .map(|contract| hash(&contract.code()))

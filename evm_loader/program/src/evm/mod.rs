@@ -135,6 +135,10 @@ impl<B: Database> Machine<B> {
             return Err(Error::InsufficientBalance(origin, trx.value));
         }
 
+        if backend.code_size(&origin)? != 0 {
+            return Err(Error::SenderHasDeployedCode(origin));
+        }
+
         if trx.target.is_some() {
             Self::new_call(trx, origin, backend)
         } else {

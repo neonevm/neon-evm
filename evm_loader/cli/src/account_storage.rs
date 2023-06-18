@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 
 use ethnum::U256;
 use evm_loader::account::ether_contract;
@@ -26,47 +26,14 @@ use solana_sdk::{
     sysvar::{slot_hashes, Sysvar},
 };
 
-use crate::{Config, Context};
+use crate::{types::PubkeyBase58, Config, Context};
 
 const FAKE_OPERATOR: Pubkey = pubkey!("neonoperator1111111111111111111111111111111");
-
-fn serde_pubkey_bs58<S>(value: &Pubkey, s: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    let bs58 = bs58::encode(value).into_string();
-    s.serialize_str(&bs58)
-}
-
-#[allow(unused)]
-fn deserialize_pubkey_from_str<'de, D>(deserializer: D) -> Result<Pubkey, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    struct StringVisitor;
-    impl<'de> serde::de::Visitor<'de> for StringVisitor {
-        type Value = Pubkey;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("a string containing json data")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            Pubkey::from_str(v).map_err(E::custom)
-        }
-    }
-    deserializer.deserialize_any(StringVisitor)
-}
 
 #[derive(serde::Serialize, Clone)]
 pub struct NeonAccount {
     address: Address,
-    #[serde(serialize_with = "serde_pubkey_bs58")]
-    #[serde(deserialize_with = "deserialize_pubkey_from_str")]
-    account: Pubkey,
+    account: PubkeyBase58,
     writable: bool,
     new: bool,
     size: usize,
@@ -83,7 +50,7 @@ impl NeonAccount {
 
             Self {
                 address,
-                account: pubkey,
+                account: pubkey.into(),
                 writable,
                 new: false,
                 size: account.data.len(),
@@ -96,7 +63,7 @@ impl NeonAccount {
 
             Self {
                 address,
-                account: pubkey,
+                account: pubkey.into(),
                 writable,
                 new: true,
                 size: 0,
@@ -118,8 +85,7 @@ impl NeonAccount {
 
 #[derive(serde::Serialize, Clone)]
 pub struct SolanaAccount {
-    #[serde(serialize_with = "serde_pubkey_bs58")]
-    pubkey: Pubkey,
+    pubkey: PubkeyBase58,
     is_writable: bool,
     #[serde(skip)]
     data: Option<Account>,
@@ -187,7 +153,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 solana_accounts_storage.insert(
                     pubkey,
                     SolanaAccount {
-                        pubkey,
+                        pubkey: pubkey.into(),
                         is_writable: false,
                         data: account.clone(),
                     },
@@ -214,7 +180,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             .entry(*pubkey)
             .and_modify(|a| a.data = result.value.clone())
             .or_insert(SolanaAccount {
-                pubkey: *pubkey,
+                pubkey: pubkey.into(),
                 is_writable: false,
                 data: result.value.clone(),
             });
@@ -271,7 +237,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
         let account = SolanaAccount {
-            pubkey,
+            pubkey: pubkey.into(),
             is_writable,
             data: None,
         };
@@ -415,7 +381,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         let solana_account = accounts.get_mut(address).expect("get account error");
 
         if let Some(account_data) = &mut solana_account.data {
-            let info = account_info(&solana_account.account, account_data);
+            let info = account_info(solana_account.account.as_ref(), account_data);
             EthereumAccount::from_account(&self.config.evm_loader, &info).map_or(default, |a| f(&a))
         } else {
             default
@@ -432,7 +398,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         let solana_account = accounts.get_mut(address).expect("get account error");
 
         if let Some(account_data) = &mut solana_account.data {
-            let info = account_info(&solana_account.account, account_data);
+            let info = account_info(solana_account.account.as_ref(), account_data);
             let account = EthereumAccount::from_account(&self.config.evm_loader, &info);
             match &account {
                 Ok(a) => a.contract_data().map_or(default, f),
@@ -514,7 +480,18 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         info!("code_hash {address}");
 
-        self.ethereum_contract_map_or(address, <[u8; 32]>::default(), |c| {
+        // https://eips.ethereum.org/EIPS/eip-1052
+        // https://eips.ethereum.org/EIPS/eip-161
+        let is_non_existent_account = self.ethereum_account_map_or(address, true, |a| {
+            a.trx_count == 0 && a.balance == 0 && a.code_size == 0
+        });
+
+        if is_non_existent_account {
+            return <[u8; 32]>::default();
+        }
+
+        // return empty hash(&[]) as a default value, or code's hash if contract exists
+        self.ethereum_contract_map_or(address, hash(&[]).to_bytes(), |c| {
             hash(&c.code()).to_bytes()
         })
     }

@@ -1,12 +1,16 @@
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use ethnum::U256;
 use evm_loader::types::Address;
+use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::api_server::request_models::TxParamsRequest;
 use crate::commands::get_neon_elf::CachedElfParams;
-use crate::types::TxParams;
+use crate::errors::NeonCliError;
 use crate::{Config, Context, NeonCliResult};
 
+use crate::types::request_models::EmulationParamsRequestModel;
 use std::str::FromStr;
 
 pub mod emulate;
@@ -21,45 +25,16 @@ pub fn u256_of(index: &str) -> Option<U256> {
         return Some(U256::ZERO);
     }
 
-    U256::from_str_prefixed(index).map(Some).unwrap_or(None)
+    U256::from_str_prefixed(index).ok()
 }
 
-pub(crate) fn parse_tx(model: &TxParamsRequest) -> TxParams {
-    let from = model.sender;
-    let to = match Address::from_hex(model.contract.clone().unwrap_or_default().as_str()) {
-        Ok(address) => Some(address),
-        Err(_) => None,
-    };
-    let value = model
-        .value
-        .clone()
-        .map(|v| u256_of(v.as_str()))
-        .unwrap_or_default();
-    let data = model.data.clone();
-    let gas_limit = model
-        .gas_limit
-        .clone()
-        .map(|v| u256_of(v.as_str()))
-        .unwrap_or_default();
-
-    TxParams {
-        from,
-        to,
-        data,
-        value,
-        gas_limit,
-    }
-}
-
-pub(crate) fn parse_tx_params(
+pub(crate) fn parse_emulation_params(
     config: &Config,
     context: &Context,
-    params: &TxParamsRequest,
+    params: &EmulationParamsRequestModel,
 ) -> (Pubkey, u64, u64, Vec<Address>, Vec<Pubkey>) {
     // Read ELF params only if token_mint or chain_id is not set.
-    let mut token: Option<Pubkey> =
-        Pubkey::from_str(params.token_mint.clone().unwrap_or_default().as_str())
-            .map_or_else(|_| None, Some);
+    let mut token: Option<Pubkey> = params.token_mint.map(Into::into);
     let mut chain = params.chain_id;
     if token.is_none() || chain.is_none() {
         let cached_elf_params = CachedElfParams::new(config, context);
@@ -86,40 +61,57 @@ pub(crate) fn parse_tx_params(
     }
     let token = token.expect("token_mint get error");
     let chain = chain.expect("chain_id get error");
-    let max_steps = params
-        .max_steps_to_execute
-        .expect("max_steps_to_execute parse error");
+    let max_steps = params.max_steps_to_execute;
 
     let accounts = params.cached_accounts.clone().unwrap_or_default();
 
     let solana_accounts = params
         .solana_accounts
         .clone()
-        .map(|vec| {
-            vec.into_iter()
-                .map(|s| Pubkey::from_str(s.as_str()).expect("incorrect sonala account"))
-                .collect()
-        })
+        .map(|vec| vec.into_iter().map(Into::into).collect())
         .unwrap_or_default();
 
     (token, chain, max_steps, accounts, solana_accounts)
 }
 
-fn process_result(result: &NeonCliResult) -> tide::Result<serde_json::Value> {
+impl IntoResponse for NeonCliError {
+    fn into_response(self) -> Response {
+        let (status, error_message) = (StatusCode::INTERNAL_SERVER_ERROR, self.to_string());
+
+        let body = Json(json!({
+            "result": "error",
+            "error":error_message,
+        }));
+
+        (status, body).into_response()
+    }
+}
+
+fn process_result(result: &NeonCliResult) -> (StatusCode, Json<Value>) {
     match result {
-        Ok(value) => Ok(serde_json::json!({
-            "result": "success",
-            "value": value.to_string(),
-        })),
-        Err(e) => {
-            let err_result = serde_json::json!({
+        Ok(value) => (
+            StatusCode::OK,
+            Json(json!({
+                "result": "success",
+                "value": value.to_string(),
+            })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
                 "result": "error",
                 "error": e.to_string(),
-            });
-            Err(tide::Error::from_str(
-                400,
-                serde_json::to_string_pretty(&err_result).unwrap(),
-            ))
-        }
+            })),
+        ),
     }
+}
+
+fn process_error(status_code: StatusCode, e: &NeonCliError) -> (StatusCode, Json<Value>) {
+    (
+        status_code,
+        Json(json!({
+            "result": "error",
+            "error": e.to_string(),
+        })),
+    )
 }

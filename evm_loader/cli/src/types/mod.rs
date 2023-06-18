@@ -1,11 +1,13 @@
 mod indexer_db;
+pub mod request_models;
 #[allow(clippy::all)]
 pub mod trace;
 mod tracer_ch_db;
 
 pub use indexer_db::IndexerDb;
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
+use std::str::FromStr;
 use tokio::{runtime::Runtime, task::block_in_place};
 pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
 
@@ -13,6 +15,7 @@ use {
     ethnum::U256,
     evm_loader::types::Address,
     postgres::NoTls,
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
     thiserror::Error,
     // tokio::task::block_in_place,
     tokio_postgres::{connect, Client},
@@ -92,3 +95,66 @@ pub enum PgError {
 }
 
 pub type PgResult<T> = std::result::Result<T, PgError>;
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PubkeyBase58(pub Pubkey);
+
+impl AsRef<Pubkey> for PubkeyBase58 {
+    fn as_ref(&self) -> &Pubkey {
+        &self.0
+    }
+}
+
+impl From<Pubkey> for PubkeyBase58 {
+    fn from(value: Pubkey) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&Pubkey> for PubkeyBase58 {
+    fn from(value: &Pubkey) -> Self {
+        Self(*value)
+    }
+}
+
+impl From<PubkeyBase58> for Pubkey {
+    fn from(value: PubkeyBase58) -> Self {
+        value.0
+    }
+}
+
+impl Serialize for PubkeyBase58 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bs58 = bs58::encode(&self.0).into_string();
+        serializer.serialize_str(&bs58)
+    }
+}
+
+impl<'de> Deserialize<'de> for PubkeyBase58 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StringVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for StringVisitor {
+            type Value = Pubkey;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string containing json data")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Pubkey::from_str(v).map_err(E::custom)
+            }
+        }
+
+        deserializer.deserialize_any(StringVisitor).map(Self)
+    }
+}

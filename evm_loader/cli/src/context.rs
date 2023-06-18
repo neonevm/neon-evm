@@ -69,7 +69,7 @@ pub fn create_from_config_and_options(
 }
 
 /// # Errors
-pub fn build_singer(config: &Config) -> Result<Box<dyn Signer>, NeonCliError> {
+pub fn build_signer(config: &Config) -> Result<Box<dyn Signer>, NeonCliError> {
     let mut wallet_manager = None;
 
     let signer = signer_from_path(
