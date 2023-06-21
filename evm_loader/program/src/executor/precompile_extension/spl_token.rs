@@ -269,11 +269,11 @@ fn create_account<B: AccountStorage>(
     if required_lamports > 0 {
         let transfer =
             system_instruction::transfer(state.backend.operator(), &account.key, required_lamports);
-        state.queue_external_instruction(transfer, vec![], 0);
+        state.queue_external_instruction(transfer, vec![], required_lamports);
     }
 
     let allocate = system_instruction::allocate(&account.key, space.try_into().unwrap());
-    state.queue_external_instruction(allocate, seeds.clone(), space);
+    state.queue_external_instruction(allocate, seeds.clone(), 0);
 
     let assign = system_instruction::assign(&account.key, &spl_token::ID);
     state.queue_external_instruction(assign, seeds, 0);

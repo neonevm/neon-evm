@@ -12,7 +12,7 @@ pub enum Action {
         #[serde(with = "serde_bytes")]
         data: Vec<u8>,
         seeds: Vec<Vec<u8>>,
-        allocate: usize,
+        fee: u64,
     },
     NeonTransfer {
         source: Address,

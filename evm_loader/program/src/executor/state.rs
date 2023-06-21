@@ -90,14 +90,14 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         &mut self,
         instruction: Instruction,
         seeds: Vec<Vec<u8>>,
-        allocate: usize,
+        fee: u64,
     ) {
         let action = Action::ExternalInstruction {
             program_id: instruction.program_id,
             data: instruction.data,
             accounts: instruction.accounts,
             seeds,
-            allocate,
+            fee,
         };
 
         self.actions.push(action);

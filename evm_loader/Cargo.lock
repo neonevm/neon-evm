@@ -2110,14 +2110,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "mpl-token-metadata"
-version = "1.3.2"
+name = "mpl-token-auth-rules"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47f4b577942a9029b33381344f343d6ff96f3212e857db66db8de21bfc58134f"
+checksum = "c376f2cc7dae80e2949cd6ca8a2420b3c61c1ecb7a275c6433d9a4d2d24f994d"
+dependencies = [
+ "borsh",
+ "bytemuck",
+ "mpl-token-metadata-context-derive",
+ "num-derive",
+ "num-traits",
+ "rmp-serde",
+ "serde",
+ "shank",
+ "solana-program",
+ "solana-zk-token-sdk",
+ "thiserror",
+]
+
+[[package]]
+name = "mpl-token-metadata"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f661ff8c1d64c48cf207c0d259783d411a4249058c1b861fabd8bb6ce30ae4d8"
 dependencies = [
  "arrayref",
  "borsh",
- "mpl-token-vault",
+ "mpl-token-auth-rules",
+ "mpl-token-metadata-context-derive",
+ "mpl-utils",
  "num-derive",
  "num-traits",
  "shank",
@@ -2128,17 +2149,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "mpl-token-vault"
-version = "0.1.0"
+name = "mpl-token-metadata-context-derive"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ade4ef15bc06a6033076c4ff28cba9b42521df5ec61211d6f419415ace2746a"
+checksum = "12989bc45715b0ee91944855130131479f9c772e198a910c3eb0ea327d5bffc3"
 dependencies = [
+ "quote 1.0.26",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "mpl-utils"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "822133b6cba8f9a43e5e0e189813be63dd795858f54155c729833be472ffdb51"
+dependencies = [
+ "arrayref",
  "borsh",
- "num-derive",
- "num-traits",
  "solana-program",
  "spl-token",
- "thiserror",
 ]
 
 [[package]]
@@ -2481,6 +2510,12 @@ dependencies = [
  "smallvec",
  "windows-sys 0.45.0",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
 
 [[package]]
 name = "pbkdf2"
@@ -3066,6 +3101,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmp"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44519172358fd6d58656c86ab8e7fbc9e1490c3e8f14d35ed78ca0dd07403c9f"
+dependencies = [
+ "byteorder",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5b13be192e0220b8afb7222aa5813cb62cc269ebb5cac346ca6487681d2913e"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
+]
+
+[[package]]
 name = "rpassword"
 version = "6.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3416,48 +3473,36 @@ dependencies = [
 
 [[package]]
 name = "shank"
-version = "0.0.12"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439c00542aa8b4c777750b3130ce36fcff86ba215d54006d47d67359513b70be"
+checksum = "b63e565b5e95ad88ab38f312e89444c749360641c509ef2de0093b49f55974a5"
 dependencies = [
  "shank_macro",
 ]
 
 [[package]]
 name = "shank_macro"
-version = "0.0.12"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3498d6ea2ba012f26ad3d79a19773ba8e1c7a69f14dec67e3ed51c723cc9f30a"
+checksum = "63927d22a1e8b74bda98cc6e151fcdf178b7abb0dc6c4f81e0bbf5ffe2fc4ec8"
 dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "shank_macro_impl",
- "shank_render",
  "syn 1.0.109",
 ]
 
 [[package]]
 name = "shank_macro_impl"
-version = "0.0.12"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271c0b0b47ef930d7455d11a02164e3f0e71704d639bcaa6581f23e4b2073227"
+checksum = "40ce03403df682f80f4dc1efafa87a4d0cb89b03726d0565e6364bdca5b9a441"
 dependencies = [
  "anyhow",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "serde",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "shank_render"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "142e11124c70d1702424011209621551adf775988033dedea428ce4a21d3acdf"
-dependencies = [
- "proc-macro2 1.0.56",
- "quote 1.0.26",
- "shank_macro_impl",
 ]
 
 [[package]]
