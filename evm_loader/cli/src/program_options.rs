@@ -2,16 +2,9 @@ use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, Sub
 use ethnum::U256;
 use evm_loader::types::Address;
 use hex::FromHex;
+use neon_lib::context::truncate;
 use solana_clap_utils::input_validators::{is_url_or_moniker, is_valid_pubkey};
 use std::fmt::Display;
-
-pub fn truncate(in_str: &str) -> &str {
-    if &in_str[..2] == "0x" {
-        &in_str[2..]
-    } else {
-        in_str
-    }
-}
 
 // Return an error if string cannot be parsed as a Address address
 fn is_valid_address<T>(string: T) -> Result<(), String>

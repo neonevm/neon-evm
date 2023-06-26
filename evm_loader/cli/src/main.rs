@@ -1,26 +1,27 @@
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 
-mod account_storage;
 mod commands;
-pub mod config;
-pub mod context;
-mod errors;
-mod event_listener;
+mod config;
+mod context;
 mod logs;
 mod program_options;
-mod rpc;
-mod syscall_stubs;
-mod types;
+
+pub use neon_lib::account_storage;
+pub use neon_lib::errors;
+pub use neon_lib::event_listener;
+pub use neon_lib::rpc;
+pub use neon_lib::syscall_stubs;
+pub use neon_lib::types;
 
 use clap::ArgMatches;
 pub use config::Config;
 pub use context::Context;
 
-use crate::errors::NeonCliError;
+use crate::errors::NeonError;
 use std::time::Instant;
 
-type NeonCliResult = Result<serde_json::Value, NeonCliError>;
+type NeonCliResult = Result<serde_json::Value, NeonError>;
 
 fn run(options: &ArgMatches) -> NeonCliResult {
     let (cmd, params) = options.subcommand();
@@ -61,7 +62,7 @@ async fn main() {
     logs::init(&options).expect("logs init error");
     std::panic::set_hook(Box::new(|info| {
         let message = std::format!("Panic: {}", info);
-        print_result(&Err(NeonCliError::Panic(message)));
+        print_result(&Err(NeonError::Panic(message)));
     }));
 
     let result = run(&options);

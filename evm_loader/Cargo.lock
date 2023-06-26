@@ -2189,35 +2189,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "neon-api"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap 2.34.0",
+ "ethnum",
+ "evm-loader",
+ "neon-lib",
+ "serde",
+ "serde_json",
+ "solana-sdk",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "neon-cli"
 version = "0.15.0-dev"
 dependencies = [
- "arrayref",
- "axum",
- "bincode",
- "bs58",
- "chrono",
  "clap 2.34.0",
- "clickhouse",
  "ethnum",
  "evm-loader",
  "fern",
- "getrandom 0.1.16",
+ "hex",
+ "log",
+ "neon-lib",
+ "serde",
+ "serde_json",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-client",
+ "solana-sdk",
+ "tokio",
+]
+
+[[package]]
+name = "neon-lib"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bincode",
+ "bs58",
+ "clickhouse",
+ "ethnum",
+ "evm-loader",
  "goblin 0.6.1",
  "hex",
  "lazy_static",
  "log",
  "postgres",
  "rand 0.8.5",
- "rlp",
  "scroll",
  "serde",
- "serde_json",
- "sha3 0.10.7",
  "solana-clap-utils",
  "solana-cli",
  "solana-cli-config",
- "solana-cli-output",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",
@@ -2226,9 +2255,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-postgres",
- "tower",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -1,22 +1,20 @@
 [package]
-name = "neon-cli"
-version = "0.15.0-dev"
-authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
+name = "neon-api"
+version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
 clap = "2.33.3"
 evm-loader = { path = "../program", default_features = false, features = ["log", "tracing"] }
 solana-sdk = "~1.14"
-solana-client = "~1.14"
-solana-clap-utils = "~1.14"
-solana-cli-config = "~1.14"
-hex = "0.4.2"
 serde = "1.0.147"
 serde_json = "1.0.85"
-log = "0.4.17"
-fern = "0.6"
 ethnum = { version = "1", default_features = false, features = [ "serde" ] }
 tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = "0.6"
+tower = { version = "0.4", features = ["make"] }
 neon-lib = { path = "../lib" }
