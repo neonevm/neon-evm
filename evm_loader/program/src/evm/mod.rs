@@ -106,8 +106,27 @@ impl<B: Database> Machine<B> {
         cursor.position().try_into().map_err(Error::from)
     }
 
-    pub fn deserialize_from(buffer: &[u8], _backend: &B) -> Result<Self> {
-        bincode::deserialize(buffer).map_err(Error::from)
+    pub fn deserialize_from(buffer: &[u8], backend: &B) -> Result<Self> {
+        fn reinit_buffer<B: Database>(buffer: &mut Buffer, backend: &B) {
+            if let Some((key, range)) = buffer.uninit_data() {
+                *buffer = backend.map_solana_account(&key, |i| Buffer::from_account(i, range));
+            }
+        }
+
+        fn reinit_machine<B: Database>(machine: &mut Machine<B>, backend: &B) {
+            reinit_buffer(&mut machine.call_data, backend);
+            reinit_buffer(&mut machine.execution_code, backend);
+            reinit_buffer(&mut machine.return_data, backend);
+
+            if let Some(parent) = &mut machine.parent {
+                reinit_machine(parent, backend);
+            }
+        }
+
+        let mut evm: Self = bincode::deserialize(buffer)?;
+        reinit_machine(&mut evm, backend);
+
+        Ok(evm)
     }
 
     pub fn new(trx: Transaction, origin: Address, backend: &mut B) -> Result<Self> {
@@ -224,6 +243,10 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
+        assert!(self.execution_code.uninit_data().is_none());
+        assert!(self.call_data.uninit_data().is_none());
+        assert!(self.return_data.uninit_data().is_none());
+
         let mut step = 0_u64;
 
         tracing_event!(tracing::Event::BeginVM {
@@ -253,7 +276,7 @@ impl<B: Database> Machine<B> {
                 Ok(result) => result,
                 Err(e) => {
                     let message = build_revert_message(&e.to_string());
-                    self.opcode_revert_impl(Buffer::new(&message), backend)?
+                    self.opcode_revert_impl(Buffer::from_slice(&message), backend)?
                 }
             };
 

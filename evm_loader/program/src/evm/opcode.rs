@@ -1173,7 +1173,7 @@ impl<B: Database> Machine<B> {
         }
 
         let result = result.unwrap()?;
-        let return_data = Buffer::new(&result);
+        let return_data = Buffer::from_slice(&result);
 
         self.opcode_return_impl(return_data, backend)
     }

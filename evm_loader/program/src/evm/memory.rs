@@ -236,7 +236,7 @@ impl Memory {
     #[inline]
     pub fn read_buffer(&mut self, offset: usize, length: usize) -> Result<Buffer, Error> {
         let slice = self.read(offset, length)?;
-        Ok(Buffer::new(slice))
+        Ok(Buffer::from_slice(slice))
     }
 }
 

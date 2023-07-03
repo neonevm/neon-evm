@@ -498,7 +498,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         info!("code {address}");
 
-        self.ethereum_contract_map_or(address, Buffer::empty(), |c| Buffer::new(&c.code()))
+        self.ethereum_contract_map_or(address, Buffer::empty(), |c| Buffer::from_slice(&c.code()))
     }
 
     fn generation(&self, address: &Address) -> u32 {

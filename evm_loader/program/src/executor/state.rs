@@ -380,6 +380,13 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(cache.block_timestamp)
     }
 
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&solana_program::account_info::AccountInfo) -> R,
+    {
+        self.backend.map_solana_account(address, action)
+    }
+
     fn snapshot(&mut self) {
         self.stack.push(self.actions.len());
     }

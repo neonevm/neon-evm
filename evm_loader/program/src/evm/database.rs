@@ -1,6 +1,7 @@
 use super::{Buffer, Context};
 use crate::{error::Result, types::Address};
 use ethnum::U256;
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 pub trait Database {
     fn chain_id(&self) -> U256;
@@ -23,6 +24,10 @@ pub trait Database {
     fn block_hash(&self, number: U256) -> Result<[u8; 32]>;
     fn block_number(&self) -> Result<U256>;
     fn block_timestamp(&self) -> Result<U256>;
+
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&AccountInfo) -> R;
 
     fn snapshot(&mut self);
     fn revert_snapshot(&mut self);
