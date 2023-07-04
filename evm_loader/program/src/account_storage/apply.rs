@@ -216,6 +216,8 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> Result<(), ProgramError> {
         const STATIC_STORAGE_LIMIT: U256 = U256::new(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as u128);
 
+        let mut required_account_transfers = std::collections::HashMap::new();
+
         for (address, storage) in storage {
             let contract: &EthereumAccount<'a> = &self.ethereum_accounts[&address];
             let contract_data = contract.contract_data().expect("Contract expected");
@@ -263,11 +265,15 @@ impl<'a> ProgramAccountStorage<'a> {
                         }
                         Entry::Occupied(mut entry) => {
                             let storage = entry.get_mut();
-                            storage.set(subindex, &value, operator, system_program)?;
+                            storage.set(subindex, &value, &mut required_account_transfers)?;
                         }
                     }
                 }
             }
+        }
+
+        for (_key, (info, required_lamports)) in required_account_transfers {
+            system_program.transfer(operator, &info, required_lamports)?;
         }
 
         Ok(())
