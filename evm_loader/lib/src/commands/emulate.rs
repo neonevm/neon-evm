@@ -65,16 +65,16 @@ pub fn execute(
         let mut evm = Machine::new(trx, tx_params.from, &mut backend)?;
 
         let (result, steps_executed) = evm.execute(steps, &mut backend)?;
+        if result == ExitStatus::StepLimit {
+            return Err(NeonError::TooManySteps);
+        }
+
         let actions = backend.into_actions();
         (result, actions, steps_executed)
     };
 
     debug!("Execute done, result={exit_status:?}");
     debug!("{steps_executed} steps executed");
-
-    if exit_status == ExitStatus::StepLimit {
-        return Err(NeonError::TooManySteps);
-    }
 
     let accounts_operations = storage.calc_accounts_operations(&actions);
 
