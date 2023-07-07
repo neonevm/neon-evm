@@ -1,5 +1,6 @@
 use super::{e, Rpc};
 use crate::types::{ChDbConfig, IndexerDb, TracerDb, TxParams};
+use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
     client_error::{ClientError, ClientErrorKind},
@@ -28,11 +29,12 @@ pub struct TrxDbClient {
 }
 
 impl TrxDbClient {
-    pub fn new(config: &ChDbConfig, hash: [u8; 32]) -> Self {
+    pub async fn new(config: &ChDbConfig, hash: [u8; 32]) -> Self {
         let tracer_db = TracerDb::new(config);
-        let indexer_db = IndexerDb::new(config);
+        let indexer_db = IndexerDb::new(config).await;
         let sol_sig = indexer_db
             .get_sol_sig(&hash)
+            .await
             .unwrap_or_else(|_| panic!("get_sol_sig error, hash: 0x{}", hex::encode(hash)));
 
         Self {
@@ -44,12 +46,13 @@ impl TrxDbClient {
     }
 }
 
+#[async_trait]
 impl Rpc for TrxDbClient {
     fn commitment(&self) -> CommitmentConfig {
         CommitmentConfig::default()
     }
 
-    fn confirm_transaction_with_spinner(
+    async fn confirm_transaction_with_spinner(
         &self,
         _signature: &Signature,
         _recent_blockhash: &Hash,
@@ -60,14 +63,14 @@ impl Rpc for TrxDbClient {
         ))
     }
 
-    fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
+    async fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
         self.tracer_db
             .get_account_by_sol_sig(key, &self.sol_sig)
             .map_err(|e| e!("load account error", key, e))?
             .ok_or_else(|| e!("account not found", key))
     }
 
-    fn get_account_with_commitment(
+    async fn get_account_with_commitment(
         &self,
         key: &Pubkey,
         _commitment: CommitmentConfig,
@@ -80,6 +83,7 @@ impl Rpc for TrxDbClient {
         let slot = self
             .indexer_db
             .get_slot(&self.hash)
+            .await
             .map_err(|e| e!("get_slot error", e))?;
 
         let context = RpcResponseContext {
@@ -92,7 +96,10 @@ impl Rpc for TrxDbClient {
         })
     }
 
-    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
+    async fn get_multiple_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> ClientResult<Vec<Option<Account>>> {
         let mut result = Vec::new();
         for key in pubkeys {
             let account = self
@@ -104,39 +111,41 @@ impl Rpc for TrxDbClient {
         Ok(result)
     }
 
-    fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
-        Ok(self.get_account(key)?.data)
+    async fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
+        Ok(self.get_account(key).await?.data)
     }
 
-    fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
+    async fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
         Err(e!("get_block() not implemented for db_trx_client"))
     }
 
-    fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
+    async fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
         self.tracer_db
             .get_block_time(slot)
+            .await
             .map_err(|e| e!("get_block_time error", slot, e))
     }
 
-    fn get_latest_blockhash(&self) -> ClientResult<Hash> {
+    async fn get_latest_blockhash(&self) -> ClientResult<Hash> {
         Err(e!(
             "get_latest_blockhash() not implemented for db_trx_client"
         ))
     }
 
-    fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64> {
+    async fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64> {
         Err(e!(
             "get_minimum_balance_for_rent_exemption() not implemented for db_trx_client"
         ))
     }
 
-    fn get_slot(&self) -> ClientResult<Slot> {
+    async fn get_slot(&self) -> ClientResult<Slot> {
         self.indexer_db
             .get_slot(&self.hash)
+            .await
             .map_err(|e| e!("get_slot error", e))
     }
 
-    fn get_signature_statuses(
+    async fn get_signature_statuses(
         &self,
         _signatures: &[Signature],
     ) -> RpcResult<Vec<Option<TransactionStatus>>> {
@@ -145,7 +154,7 @@ impl Rpc for TrxDbClient {
         ))
     }
 
-    fn get_transaction_with_config(
+    async fn get_transaction_with_config(
         &self,
         _signature: &Signature,
         _config: RpcTransactionConfig,
@@ -155,11 +164,11 @@ impl Rpc for TrxDbClient {
         ))
     }
 
-    fn send_transaction(&self, _transaction: &Transaction) -> ClientResult<Signature> {
+    async fn send_transaction(&self, _transaction: &Transaction) -> ClientResult<Signature> {
         Err(e!("send_transaction() not implemented for db_trx_client"))
     }
 
-    fn send_and_confirm_transaction_with_spinner(
+    async fn send_and_confirm_transaction_with_spinner(
         &self,
         _transaction: &Transaction,
     ) -> ClientResult<Signature> {
@@ -168,7 +177,7 @@ impl Rpc for TrxDbClient {
         ))
     }
 
-    fn send_and_confirm_transaction_with_spinner_and_commitment(
+    async fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
         _transaction: &Transaction,
         _commitment: CommitmentConfig,
@@ -176,7 +185,7 @@ impl Rpc for TrxDbClient {
         Err(e!("send_and_confirm_transaction_with_spinner_and_commitment() not implemented for db_trx_client"))
     }
 
-    fn send_and_confirm_transaction_with_spinner_and_config(
+    async fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
         _transaction: &Transaction,
         _commitment: CommitmentConfig,
@@ -185,7 +194,7 @@ impl Rpc for TrxDbClient {
         Err(e!("send_and_confirm_transaction_with_spinner_and_config() not implemented for db_trx_client"))
     }
 
-    fn get_latest_blockhash_with_commitment(
+    async fn get_latest_blockhash_with_commitment(
         &self,
         _commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
@@ -194,9 +203,10 @@ impl Rpc for TrxDbClient {
         ))
     }
 
-    fn get_transaction_data(&self) -> ClientResult<TxParams> {
+    async fn get_transaction_data(&self) -> ClientResult<TxParams> {
         self.indexer_db
             .get_transaction_data(&self.hash)
+            .await
             .map_err(|e| e!("load transaction error", self.hash, e))
     }
 

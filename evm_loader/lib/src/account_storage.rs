@@ -1,4 +1,5 @@
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
+use tokio::sync::RwLock;
 
 use ethnum::U256;
 use evm_loader::account::ether_contract;
@@ -26,6 +27,7 @@ use solana_sdk::{
     sysvar::{slot_hashes, Sysvar},
 };
 
+use crate::types::block;
 use crate::{types::PubkeyBase58, Config, Context};
 
 const FAKE_OPERATOR: Pubkey = pubkey!("neonoperator1111111111111111111111111111111");
@@ -74,11 +76,16 @@ impl NeonAccount {
         }
     }
 
-    pub fn rpc_load(config: &Config, context: &Context, address: Address, writable: bool) -> Self {
+    pub async fn rpc_load(
+        config: &Config,
+        context: &Context,
+        address: Address,
+        writable: bool,
+    ) -> Self {
         let (key, _) = make_solana_program_address(&address, &config.evm_loader);
         info!("get_account_from_solana {} => {}", address, key);
 
-        let account = context.rpc_client.get_account(&key).ok();
+        let account = context.rpc_client.get_account(&key).await.ok();
         Self::new(address, key, account, writable)
     }
 }
@@ -93,8 +100,8 @@ pub struct SolanaAccount {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct EmulatorAccountStorage<'a> {
-    pub accounts: RefCell<HashMap<Address, NeonAccount>>,
-    pub solana_accounts: RefCell<HashMap<Pubkey, SolanaAccount>>,
+    pub accounts: RwLock<HashMap<Address, NeonAccount>>,
+    pub solana_accounts: RwLock<HashMap<Pubkey, SolanaAccount>>,
     config: &'a Config,
     context: &'a Context,
     block_number: u64,
@@ -104,7 +111,7 @@ pub struct EmulatorAccountStorage<'a> {
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(
+    pub async fn new(
         config: &'a Config,
         context: &'a Context,
         token_mint: Pubkey,
@@ -112,12 +119,16 @@ impl<'a> EmulatorAccountStorage<'a> {
     ) -> EmulatorAccountStorage<'a> {
         trace!("backend::new");
 
-        let slot = context.rpc_client.get_slot().unwrap_or_default();
-        let timestamp = context.rpc_client.get_block_time(slot).unwrap_or_default();
+        let slot = context.rpc_client.get_slot().await.unwrap_or_default();
+        let timestamp = context
+            .rpc_client
+            .get_block_time(slot)
+            .await
+            .unwrap_or_default();
 
         Self {
-            accounts: RefCell::new(HashMap::new()),
-            solana_accounts: RefCell::new(HashMap::new()),
+            accounts: RwLock::new(HashMap::new()),
+            solana_accounts: RwLock::new(HashMap::new()),
             config,
             context,
             block_number: slot,
@@ -127,19 +138,28 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn initialize_cached_accounts(&self, addresses: &[Address], solana_accounts: &[Pubkey]) {
+    pub async fn initialize_cached_accounts(
+        &self,
+        addresses: &[Address],
+        solana_accounts: &[Pubkey],
+    ) {
         let pubkeys: Vec<_> = addresses
             .iter()
             .map(|address| make_solana_program_address(address, &self.config.evm_loader).0)
             .chain(solana_accounts.iter().copied())
             .collect();
 
-        if let Ok(accounts) = self.context.rpc_client.get_multiple_accounts(&pubkeys) {
+        if let Ok(accounts) = self
+            .context
+            .rpc_client
+            .get_multiple_accounts(&pubkeys)
+            .await
+        {
             let entries = addresses
                 .iter()
                 .zip(accounts.iter().take(addresses.len()))
                 .zip(pubkeys.iter().take(addresses.len()));
-            let mut accounts_storage = self.accounts.borrow_mut();
+            let mut accounts_storage = self.accounts.write().await;
             for ((&address, account), &pubkey) in entries {
                 accounts_storage.insert(
                     address,
@@ -148,7 +168,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             }
 
             let entries = accounts.iter().skip(addresses.len()).zip(solana_accounts);
-            let mut solana_accounts_storage = self.solana_accounts.borrow_mut();
+            let mut solana_accounts_storage = self.solana_accounts.write().await;
             for (account, &pubkey) in entries {
                 solana_accounts_storage.insert(
                     pubkey,
@@ -162,8 +182,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn get_account(&self, pubkey: &Pubkey) -> client_error::Result<Option<Account>> {
-        let mut accounts = self.solana_accounts.borrow_mut();
+    pub async fn get_account(&self, pubkey: &Pubkey) -> client_error::Result<Option<Account>> {
+        let mut accounts = self.solana_accounts.write().await;
 
         if let Some(account) = accounts.get(pubkey) {
             if let Some(ref data) = account.data {
@@ -174,7 +194,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         let result = self
             .context
             .rpc_client
-            .get_account_with_commitment(pubkey, self.config.commitment)?;
+            .get_account_with_commitment(pubkey, self.config.commitment)
+            .await?;
 
         accounts
             .entry(*pubkey)
@@ -188,7 +209,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         Ok(result.value)
     }
 
-    pub fn get_account_from_solana(
+    pub async fn get_account_from_solana(
         config: &'a Config,
         context: &'a Context,
         address: &Address,
@@ -197,7 +218,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             make_solana_program_address(address, &config.evm_loader);
         info!("get_account_from_solana {} => {}", address, solana_address);
 
-        if let Ok(acc) = context.rpc_client.get_account(&solana_address) {
+        if let Ok(acc) = context.rpc_client.get_account(&solana_address).await {
             trace!("Account found");
             trace!("Account data len {}", acc.data.len());
             trace!("Account owner {}", acc.owner);
@@ -210,22 +231,23 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    fn add_ethereum_account(&self, address: &Address, writable: bool) -> bool {
-        let mut accounts = self.accounts.borrow_mut();
+    async fn add_ethereum_account(&self, address: &Address, writable: bool) -> bool {
+        let mut accounts = self.accounts.write().await;
 
         if let Some(ref mut account) = accounts.get_mut(address) {
             account.writable |= writable;
 
             true
         } else {
-            let account = NeonAccount::rpc_load(self.config, self.context, *address, writable);
+            let account =
+                NeonAccount::rpc_load(self.config, self.context, *address, writable).await;
             accounts.insert(*address, account);
 
             false
         }
     }
 
-    fn add_solana_account(&self, pubkey: Pubkey, is_writable: bool) {
+    async fn add_solana_account(&self, pubkey: Pubkey, is_writable: bool) {
         if solana_sdk::system_program::check_id(&pubkey) {
             return;
         }
@@ -234,7 +256,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             return;
         }
 
-        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        let mut solana_accounts = self.solana_accounts.write().await;
 
         let account = SolanaAccount {
             pubkey: pubkey.into(),
@@ -252,8 +274,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    #[must_use]
-    pub fn apply_actions(&self, actions: &[Action]) -> u64 {
+    pub async fn apply_actions(&self, actions: &[Action]) -> u64 {
         info!("apply_actions");
 
         let mut gas = 0_u64;
@@ -269,13 +290,13 @@ impl<'a> EmulatorAccountStorage<'a> {
                 } => {
                     info!("neon transfer {value} from {source} to {target}");
 
-                    self.add_ethereum_account(source, true);
-                    self.add_ethereum_account(target, true);
+                    self.add_ethereum_account(source, true).await;
+                    self.add_ethereum_account(target, true).await;
                 }
                 Action::NeonWithdraw { source, value } => {
                     info!("neon withdraw {value} from {source}");
 
-                    self.add_ethereum_account(source, true);
+                    self.add_ethereum_account(source, true).await;
                 }
                 Action::EvmSetStorage {
                     address,
@@ -285,12 +306,13 @@ impl<'a> EmulatorAccountStorage<'a> {
                     info!("set storage {address} -> {index} = {}", hex::encode(value));
 
                     if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
-                        self.add_ethereum_account(address, true);
+                        self.add_ethereum_account(address, true).await;
                     } else {
                         let (base, _) = address.find_solana_address(self.program_id());
                         let storage_account =
                             EthereumStorageAddress::new(self.program_id(), &base, index);
-                        self.add_solana_account(*storage_account.pubkey(), true);
+                        self.add_solana_account(*storage_account.pubkey(), true)
+                            .await;
 
                         if self.storage(address, index) == [0_u8; 32] {
                             let metadata_size = EthereumStorage::SIZE;
@@ -304,17 +326,17 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::EvmIncrementNonce { address } => {
                     info!("nonce increment {address}");
 
-                    self.add_ethereum_account(address, true);
+                    self.add_ethereum_account(address, true).await;
                 }
                 Action::EvmSetCode { address, code } => {
                     info!("set code {address} -> {} bytes", code.len());
 
-                    self.add_ethereum_account(address, true);
+                    self.add_ethereum_account(address, true).await;
                 }
                 Action::EvmSelfDestruct { address } => {
                     info!("selfdestruct {address}");
 
-                    self.add_ethereum_account(address, true);
+                    self.add_ethereum_account(address, true).await;
                 }
                 Action::ExternalInstruction {
                     program_id,
@@ -324,10 +346,11 @@ impl<'a> EmulatorAccountStorage<'a> {
                 } => {
                     info!("external call {program_id}");
 
-                    self.add_solana_account(*program_id, false);
+                    self.add_solana_account(*program_id, false).await;
 
                     for account in accounts {
-                        self.add_solana_account(account.pubkey, account.is_writable);
+                        self.add_solana_account(account.pubkey, account.is_writable)
+                            .await;
                     }
 
                     gas = gas.saturating_add(*fee);
@@ -338,14 +361,13 @@ impl<'a> EmulatorAccountStorage<'a> {
         gas
     }
 
-    #[must_use]
-    pub fn apply_accounts_operations(&self, operations: AccountsOperations) -> u64 {
+    pub async fn apply_accounts_operations(&self, operations: AccountsOperations) -> u64 {
         let mut gas = 0_u64;
         let rent = Rent::get().expect("Rent get error");
 
         let mut iterations = 0_usize;
 
-        let mut accounts = self.accounts.borrow_mut();
+        let mut accounts = self.accounts.write().await;
         for (address, operation) in operations {
             let new_size = match operation {
                 AccountOperation::Create { space } => space,
@@ -368,13 +390,13 @@ impl<'a> EmulatorAccountStorage<'a> {
         gas.saturating_add(iterations_cost)
     }
 
-    fn ethereum_account_map_or<F, R>(&self, address: &Address, default: R, f: F) -> R
+    async fn ethereum_account_map_or<F, R>(&self, address: &Address, default: R, f: F) -> R
     where
         F: FnOnce(&EthereumAccount) -> R,
     {
-        self.add_ethereum_account(address, false);
+        self.add_ethereum_account(address, false).await;
 
-        let mut accounts = self.accounts.borrow_mut();
+        let mut accounts = self.accounts.write().await;
         let solana_account = accounts.get_mut(address).expect("get account error");
 
         if let Some(account_data) = &mut solana_account.data {
@@ -385,13 +407,13 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    fn ethereum_contract_map_or<F, R>(&self, address: &Address, default: R, f: F) -> R
+    async fn ethereum_contract_map_or<F, R>(&self, address: &Address, default: R, f: F) -> R
     where
         F: FnOnce(ether_contract::ContractData) -> R,
     {
-        self.add_ethereum_account(address, false);
+        self.add_ethereum_account(address, false).await;
 
-        let mut accounts = self.accounts.borrow_mut();
+        let mut accounts = self.accounts.write().await;
         let solana_account = accounts.get_mut(address).expect("get account error");
 
         if let Some(account_data) = &mut solana_account.data {
@@ -436,9 +458,9 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_hash(&self, slot: u64) -> [u8; 32] {
         info!("block_hash {slot}");
 
-        self.add_solana_account(slot_hashes::ID, false);
+        block(|| self.add_solana_account(slot_hashes::ID, false));
 
-        if let Ok(Some(slot_hashes_account)) = self.get_account(&slot_hashes::ID) {
+        if let Ok(Some(slot_hashes_account)) = block(|| self.get_account(&slot_hashes::ID)) {
             let slot_hashes_data = slot_hashes_account.data.as_slice();
             find_slot_hash(slot, slot_hashes_data)
         } else {
@@ -449,27 +471,27 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn exists(&self, address: &Address) -> bool {
         info!("exists {address}");
 
-        self.add_ethereum_account(address, false);
+        block(|| self.add_ethereum_account(address, false));
 
-        let accounts = self.accounts.borrow();
+        let accounts = block(|| self.accounts.read());
         accounts.contains_key(address)
     }
 
     fn nonce(&self, address: &Address) -> u64 {
         info!("nonce {address}");
 
-        self.ethereum_account_map_or(address, 0_u64, |a| a.trx_count)
+        block(|| self.ethereum_account_map_or(address, 0_u64, |a| a.trx_count))
     }
 
     fn balance(&self, address: &Address) -> U256 {
         info!("balance {address}");
 
-        self.ethereum_account_map_or(address, U256::ZERO, |a| a.balance)
+        block(|| self.ethereum_account_map_or(address, U256::ZERO, |a| a.balance))
     }
 
     fn code_size(&self, address: &Address) -> usize {
         info!("code_size {address}");
-        self.ethereum_account_map_or(address, 0, |a| a.code_size as usize)
+        block(|| self.ethereum_account_map_or(address, 0, |a| a.code_size as usize))
     }
 
     fn code_hash(&self, address: &Address) -> [u8; 32] {
@@ -479,8 +501,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         // https://eips.ethereum.org/EIPS/eip-1052
         // https://eips.ethereum.org/EIPS/eip-161
-        let is_non_existent_account = self.ethereum_account_map_or(address, true, |a| {
-            a.trx_count == 0 && a.balance == 0 && a.code_size == 0
+        let is_non_existent_account = block(|| {
+            self.ethereum_account_map_or(address, true, |a| {
+                a.trx_count == 0 && a.balance == 0 && a.code_size == 0
+            })
         });
 
         if is_non_existent_account {
@@ -488,8 +512,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         }
 
         // return empty hash(&[]) as a default value, or code's hash if contract exists
-        self.ethereum_contract_map_or(address, hash(&[]).to_bytes(), |c| {
-            hash(&c.code()).to_bytes()
+        block(|| {
+            self.ethereum_contract_map_or(address, hash(&[]).to_bytes(), |c| {
+                hash(&c.code()).to_bytes()
+            })
         })
     }
 
@@ -498,11 +524,15 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         info!("code {address}");
 
-        self.ethereum_contract_map_or(address, Buffer::empty(), |c| Buffer::from_slice(&c.code()))
+        block(|| {
+            self.ethereum_contract_map_or(address, Buffer::empty(), |c| {
+                Buffer::from_slice(&c.code())
+            })
+        })
     }
 
     fn generation(&self, address: &Address) -> u32 {
-        let value = self.ethereum_account_map_or(address, 0_u32, |c| c.generation);
+        let value = block(|| self.ethereum_account_map_or(address, 0_u32, |c| c.generation));
 
         info!("account generation {address} - {value}");
         value
@@ -511,8 +541,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn storage(&self, address: &Address, index: &U256) -> [u8; 32] {
         let value = if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
-            self.ethereum_contract_map_or(address, <[u8; 32]>::default(), |c| {
-                c.storage()[index..index + 32].try_into().unwrap()
+            block(|| {
+                self.ethereum_contract_map_or(address, <[u8; 32]>::default(), |c| {
+                    c.storage()[index..index + 32].try_into().unwrap()
+                })
             })
         } else {
             let subindex = (index & 0xFF).as_u8();
@@ -521,10 +553,9 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let (base, _) = address.find_solana_address(self.program_id());
             let storage_address = EthereumStorageAddress::new(self.program_id(), &base, &index);
 
-            self.add_solana_account(*storage_address.pubkey(), false);
+            block(|| self.add_solana_account(*storage_address.pubkey(), false));
 
-            let rpc_response = self
-                .get_account(storage_address.pubkey())
+            let rpc_response = block(|| self.get_account(storage_address.pubkey()))
                 .expect("Error querying account from Solana");
 
             if let Some(mut account) = rpc_response {
@@ -558,7 +589,9 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn solana_account_space(&self, address: &Address) -> Option<usize> {
-        self.ethereum_account_map_or(address, None, |account| Some(account.info.data_len()))
+        block(|| {
+            self.ethereum_account_map_or(address, None, |account| Some(account.info.data_len()))
+        })
     }
 
     fn chain_id(&self) -> u64 {
@@ -582,10 +615,9 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                 rent_epoch: 0,
             }
         } else {
-            self.add_solana_account(*address, false);
+            block(|| self.add_solana_account(*address, false));
 
-            let mut account = self
-                .get_account(address)
+            let mut account = block(|| self.get_account(address))
                 .unwrap_or_default()
                 .unwrap_or_default();
             let info = account_info(address, &mut account);
@@ -598,10 +630,9 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     where
         F: FnOnce(&AccountInfo) -> R,
     {
-        self.add_solana_account(*address, false);
+        block(|| self.add_solana_account(*address, false));
 
-        let mut account = self
-            .get_account(address)
+        let mut account = block(|| self.get_account(address))
             .unwrap_or_default()
             .unwrap_or_default();
         let info = account_info(address, &mut account);

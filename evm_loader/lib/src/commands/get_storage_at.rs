@@ -17,14 +17,14 @@ use crate::{
 
 pub type GetStorageAtReturn = String;
 
-pub fn execute(
+pub async fn execute(
     config: &Config,
     context: &Context,
     ether_address: Address,
     index: &U256,
 ) -> NeonResult<GetStorageAtReturn> {
     let value = if let (solana_address, Some(mut account)) =
-        EmulatorAccountStorage::get_account_from_solana(config, context, &ether_address)
+        EmulatorAccountStorage::get_account_from_solana(config, context, &ether_address).await
     {
         let info = account_info(&solana_address, &mut account);
 
@@ -40,7 +40,7 @@ pub fn execute(
                 let address =
                     EthereumStorageAddress::new(&config.evm_loader, account_data.info.key, &index);
 
-                if let Ok(mut account) = context.rpc_client.get_account(address.pubkey()) {
+                if let Ok(mut account) = context.rpc_client.get_account(address.pubkey()).await {
                     if solana_sdk::system_program::check_id(&account.owner) {
                         <[u8; 32]>::default()
                     } else {

@@ -1,5 +1,6 @@
 use super::{e, Rpc};
 use crate::types::{ChDbConfig, TracerDb, TxParams};
+use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
     client_error::{ClientError, ClientErrorKind},
@@ -35,12 +36,13 @@ impl CallDbClient {
     }
 }
 
+#[async_trait]
 impl Rpc for CallDbClient {
     fn commitment(&self) -> CommitmentConfig {
         CommitmentConfig::default()
     }
 
-    fn confirm_transaction_with_spinner(
+    async fn confirm_transaction_with_spinner(
         &self,
         _signature: &Signature,
         _recent_blockhash: &Hash,
@@ -51,14 +53,15 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
+    async fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
         self.tracer_db
             .get_account_at(key, self.slot)
+            .await
             .map_err(|e| e!("load account error", key, e))?
             .ok_or_else(|| e!("account not found", key))
     }
 
-    fn get_account_with_commitment(
+    async fn get_account_with_commitment(
         &self,
         key: &Pubkey,
         _: CommitmentConfig,
@@ -66,6 +69,7 @@ impl Rpc for CallDbClient {
         let account = self
             .tracer_db
             .get_account_at(key, self.slot)
+            .await
             .map_err(|e| e!("load account error", key, e))?;
 
         let context = RpcResponseContext {
@@ -78,49 +82,54 @@ impl Rpc for CallDbClient {
         })
     }
 
-    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
+    async fn get_multiple_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> ClientResult<Vec<Option<Account>>> {
         let mut result = Vec::new();
         for key in pubkeys {
             let account = self
                 .tracer_db
                 .get_account_at(key, self.slot)
+                .await
                 .map_err(|e| e!("load account error", key, e))?;
             result.push(account);
         }
         Ok(result)
     }
 
-    fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
-        Ok(self.get_account(key)?.data)
+    async fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
+        Ok(self.get_account(key).await?.data)
     }
 
-    fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
+    async fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
         Err(e!("get_block() not implemented for db_call_client"))
     }
 
-    fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
+    async fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
         self.tracer_db
             .get_block_time(slot)
+            .await
             .map_err(|e| e!("get_block_time error", slot, e))
     }
 
-    fn get_latest_blockhash(&self) -> ClientResult<Hash> {
+    async fn get_latest_blockhash(&self) -> ClientResult<Hash> {
         Err(e!(
             "get_latest_blockhash() not implemented for db_call_client"
         ))
     }
 
-    fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64> {
+    async fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64> {
         Err(e!(
             "get_minimum_balance_for_rent_exemption() not implemented for db_call_client"
         ))
     }
 
-    fn get_slot(&self) -> ClientResult<Slot> {
+    async fn get_slot(&self) -> ClientResult<Slot> {
         Ok(self.slot)
     }
 
-    fn get_signature_statuses(
+    async fn get_signature_statuses(
         &self,
         _signatures: &[Signature],
     ) -> RpcResult<Vec<Option<TransactionStatus>>> {
@@ -129,7 +138,7 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    fn get_transaction_with_config(
+    async fn get_transaction_with_config(
         &self,
         _signature: &Signature,
         _config: RpcTransactionConfig,
@@ -139,11 +148,11 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    fn send_transaction(&self, _transaction: &Transaction) -> ClientResult<Signature> {
+    async fn send_transaction(&self, _transaction: &Transaction) -> ClientResult<Signature> {
         Err(e!("send_transaction() not implemented for db_call_client"))
     }
 
-    fn send_and_confirm_transaction_with_spinner(
+    async fn send_and_confirm_transaction_with_spinner(
         &self,
         _transaction: &Transaction,
     ) -> ClientResult<Signature> {
@@ -152,7 +161,7 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    fn send_and_confirm_transaction_with_spinner_and_commitment(
+    async fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
         _transaction: &Transaction,
         _commitment: CommitmentConfig,
@@ -160,7 +169,7 @@ impl Rpc for CallDbClient {
         Err(e!("send_and_confirm_transaction_with_spinner_and_commitment() not implemented for db_call_client"))
     }
 
-    fn send_and_confirm_transaction_with_spinner_and_config(
+    async fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
         _transaction: &Transaction,
         _commitment: CommitmentConfig,
@@ -169,7 +178,7 @@ impl Rpc for CallDbClient {
         Err(e!("send_and_confirm_transaction_with_spinner_and_config() not implemented for db_call_client"))
     }
 
-    fn get_latest_blockhash_with_commitment(
+    async fn get_latest_blockhash_with_commitment(
         &self,
         _commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
@@ -178,7 +187,7 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    fn get_transaction_data(&self) -> ClientResult<TxParams> {
+    async fn get_transaction_data(&self) -> ClientResult<TxParams> {
         Err(e!(
             "get_transaction_data() not implemented for db_call_client"
         ))

@@ -4,7 +4,6 @@ use serde::Serialize;
 use crate::{Config, Context, NeonResult};
 use evm_loader::types::Address;
 use solana_cli::checks::check_account_for_fee;
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
@@ -21,7 +20,7 @@ pub struct DepositReturn {
 }
 
 /// Executes subcommand `deposit`.
-pub fn execute(
+pub async fn execute(
     config: &Config,
     context: &Context,
     amount: u64,
@@ -49,14 +48,13 @@ pub fn execute(
     ];
 
     let mut finalize_message = Message::new(&instructions, Some(&context.signer.pubkey()));
-    let blockhash = context.rpc_client.get_latest_blockhash()?;
+    let blockhash = context.rpc_client.get_latest_blockhash().await?;
     finalize_message.recent_blockhash = blockhash;
 
     let client = context
-        .rpc_client
-        .as_any()
-        .downcast_ref::<RpcClient>()
-        .expect("cast to solana_client::rpc_client::RpcClient error");
+        .blocking_rpc_client
+        .as_ref()
+        .expect("Blocking RPC client not initialized");
 
     check_account_for_fee(client, &context.signer.pubkey(), &finalize_message)?;
 
@@ -67,7 +65,8 @@ pub fn execute(
 
     let signature = context
         .rpc_client
-        .send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+        .send_and_confirm_transaction_with_spinner(&finalize_tx)
+        .await?;
 
     Ok(DepositReturn {
         transaction: signature,

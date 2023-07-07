@@ -1,7 +1,6 @@
 use log::debug;
 use serde::Serialize;
 use solana_cli::checks::check_account_for_fee;
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
@@ -18,7 +17,7 @@ pub struct CreateEtherAccountReturn {
     pub solana_address: String,
 }
 
-pub fn execute(
+pub async fn execute(
     config: &Config,
     context: &Context,
     ether_address: &Address,
@@ -39,14 +38,13 @@ pub fn execute(
     let instructions = vec![create_account_v03_instruction];
 
     let mut finalize_message = Message::new(&instructions, Some(&context.signer.pubkey()));
-    let blockhash = context.rpc_client.get_latest_blockhash()?;
+    let blockhash = context.rpc_client.get_latest_blockhash().await?;
     finalize_message.recent_blockhash = blockhash;
 
     let client = context
-        .rpc_client
-        .as_any()
-        .downcast_ref::<RpcClient>()
-        .expect("cast to solana_client::rpc_client::RpcClient error");
+        .blocking_rpc_client
+        .as_ref()
+        .expect("Blocking RPC client not initialized");
 
     check_account_for_fee(client, &context.signer.pubkey(), &finalize_message)?;
 
@@ -57,7 +55,8 @@ pub fn execute(
 
     context
         .rpc_client
-        .send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+        .send_and_confirm_transaction_with_spinner(&finalize_tx)
+        .await?;
 
     Ok(CreateEtherAccountReturn {
         solana_address: solana_address.to_string(),

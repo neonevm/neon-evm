@@ -44,7 +44,7 @@ pub struct TxParams {
     pub gas_limit: Option<U256>,
 }
 
-pub fn do_connect(
+pub async fn do_connect(
     host: &String,
     port: &String,
     db: &String,
@@ -57,7 +57,7 @@ pub fn do_connect(
     let mut result = None;
 
     while attempt < 3 {
-        result = block(|| async { connect(&authority, NoTls).await }).ok();
+        result = connect(&authority, NoTls).await.ok();
         if result.is_some() {
             break;
         }

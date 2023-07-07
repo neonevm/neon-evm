@@ -1,6 +1,5 @@
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::Json;
+use actix_web::http::StatusCode;
+use actix_web::web::Json;
 use ethnum::U256;
 use evm_loader::types::Address;
 use serde::Serialize;
@@ -49,19 +48,6 @@ impl From<AddrParseError> for NeonApiError {
     }
 }
 
-impl IntoResponse for NeonApiError {
-    fn into_response(self) -> Response {
-        let (status, error_message) = (StatusCode::INTERNAL_SERVER_ERROR, self.0.to_string());
-
-        let body = Json(json!({
-            "result": "error",
-            "error":error_message,
-        }));
-
-        (status, body).into_response()
-    }
-}
-
 pub fn u256_of(index: &str) -> Option<U256> {
     if index.is_empty() {
         return Some(U256::ZERO);
@@ -70,7 +56,7 @@ pub fn u256_of(index: &str) -> Option<U256> {
     U256::from_str_prefixed(index).ok()
 }
 
-pub(crate) fn parse_emulation_params(
+pub(crate) async fn parse_emulation_params(
     config: &Config,
     context: &Context,
     params: &EmulationParamsRequestModel,
@@ -79,7 +65,7 @@ pub(crate) fn parse_emulation_params(
     let mut token: Option<Pubkey> = params.token_mint.map(Into::into);
     let mut chain = params.chain_id;
     if token.is_none() || chain.is_none() {
-        let cached_elf_params = CachedElfParams::new(config, context);
+        let cached_elf_params = CachedElfParams::new(config, context).await;
         token = token.or_else(|| {
             Some(
                 Pubkey::from_str(
@@ -118,31 +104,31 @@ pub(crate) fn parse_emulation_params(
 
 fn process_result<T: Serialize>(
     result: &NeonApiResult<T>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> (Json<serde_json::Value>, StatusCode) {
     match result {
         Ok(value) => (
-            StatusCode::OK,
             Json(json!({
                 "result": "success",
                 "value": value,
             })),
+            StatusCode::OK,
         ),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({
                 "result": "error",
                 "error": e.0.to_string(),
             })),
+            StatusCode::INTERNAL_SERVER_ERROR,
         ),
     }
 }
 
-fn process_error(status_code: StatusCode, e: &NeonError) -> (StatusCode, Json<Value>) {
+fn process_error(status_code: StatusCode, e: &NeonError) -> (Json<Value>, StatusCode) {
     (
-        status_code,
         Json(json!({
             "result": "error",
             "error": e.to_string(),
         })),
+        status_code,
     )
 }

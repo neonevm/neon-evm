@@ -6,6 +6,7 @@ pub use db_call_client::CallDbClient;
 pub use db_trx_client::TrxDbClient;
 
 use crate::types::TxParams;
+use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
     rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
@@ -25,57 +26,59 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
+#[async_trait]
 pub trait Rpc {
     fn commitment(&self) -> CommitmentConfig;
-    fn confirm_transaction_with_spinner(
+    async fn confirm_transaction_with_spinner(
         &self,
         signature: &Signature,
         recent_blockhash: &Hash,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<()>;
-    fn get_account(&self, key: &Pubkey) -> ClientResult<Account>;
-    fn get_account_with_commitment(
+    async fn get_account(&self, key: &Pubkey) -> ClientResult<Account>;
+    async fn get_account_with_commitment(
         &self,
         key: &Pubkey,
         commitment: CommitmentConfig,
     ) -> RpcResult<Option<Account>>;
-    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>>;
-    fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>>;
-    fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>;
-    fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>;
-    fn get_latest_blockhash(&self) -> ClientResult<Hash>;
-    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64>;
-    fn get_slot(&self) -> ClientResult<Slot>;
-    fn get_signature_statuses(
+    async fn get_multiple_accounts(&self, pubkeys: &[Pubkey])
+        -> ClientResult<Vec<Option<Account>>>;
+    async fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>>;
+    async fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>;
+    async fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>;
+    async fn get_latest_blockhash(&self) -> ClientResult<Hash>;
+    async fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64>;
+    async fn get_slot(&self) -> ClientResult<Slot>;
+    async fn get_signature_statuses(
         &self,
         signatures: &[Signature],
     ) -> RpcResult<Vec<Option<TransactionStatus>>>;
-    fn get_transaction_with_config(
+    async fn get_transaction_with_config(
         &self,
         signature: &Signature,
         config: RpcTransactionConfig,
     ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta>;
-    fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature>;
-    fn send_and_confirm_transaction_with_spinner(
+    async fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature>;
+    async fn send_and_confirm_transaction_with_spinner(
         &self,
         transaction: &Transaction,
     ) -> ClientResult<Signature>;
-    fn send_and_confirm_transaction_with_spinner_and_commitment(
+    async fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
         transaction: &Transaction,
         commitment: CommitmentConfig,
     ) -> ClientResult<Signature>;
-    fn send_and_confirm_transaction_with_spinner_and_config(
+    async fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
         transaction: &Transaction,
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature>;
-    fn get_latest_blockhash_with_commitment(
+    async fn get_latest_blockhash_with_commitment(
         &self,
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)>;
-    fn get_transaction_data(&self) -> ClientResult<TxParams>;
+    async fn get_transaction_data(&self) -> ClientResult<TxParams>;
     fn as_any(&self) -> &dyn Any;
 }
 

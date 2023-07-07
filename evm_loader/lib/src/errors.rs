@@ -79,8 +79,8 @@ pub enum NeonError {
     #[error("AddrParseError. {0:?}")]
     AddrParseError(#[from] AddrParseError),
 
-    #[error("AxumError. {0:?}")]
-    AxumError(#[from] axum::Error),
+    #[error("ActixError. {0:?}")]
+    ActixError(#[from] actix_web::error::Error),
 
     #[error("SolanaClientError. {0:?}")]
     SolanaClientError(solana_client::client_error::ClientError),
@@ -120,7 +120,7 @@ impl NeonError {
             NeonError::PubkeyError(_) => 116,
             NeonError::EvmError(_) => 117,
             NeonError::AddrParseError(_) => 118,
-            NeonError::AxumError(_) => 119,
+            NeonError::ActixError(_) => 119,
             NeonError::SolanaClientError(_) => 120,
             NeonError::EvmLoaderNotSpecified => 201,
             NeonError::KeypairNotSpecified => 202,

@@ -22,7 +22,7 @@ pub mod init_environment;
 pub mod trace;
 mod transaction_executor;
 
-pub fn send_transaction(
+pub async fn send_transaction(
     context: &Context,
     instructions: &[Instruction],
 ) -> SolanaClientResult<Signature> {
@@ -31,7 +31,8 @@ pub fn send_transaction(
     let signers = [&*context.signer];
     let (blockhash, _last_valid_slot) = context
         .rpc_client
-        .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+        .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
+        .await?;
     transaction.try_sign(&signers, blockhash)?;
 
     context
@@ -44,4 +45,5 @@ pub fn send_transaction(
                 ..RpcSendTransactionConfig::default()
             },
         )
+        .await
 }

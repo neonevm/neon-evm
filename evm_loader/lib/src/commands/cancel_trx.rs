@@ -19,12 +19,12 @@ pub struct CancelTrxReturn {
     pub transaction: Signature,
 }
 
-pub fn execute(
+pub async fn execute(
     config: &Config,
     context: &Context,
     storage_account: &Pubkey,
 ) -> NeonResult<CancelTrxReturn> {
-    let mut acc = context.rpc_client.get_account(storage_account)?;
+    let mut acc = context.rpc_client.get_account(storage_account).await?;
     let storage_info = account_info(storage_account, &mut acc);
     let storage = State::from_account(&config.evm_loader, &storage_info)?;
 
@@ -56,7 +56,7 @@ pub fn execute(
 
     let instructions = vec![cancel_with_nonce_instruction];
 
-    let signature = send_transaction(context, &instructions)?;
+    let signature = send_transaction(context, &instructions).await?;
 
     Ok(CancelTrxReturn {
         transaction: signature,

@@ -31,4 +31,5 @@ tokio-postgres = {version="0.7", features=["with-uuid-0_8"]}
 lazy_static = "1.4"
 clickhouse = "0.11.2"
 tracing = "0.1"
-axum = "0.6"
+async-trait = "0.1.68"
+actix-web = "4"

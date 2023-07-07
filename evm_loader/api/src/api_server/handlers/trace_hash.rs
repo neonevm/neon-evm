@@ -1,30 +1,32 @@
-use crate::NeonApiState;
-use axum::{http::StatusCode, Json};
 use std::convert::Into;
 
-use crate::{context, types::request_models::TraceHashRequestModel};
+use actix_web::{http::StatusCode, post, web, Responder};
+
+use crate::{context, types::request_models::TraceHashRequestModel, NeonApiState};
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[allow(clippy::unused_async)]
+#[post("/trace_hash")]
 pub async fn trace_hash(
-    axum::extract::State(state): axum::extract::State<NeonApiState>,
-    Json(trace_hash_request): Json<TraceHashRequestModel>,
-) -> (StatusCode, Json<serde_json::Value>) {
+    state: web::Data<NeonApiState>,
+    web::Json(trace_hash_request): web::Json<TraceHashRequestModel>,
+) -> impl Responder {
     let signer = match context::build_signer(&state.config) {
         Ok(signer) => signer,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
-    let rpc_client = match context::build_hash_rpc_client(
+    let (rpc_client, blocking_rpc_client) = match context::build_hash_rpc_client(
         &state.config,
         &trace_hash_request.emulate_hash_request.hash,
-    ) {
-        Ok(rpc_client) => rpc_client,
+    )
+    .await
+    {
+        Ok((rpc_client, blocking_rpc_client)) => (rpc_client, blocking_rpc_client),
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
-    let tx = match rpc_client.get_transaction_data() {
+    let tx = match rpc_client.get_transaction_data().await {
         Ok(tx) => tx,
         Err(e) => {
             return process_error(
@@ -34,13 +36,14 @@ pub async fn trace_hash(
         }
     };
 
-    let context = context::create(rpc_client, signer);
+    let context = context::create(rpc_client, signer, blocking_rpc_client);
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,
         &context,
         &trace_hash_request.emulate_hash_request.emulation_params,
-    );
+    )
+    .await;
 
     process_result(
         &crate::commands::trace::execute(
@@ -53,6 +56,7 @@ pub async fn trace_hash(
             &accounts,
             &solana_accounts,
         )
+        .await
         .map_err(Into::into),
     )
 }

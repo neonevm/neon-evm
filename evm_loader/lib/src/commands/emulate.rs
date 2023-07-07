@@ -33,7 +33,7 @@ pub struct EmulateReturn {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn execute(
+pub async fn execute(
     config: &Config,
     context: &Context,
     tx_params: TxParams,
@@ -43,11 +43,13 @@ pub fn execute(
     accounts: &[Address],
     solana_accounts: &[Pubkey],
 ) -> NeonResult<EmulateReturn> {
-    let syscall_stubs = Stubs::new(context)?;
+    let syscall_stubs = Stubs::new(context).await?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, context, token, chain);
-    storage.initialize_cached_accounts(accounts, solana_accounts);
+    let storage = EmulatorAccountStorage::new(config, context, token, chain).await;
+    storage
+        .initialize_cached_accounts(accounts, solana_accounts)
+        .await;
 
     let trx = Transaction {
         nonce: storage.nonce(&tx_params.from),
@@ -81,8 +83,8 @@ pub fn execute(
     let max_iterations = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
     let steps_gas = max_iterations * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
     let begin_end_gas = 2 * LAMPORTS_PER_SIGNATURE;
-    let actions_gas = storage.apply_actions(&actions);
-    let accounts_gas = storage.apply_accounts_operations(accounts_operations);
+    let actions_gas = storage.apply_actions(&actions).await;
+    let accounts_gas = storage.apply_accounts_operations(accounts_operations).await;
     info!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
 
     let (result, status) = match exit_status {
@@ -92,10 +94,15 @@ pub fn execute(
         ExitStatus::StepLimit => unreachable!(),
     };
 
-    let accounts: Vec<NeonAccount> = storage.accounts.borrow().values().cloned().collect();
+    let accounts: Vec<NeonAccount> = storage.accounts.read().await.values().cloned().collect();
 
-    let solana_accounts: Vec<SolanaAccount> =
-        storage.solana_accounts.borrow().values().cloned().collect();
+    let solana_accounts: Vec<SolanaAccount> = storage
+        .solana_accounts
+        .read()
+        .await
+        .values()
+        .cloned()
+        .collect();
 
     let result = EmulateReturn {
         accounts,

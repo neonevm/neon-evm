@@ -13,116 +13,124 @@ use std::str::FromStr;
 pub type NeonCliResult = Result<serde_json::Value, NeonError>;
 
 #[allow(clippy::too_many_lines)]
-pub fn execute(
-    cmd: &str,
-    params: Option<&ArgMatches>,
-    config: &Config,
-    context: &Context,
+pub async fn execute<'a>(
+    cmd: &'a str,
+    params: Option<&'a ArgMatches<'a>>,
+    config: &'a Config,
+    context: &'a Context,
 ) -> NeonCliResult {
     Ok(match (cmd, params) {
         ("emulate", Some(params)) => {
             let tx = parse_tx(params);
             let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params);
-            json!(emulate::execute(
-                config,
-                context,
-                tx,
-                token,
-                chain,
-                steps,
-                &accounts,
-                &solana_accounts,
-            )?)
+                parse_tx_params(config, context, params).await;
+            json!(
+                emulate::execute(
+                    config,
+                    context,
+                    tx,
+                    token,
+                    chain,
+                    steps,
+                    &accounts,
+                    &solana_accounts,
+                )
+                .await?
+            )
         }
         ("emulate_hash", Some(params)) => {
-            let tx = context.rpc_client.get_transaction_data()?;
+            let tx = context.rpc_client.get_transaction_data().await?;
             let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params);
-            json!(emulate::execute(
-                config,
-                context,
-                tx,
-                token,
-                chain,
-                steps,
-                &accounts,
-                &solana_accounts,
-            )?)
+                parse_tx_params(config, context, params).await;
+            json!(
+                emulate::execute(
+                    config,
+                    context,
+                    tx,
+                    token,
+                    chain,
+                    steps,
+                    &accounts,
+                    &solana_accounts,
+                )
+                .await?
+            )
         }
         ("trace", Some(params)) => {
             let tx = parse_tx(params);
             let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params);
-            json!(trace::execute(
-                config,
-                context,
-                tx,
-                token,
-                chain,
-                steps,
-                &accounts,
-                &solana_accounts,
-            )?)
+                parse_tx_params(config, context, params).await;
+            json!(
+                trace::execute(
+                    config,
+                    context,
+                    tx,
+                    token,
+                    chain,
+                    steps,
+                    &accounts,
+                    &solana_accounts,
+                )
+                .await?
+            )
         }
         ("trace_hash", Some(params)) => {
-            let tx = context.rpc_client.get_transaction_data()?;
+            let tx = context.rpc_client.get_transaction_data().await?;
             let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params);
-            json!(trace::execute(
-                config,
-                context,
-                tx,
-                token,
-                chain,
-                steps,
-                &accounts,
-                &solana_accounts,
-            )?)
+                parse_tx_params(config, context, params).await;
+            json!(
+                trace::execute(
+                    config,
+                    context,
+                    tx,
+                    token,
+                    chain,
+                    steps,
+                    &accounts,
+                    &solana_accounts,
+                )
+                .await?
+            )
         }
         ("create-ether-account", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
-            json!(create_ether_account::execute(config, context, &ether)?)
+            json!(create_ether_account::execute(config, context, &ether).await?)
         }
         ("deposit", Some(params)) => {
             let amount = value_of(params, "amount").expect("amount parse error");
             let ether = address_of(params, "ether").expect("ether parse error");
-            json!(deposit::execute(config, context, amount, &ether)?)
+            json!(deposit::execute(config, context, amount, &ether).await?)
         }
         ("get-ether-account-data", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
-            json!(get_ether_account_data::execute(config, context, &ether)?)
+            json!(get_ether_account_data::execute(config, context, &ether).await?)
         }
         ("cancel-trx", Some(params)) => {
             let storage_account =
                 pubkey_of(params, "storage_account").expect("storage_account parse error");
-            json!(cancel_trx::execute(config, context, &storage_account)?)
+            json!(cancel_trx::execute(config, context, &storage_account).await?)
         }
         ("neon-elf-params", Some(params)) => {
             let program_location = params.value_of("program_location");
-            json!(get_neon_elf::execute(config, context, program_location)?)
+            json!(get_neon_elf::execute(config, context, program_location).await?)
         }
         ("collect-treasury", Some(_)) => {
-            json!(collect_treasury::execute(config, context)?)
+            json!(collect_treasury::execute(config, context).await?)
         }
         ("init-environment", Some(params)) => {
             let file = params.value_of("file");
             let send_trx = params.is_present("send-trx");
             let force = params.is_present("force");
             let keys_dir = params.value_of("keys-dir");
-            json!(init_environment::execute(
-                config, context, send_trx, force, keys_dir, file,
-            )?)
+            json!(
+                init_environment::execute(config, context, send_trx, force, keys_dir, file,)
+                    .await?
+            )
         }
         ("get-storage-at", Some(params)) => {
             let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
             let index = u256_of(params, "index").expect("index parse error");
-            json!(get_storage_at::execute(
-                config,
-                context,
-                contract_id,
-                &index,
-            )?)
+            json!(get_storage_at::execute(config, context, contract_id, &index,).await?)
         }
         _ => unreachable!(),
     })
@@ -182,16 +190,16 @@ fn parse_tx(params: &ArgMatches) -> TxParams {
     }
 }
 
-pub fn parse_tx_params(
-    config: &Config,
-    context: &Context,
-    params: &ArgMatches,
+pub async fn parse_tx_params<'a>(
+    config: &'a Config,
+    context: &'a Context,
+    params: &'a ArgMatches<'a>,
 ) -> (Pubkey, u64, u64, Vec<Address>, Vec<Pubkey>) {
     // Read ELF params only if token_mint or chain_id is not set.
     let mut token = pubkey_of(params, "token_mint");
     let mut chain = value_of(params, "chain_id");
     if token.is_none() || chain.is_none() {
-        let cached_elf_params = CachedElfParams::new(config, context);
+        let cached_elf_params = CachedElfParams::new(config, context).await;
         token = token.or_else(|| {
             Some(
                 Pubkey::from_str(

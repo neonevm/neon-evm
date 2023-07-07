@@ -16,9 +16,10 @@ pub struct CachedElfParams {
 }
 
 impl CachedElfParams {
-    pub fn new(config: &Config, context: &Context) -> Self {
+    pub async fn new(config: &Config, context: &Context) -> Self {
         Self {
             elf_params: read_elf_parameters_from_account(config, context)
+                .await
                 .expect("read elf_params error"),
         }
     }
@@ -81,22 +82,24 @@ pub fn read_elf_parameters(_config: &Config, program_data: &[u8]) -> GetNeonElfR
     result
 }
 
-pub fn read_elf_parameters_from_account(
+pub async fn read_elf_parameters_from_account(
     config: &Config,
     context: &Context,
 ) -> Result<GetNeonElfReturn, NeonError> {
-    let (_, program_data) = read_program_data_from_account(config, context, &config.evm_loader)?;
+    let (_, program_data) =
+        read_program_data_from_account(config, context, &config.evm_loader).await?;
     Ok(read_elf_parameters(config, &program_data))
 }
 
-pub fn read_program_data_from_account(
+pub async fn read_program_data_from_account(
     config: &Config,
     context: &Context,
     evm_loader: &Pubkey,
 ) -> Result<(Option<Pubkey>, Vec<u8>), NeonError> {
     let account = context
         .rpc_client
-        .get_account_with_commitment(evm_loader, config.commitment)?
+        .get_account_with_commitment(evm_loader, config.commitment)
+        .await?
         .value
         .ok_or(NeonError::AccountNotFound(*evm_loader))?;
 
@@ -109,7 +112,8 @@ pub fn read_program_data_from_account(
         {
             let programdata_account = context
                 .rpc_client
-                .get_account_with_commitment(&programdata_address, config.commitment)?
+                .get_account_with_commitment(&programdata_address, config.commitment)
+                .await?
                 .value
                 .ok_or(NeonError::AssociatedPdaNotFound(
                     programdata_address,
@@ -161,20 +165,21 @@ fn read_program_params_from_file(
     Ok(read_elf_parameters(config, &program_data))
 }
 
-fn read_program_params_from_account(
+async fn read_program_params_from_account(
     config: &Config,
     context: &Context,
 ) -> NeonResult<GetNeonElfReturn> {
-    read_elf_parameters_from_account(config, context)
+    read_elf_parameters_from_account(config, context).await
 }
 
-pub fn execute(
+pub async fn execute(
     config: &Config,
     context: &Context,
     program_location: Option<&str>,
 ) -> NeonResult<GetNeonElfReturn> {
-    program_location.map_or_else(
-        || read_program_params_from_account(config, context),
-        |program_location| read_program_params_from_file(config, program_location),
-    )
+    if let Some(program_location) = program_location {
+        read_program_params_from_file(config, program_location)
+    } else {
+        read_program_params_from_account(config, context).await
+    }
 }
