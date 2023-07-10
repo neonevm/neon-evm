@@ -23,6 +23,8 @@ jobs:
     runs-on: build-runner
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: build docker image
         run: |
@@ -39,14 +41,12 @@ jobs:
       - deploy-neon-evm
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Run tests
         run: |
           python3 ./.github/workflows/deploy.py run_tests \
           --github_sha=${GITHUB_SHA}
-
-      - name: Stop containers
-        if: always()
-        run: python3 ./.github/workflows/deploy.py stop_containers
 
       - name: Trigger proxy build
         run: |

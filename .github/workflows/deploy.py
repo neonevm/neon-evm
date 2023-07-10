@@ -102,28 +102,49 @@ def run_subprocess(command):
 def run_tests(github_sha):
     image_name = f"{IMAGE_NAME}:{github_sha}"
     os.environ["EVM_LOADER_IMAGE"] = image_name
-    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
-    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
+    project_name = f"neon-evm-{github_sha}"
+    stop_containers(project_name)
 
+    run_subprocess(f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml up -d")
+    container_name = get_solana_container_name(project_name)
     click.echo("Start tests")
     exec_id = docker_client.exec_create(
-        container="solana", cmd="/opt/deploy-test.sh")
+        container=container_name, cmd="/opt/deploy-test.sh")
     logs = docker_client.exec_start(exec_id['Id'], stream=True)
 
     tests_are_failed = False
+    all_logs = ""
     for line in logs:
         current_line = line.decode('utf-8')
+        all_logs += current_line
         click.echo(current_line)
         if 'ERROR ' in current_line or 'FAILED ' in current_line:
             tests_are_failed = True
-    if tests_are_failed or docker_client.exec_inspect(exec_id['Id'])["ExitCode"] == 1:
-        print("Tests are failed")
+            print("Tests are failed")
+    if "[100%]" not in all_logs:
+        tests_are_failed = True
+        print("Part of tests are skipped")
+
+    exec_status = docker_client.exec_inspect(exec_id['Id'])["ExitCode"]
+    stop_containers(project_name)
+
+    if tests_are_failed or exec_status == 1:
         sys.exit(1)
 
 
-@cli.command(name="stop_containers")
-def stop_containers():
-    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
+def get_solana_container_name(project_name):
+    data = subprocess.run(
+        f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml ps",
+        shell=True, capture_output=True, text=True).stdout
+    click.echo(data)
+    pattern = rf'{project_name}_[a-zA-Z0-9_]+'
+
+    match = re.search(pattern, data)
+    return match.group(0)
+
+
+def stop_containers(project_name):
+    run_subprocess(f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml down")
 
 
 @cli.command(name="trigger_proxy_action")
