@@ -1,5 +1,5 @@
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::convert::TryInto;
 
 use ethnum::U256;
@@ -86,7 +86,8 @@ impl<'a> ProgramAccountStorage<'a> {
             self.create_account_if_not_exists(address)?;
         }
 
-        let mut storage: BTreeMap<Address, Vec<(U256, [u8; 32])>> = BTreeMap::new();
+        let mut storage: HashMap<Address, Vec<(U256, [u8; 32])>> =
+            HashMap::with_capacity(actions.len());
 
         for action in actions {
             match action {
@@ -212,7 +213,7 @@ impl<'a> ProgramAccountStorage<'a> {
         &mut self,
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
-        storage: BTreeMap<Address, Vec<(U256, [u8; 32])>>,
+        storage: HashMap<Address, Vec<(U256, [u8; 32])>>,
     ) -> Result<(), ProgramError> {
         const STATIC_STORAGE_LIMIT: U256 = U256::new(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as u128);
 
