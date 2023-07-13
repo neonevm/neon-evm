@@ -1,16 +1,15 @@
 use std::convert::Into;
 
-use actix_web::{http::StatusCode, post, web, Responder};
-
 use crate::{context, types::request_models::TraceHashRequestModel, NeonApiState};
+use axum::{http::StatusCode, Json};
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[post("/trace_hash")]
+#[axum::debug_handler]
 pub async fn trace_hash(
-    state: web::Data<NeonApiState>,
-    web::Json(trace_hash_request): web::Json<TraceHashRequestModel>,
-) -> impl Responder {
+    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    Json(trace_hash_request): Json<TraceHashRequestModel>,
+) -> (StatusCode, Json<serde_json::Value>) {
     let signer = match context::build_signer(&state.config) {
         Ok(signer) => signer,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),

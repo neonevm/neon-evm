@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, post, web, Responder};
+use axum::{http::StatusCode, Json};
 use std::convert::Into;
 
 use crate::{
@@ -8,11 +8,11 @@ use crate::{
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[post("/emulate")]
+#[axum::debug_handler]
 pub async fn emulate(
-    state: web::Data<NeonApiState>,
-    web::Json(emulate_request): web::Json<EmulateRequestModel>,
-) -> impl Responder {
+    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    Json(emulate_request): Json<EmulateRequestModel>,
+) -> (StatusCode, Json<serde_json::Value>) {
     let tx = emulate_request.tx_params.into();
 
     let signer = match context::build_signer(&state.config) {

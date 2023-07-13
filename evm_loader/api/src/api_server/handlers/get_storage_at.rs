@@ -1,17 +1,20 @@
-use actix_web::{get, http::StatusCode, web, Responder};
-
 use crate::{context, types::request_models::GetStorageAtRequest, NeonApiState};
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    Json,
+};
 use std::convert::Into;
 
 use crate::commands::get_storage_at as GetStorageAtCommand;
 
 use super::{process_error, process_result};
 
-#[get("/get-storage-at")]
+#[axum::debug_handler]
 pub async fn get_storage_at(
-    web::Query(req_params): web::Query<GetStorageAtRequest>,
-    state: web::Data<NeonApiState>,
-) -> impl Responder {
+    Query(req_params): Query<GetStorageAtRequest>,
+    State(state): State<NeonApiState>,
+) -> (StatusCode, Json<serde_json::Value>) {
     let signer = match context::build_signer(&state.config) {
         Ok(signer) => signer,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
