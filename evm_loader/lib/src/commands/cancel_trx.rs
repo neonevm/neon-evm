@@ -28,7 +28,7 @@ pub async fn execute(
     let storage_info = account_info(storage_account, &mut acc);
     let storage = State::from_account(&config.evm_loader, &storage_info)?;
 
-    let operator = &context.signer.pubkey();
+    let operator = &context.signer()?.pubkey();
 
     let mut accounts_meta: Vec<AccountMeta> = vec![
         AccountMeta::new(*storage_account, false),  // State account

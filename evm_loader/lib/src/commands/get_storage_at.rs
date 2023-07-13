@@ -10,6 +10,7 @@ use evm_loader::{
 };
 
 use crate::context::Context;
+use crate::types::block;
 use crate::{
     account_storage::{account_info, EmulatorAccountStorage},
     Config, NeonResult,
@@ -40,7 +41,8 @@ pub async fn execute(
                 let address =
                     EthereumStorageAddress::new(&config.evm_loader, account_data.info.key, &index);
 
-                if let Ok(mut account) = context.rpc_client.get_account(address.pubkey()).await {
+                if let Ok(mut account) = block(|| context.rpc_client.get_account(address.pubkey()))
+                {
                     if solana_sdk::system_program::check_id(&account.owner) {
                         <[u8; 32]>::default()
                     } else {

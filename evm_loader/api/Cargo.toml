@@ -15,6 +15,6 @@ ethnum = { version = "1", default_features = false, features = [ "serde" ] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-actix-web = "4"
+axum = { version = "0.6", features = ["macros"] }
 tower = { version = "0.4", features = ["make"] }
 neon-lib = { path = "../lib" }

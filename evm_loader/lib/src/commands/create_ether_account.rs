@@ -23,13 +23,14 @@ pub async fn execute(
     ether_address: &Address,
 ) -> NeonResult<CreateEtherAccountReturn> {
     let (solana_address, nonce) = ether_address.find_solana_address(&config.evm_loader);
+    let signer = context.signer()?;
     debug!("Create ethereum account {solana_address} <- {ether_address} {nonce}");
 
     let create_account_v03_instruction = Instruction::new_with_bincode(
         config.evm_loader,
         &(0x28_u8, ether_address.as_bytes()),
         vec![
-            AccountMeta::new(context.signer.pubkey(), true),
+            AccountMeta::new(signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new(solana_address, false),
         ],
@@ -37,7 +38,7 @@ pub async fn execute(
 
     let instructions = vec![create_account_v03_instruction];
 
-    let mut finalize_message = Message::new(&instructions, Some(&context.signer.pubkey()));
+    let mut finalize_message = Message::new(&instructions, Some(&signer.pubkey()));
     let blockhash = context.rpc_client.get_latest_blockhash().await?;
     finalize_message.recent_blockhash = blockhash;
 
@@ -46,11 +47,11 @@ pub async fn execute(
         .as_ref()
         .expect("Blocking RPC client not initialized");
 
-    check_account_for_fee(client, &context.signer.pubkey(), &finalize_message)?;
+    check_account_for_fee(client, &signer.pubkey(), &finalize_message)?;
 
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
 
-    finalize_tx.try_sign(&[&*context.signer], blockhash)?;
+    finalize_tx.try_sign(&[&*signer], blockhash)?;
     debug!("signed: {:x?}", finalize_tx);
 
     context

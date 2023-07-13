@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, post, web, Responder};
+use axum::{http::StatusCode, Json};
 use std::convert::Into;
 
 use crate::{
@@ -8,16 +8,11 @@ use crate::{
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[post("/emulate_hash")]
+#[axum::debug_handler]
 pub async fn emulate_hash(
-    state: web::Data<NeonApiState>,
-    web::Json(emulate_hash_request): web::Json<EmulateHashRequestModel>,
-) -> impl Responder {
-    let signer = match context::build_signer(&state.config) {
-        Ok(signer) => signer,
-        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
-    };
-
+    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    Json(emulate_hash_request): Json<EmulateHashRequestModel>,
+) -> (StatusCode, Json<serde_json::Value>) {
     let (rpc_client, blocking_rpc_client) =
         match context::build_hash_rpc_client(&state.config, &emulate_hash_request.hash).await {
             Ok(rpc_client) => rpc_client,
@@ -34,7 +29,7 @@ pub async fn emulate_hash(
         }
     };
 
-    let context = context::create(rpc_client, signer, blocking_rpc_client);
+    let context = context::create(rpc_client, state.config.clone(), blocking_rpc_client);
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,

@@ -47,6 +47,9 @@ pub fn with<F: FnOnce(&mut (dyn EventListener + 'static))>(f: F) {
     listener::with(f);
 }
 
-pub fn using<R, F: FnOnce() -> R>(new: &mut (dyn EventListener + 'static), f: F) -> R {
+pub fn using<R, F: FnOnce() -> R>(
+    new: &mut (dyn EventListener + 'static + Send + Sync),
+    f: F,
+) -> R {
     listener::using(new, f)
 }

@@ -17,7 +17,6 @@ use {
     postgres::NoTls,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     thiserror::Error,
-    // tokio::task::block_in_place,
     tokio_postgres::{connect, Client},
 };
 
@@ -83,7 +82,10 @@ where
     F: FnOnce() -> Fu,
     Fu: std::future::Future<Output = R>,
 {
-    block_in_place(|| RT.block_on(f()))
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => block_in_place(|| handle.block_on(f())),
+        Err(_) => RT.block_on(f()),
+    }
 }
 
 #[derive(Error, Debug)]
