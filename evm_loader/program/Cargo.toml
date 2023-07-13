@@ -19,6 +19,8 @@ mainnet = []
 testnet = []
 ## Builds NeonEVM for devnet deployment
 devnet = []
+## Builds NeonEVM for CI environment
+ci = []
 
 ## Builds NeonEVM program for `emergency` mode. In this mode, NeonEVM doesn't process
 ## any transaction and return error `ProgramError::InvalidInstructionData` with comment

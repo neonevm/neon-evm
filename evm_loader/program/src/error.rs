@@ -59,6 +59,9 @@ pub enum Error {
     #[error("Account {0} - not writable")]
     AccountNotWritable(Pubkey),
 
+    #[error("Account {0} - not signer")]
+    AccountNotSigner(Pubkey),
+
     #[error("Account {0} - not rent exempt")]
     AccountNotRentExempt(Pubkey),
 
@@ -153,6 +156,12 @@ impl From<Error> for ProgramError {
             Error::ProgramError(e) => e,
             _ => Self::Custom(0),
         }
+    }
+}
+
+impl From<&'static str> for Error {
+    fn from(value: &'static str) -> Self {
+        Self::Custom(value.to_string())
     }
 }
 
