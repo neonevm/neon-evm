@@ -109,16 +109,18 @@ pub async fn execute(
     keys_dir: Option<&str>,
     file: Option<&str>,
 ) -> NeonResult<InitEnvironmentReturn> {
+    let signer = context.signer()?;
     info!(
         "Signer: {}, send_trx: {}, force: {}",
-        context.signer.pubkey(),
+        signer.pubkey(),
         send_trx,
         force
     );
+    let second_signer: Arc<dyn Signer> = Arc::from(context.signer()?);
     let fee_payer = config
         .fee_payer
         .as_ref()
-        .map_or_else(|| context.signer.clone(), |v| v.clone());
+        .map_or_else(move || second_signer, |v| v.clone());
     let executor = Arc::new(TransactionExecutor::new(
         context.rpc_client.clone(),
         fee_payer,
@@ -152,6 +154,7 @@ pub async fn execute(
 
     //====================== Create NEON-token mint ===================================================================
     let executor_clone = executor.clone();
+    let second_signer = context.signer()?;
     let create_token = move |mint: Pubkey, decimals: u8| async move {
         let mint_signer = keys
             .get(&mint)
@@ -172,7 +175,7 @@ pub async fn execute(
             spl_token::instruction::initialize_mint2(
                 &spl_token::id(),
                 &mint,
-                &context.signer.pubkey(),
+                &second_signer.pubkey(),
                 None,
                 decimals,
             )?,
@@ -255,7 +258,7 @@ pub async fn execute(
             executor.get_account(&main_balance_address).await,
             |_| async move { Ok(None) },
             || async {
-                if program_upgrade_authority != Some(context.signer.pubkey()) {
+                if program_upgrade_authority != Some(signer.pubkey()) {
                     return Err(EnvironmentError::IncorrectProgramAuthority.into());
                 }
                 let transaction = executor
@@ -266,14 +269,14 @@ pub async fn execute(
                             vec![
                                 AccountMeta::new(main_balance_address, false),
                                 AccountMeta::new_readonly(program_data_address, false),
-                                AccountMeta::new_readonly(context.signer.pubkey(), true),
+                                AccountMeta::new_readonly(signer.pubkey(), true),
                                 AccountMeta::new_readonly(spl_token::id(), false),
                                 AccountMeta::new_readonly(system_program::id(), false),
                                 AccountMeta::new_readonly(native_mint::id(), false),
                                 AccountMeta::new(executor.fee_payer.pubkey(), true),
                             ],
                         )],
-                        &[context.signer.as_ref()],
+                        &[&*signer],
                     )
                     .await?;
                 Ok(Some(transaction))

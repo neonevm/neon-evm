@@ -10,11 +10,6 @@ pub async fn trace_hash(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(trace_hash_request): Json<TraceHashRequestModel>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let signer = match context::build_signer(&state.config) {
-        Ok(signer) => signer,
-        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
-    };
-
     let (rpc_client, blocking_rpc_client) = match context::build_hash_rpc_client(
         &state.config,
         &trace_hash_request.emulate_hash_request.hash,
@@ -35,7 +30,7 @@ pub async fn trace_hash(
         }
     };
 
-    let context = context::create(rpc_client, signer, blocking_rpc_client);
+    let context = context::create(rpc_client, state.config.clone(), blocking_rpc_client);
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,
