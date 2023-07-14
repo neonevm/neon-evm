@@ -5,7 +5,6 @@ use axum::{http::StatusCode, Json};
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[axum::debug_handler]
 pub async fn trace_hash(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(trace_hash_request): Json<TraceHashRequestModel>,

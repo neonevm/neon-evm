@@ -77,14 +77,13 @@ lazy_static! {
     pub static ref RT: Runtime = tokio::runtime::Runtime::new().unwrap();
 }
 
-pub fn block<F, Fu, R>(f: F) -> R
+pub fn block<Fu>(f: Fu) -> Fu::Output
 where
-    F: FnOnce() -> Fu,
-    Fu: std::future::Future<Output = R>,
+    Fu: std::future::Future,
 {
     match tokio::runtime::Handle::try_current() {
-        Ok(handle) => block_in_place(|| handle.block_on(f())),
-        Err(_) => RT.block_on(f()),
+        Ok(handle) => block_in_place(|| handle.block_on(f)),
+        Err(_) => RT.block_on(f),
     }
 }
 

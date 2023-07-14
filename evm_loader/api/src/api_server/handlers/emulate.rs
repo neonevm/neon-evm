@@ -8,7 +8,6 @@ use crate::{
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[axum::debug_handler]
 pub async fn emulate(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(emulate_request): Json<EmulateRequestModel>,

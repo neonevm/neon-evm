@@ -84,8 +84,8 @@ pub async fn execute(
     let max_iterations = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
     let steps_gas = max_iterations * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
     let begin_end_gas = 2 * LAMPORTS_PER_SIGNATURE;
-    let actions_gas = block(|| storage.apply_actions(&actions));
-    let accounts_gas = block(|| storage.apply_accounts_operations(accounts_operations));
+    let actions_gas = block(storage.apply_actions(&actions));
+    let accounts_gas = block(storage.apply_accounts_operations(accounts_operations));
     info!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
 
     let (result, status) = match exit_status {
@@ -95,12 +95,9 @@ pub async fn execute(
         ExitStatus::StepLimit => unreachable!(),
     };
 
-    let accounts: Vec<NeonAccount> = block(|| storage.accounts.read())
-        .values()
-        .cloned()
-        .collect();
+    let accounts: Vec<NeonAccount> = block(storage.accounts.read()).values().cloned().collect();
 
-    let solana_accounts: Vec<SolanaAccount> = block(|| storage.solana_accounts.read())
+    let solana_accounts: Vec<SolanaAccount> = block(storage.solana_accounts.read())
         .values()
         .cloned()
         .collect();

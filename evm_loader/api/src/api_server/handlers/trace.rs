@@ -5,7 +5,6 @@ use crate::{context, types::request_models::TraceRequestModel, NeonApiState};
 
 use super::{parse_emulation_params, process_error, process_result};
 
-#[axum::debug_handler]
 pub async fn trace(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(trace_request): Json<TraceRequestModel>,
