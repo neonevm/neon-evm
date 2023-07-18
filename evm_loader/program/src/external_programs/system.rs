@@ -24,7 +24,7 @@ pub fn emulate(
             let account_key = &meta[1].pubkey;
 
             {
-                let mut funder = accounts.get_mut(funder_key).unwrap();
+                let funder = accounts.get_mut(funder_key).unwrap();
                 if funder.lamports < lamports {
                     return Err!(ProgramError::InsufficientFunds; "Insufficient operator lamports");
                 }
@@ -33,7 +33,7 @@ pub fn emulate(
             }
 
             {
-                let mut account = accounts.get_mut(account_key).unwrap();
+                let account = accounts.get_mut(account_key).unwrap();
                 if (account.lamports > 0)
                     || !account.data.is_empty()
                     || !system_program::check_id(&account.owner)
@@ -48,7 +48,7 @@ pub fn emulate(
         }
         SystemInstruction::Assign { owner } => {
             let account_key = &meta[0].pubkey;
-            let mut account = accounts.get_mut(account_key).unwrap();
+            let account = accounts.get_mut(account_key).unwrap();
 
             if !system_program::check_id(&account.owner) {
                 return Err!(ProgramError::InvalidInstructionData; "Assign Account: account already in use");
@@ -61,7 +61,7 @@ pub fn emulate(
             let to_key = &meta[1].pubkey;
 
             {
-                let mut from = accounts.get_mut(from_key).unwrap();
+                let from = accounts.get_mut(from_key).unwrap();
                 if !from.data.is_empty() {
                     return Err!(ProgramError::InvalidArgument; "Transfer: `from` must not carry data");
                 }
@@ -78,7 +78,7 @@ pub fn emulate(
             }
 
             {
-                let mut to = accounts.get_mut(to_key).unwrap();
+                let to = accounts.get_mut(to_key).unwrap();
                 to.lamports += lamports;
             }
         }

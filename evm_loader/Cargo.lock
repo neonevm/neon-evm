@@ -1222,6 +1222,7 @@ dependencies = [
  "rlp",
  "serde",
  "serde_bytes",
+ "serde_json",
  "solana-program",
  "spl-associated-token-account",
  "spl-token",

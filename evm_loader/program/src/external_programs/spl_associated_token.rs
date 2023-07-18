@@ -41,7 +41,7 @@ pub fn emulate(
     };
 
     {
-        let mut funder = accounts.get_mut(funder_key).unwrap();
+        let funder = accounts.get_mut(funder_key).unwrap();
         if funder.lamports < required_lamports {
             return Err!(ProgramError::InsufficientFunds; "Insufficient operator lamports");
         }
@@ -50,7 +50,7 @@ pub fn emulate(
     }
 
     {
-        let mut associated_token_account = accounts.get_mut(associated_token_account_key).unwrap();
+        let associated_token_account = accounts.get_mut(associated_token_account_key).unwrap();
         if !solana_program::system_program::check_id(&associated_token_account.owner) {
             return Err!(ProgramError::InvalidInstructionData; "Account {} is not system owned", associated_token_account_key);
         }
