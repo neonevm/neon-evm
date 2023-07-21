@@ -8,6 +8,7 @@ use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 const BUFFER_ALIGN: usize = 1;
 
+#[derive(Debug)]
 enum Inner {
     Empty,
     Owned {
@@ -25,6 +26,7 @@ enum Inner {
     },
 }
 
+#[derive(Debug)]
 pub struct Buffer {
     ptr: *const u8,
     len: usize,

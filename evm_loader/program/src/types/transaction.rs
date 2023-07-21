@@ -4,7 +4,7 @@ use std::convert::TryInto;
 
 use super::Address;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Transaction {
     pub nonce: u64,
     pub gas_price: U256,

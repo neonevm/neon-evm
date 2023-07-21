@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{context::Context, NeonResult};
 
@@ -36,7 +36,7 @@ use {
     thiserror::Error,
 };
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InitEnvironmentReturn {
     pub transactions: Vec<String>,
 }

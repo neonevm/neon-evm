@@ -2,7 +2,9 @@ use axum::{http::StatusCode, Json};
 use std::convert::Into;
 
 use crate::{
-    commands::emulate as EmulateCommand, context, types::request_models::EmulateRequestModel,
+    commands::emulate as EmulateCommand,
+    context,
+    types::{request_models::EmulateRequestModel, trace::TraceCallConfig},
     NeonApiState,
 };
 
@@ -14,27 +16,28 @@ pub async fn emulate(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let tx = emulate_request.tx_params.into();
 
-    let (rpc_client, blocking_rpc_client) =
-        match context::build_rpc_client(&state.config, emulate_request.slot) {
-            Ok(rpc_client) => rpc_client,
-            Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
-        };
+    let rpc_client = match context::build_rpc_client(&state.config, emulate_request.slot) {
+        Ok(rpc_client) => rpc_client,
+        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
+    };
 
-    let context = context::create(rpc_client, state.config.clone(), blocking_rpc_client);
+    let context = context::create(rpc_client, state.config.clone());
 
     let (token, chain, steps, accounts, solana_accounts) =
         parse_emulation_params(&state.config, &context, &emulate_request.emulation_params).await;
 
     process_result(
         &EmulateCommand::execute(
-            &state.config,
-            &context,
+            context.rpc_client.as_ref(),
+            state.config.evm_loader,
             tx,
             token,
             chain,
             steps,
+            state.config.commitment,
             &accounts,
             &solana_accounts,
+            TraceCallConfig::default(),
         )
         .await
         .map_err(Into::into),

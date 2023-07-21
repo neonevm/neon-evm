@@ -609,9 +609,9 @@ dependencies = [
 
 [[package]]
 name = "clickhouse"
-version = "0.11.3"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c29e58dfff0518f6a6306b89c78397aa98ae7efbd452be871948b0f750573eb5"
+checksum = "33816ee1fea4f60d97abfeb773b9b566ae85f8bfa891758d00a1fb1e5a606591"
 dependencies = [
  "bstr",
  "bytes",

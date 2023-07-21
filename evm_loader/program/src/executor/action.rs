@@ -4,7 +4,7 @@ use solana_program::{instruction::AccountMeta, pubkey::Pubkey};
 
 use crate::types::Address;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Action {
     ExternalInstruction {
         program_id: Pubkey,

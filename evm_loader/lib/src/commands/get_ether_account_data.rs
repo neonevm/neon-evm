@@ -1,13 +1,16 @@
 use evm_loader::{account::EthereumAccount, types::Address};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
+use std::fmt::{Display, Formatter};
 
 use crate::{
     account_storage::{account_info, EmulatorAccountStorage},
     errors::NeonError,
-    Config, Context, NeonResult,
+    rpc::Rpc,
+    NeonResult,
 };
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GetEtherAccountDataReturn {
     pub solana_address: String,
     pub address: Address,
@@ -20,16 +23,32 @@ pub struct GetEtherAccountDataReturn {
     pub code: String,
 }
 
+impl Display for GetEtherAccountDataReturn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ address: {}, solana_address: {}, trx_count: {}, balance: {}, generation: {}, code_size: {} }}",
+            self.address,
+            self.solana_address,
+            self.trx_count,
+            self.balance,
+            self.generation,
+            self.code_size,
+        )
+    }
+}
+
 pub async fn execute(
-    config: &Config,
-    context: &Context,
+    rpc_client: &dyn Rpc,
+    evm_loader: &Pubkey,
     ether_address: &Address,
 ) -> NeonResult<GetEtherAccountDataReturn> {
-    match EmulatorAccountStorage::get_account_from_solana(config, context, ether_address).await {
+    match EmulatorAccountStorage::get_account_from_solana(rpc_client, evm_loader, ether_address)
+        .await
+    {
         (solana_address, Some(mut acc)) => {
             let acc_info = account_info(&solana_address, &mut acc);
-            let account_data =
-                EthereumAccount::from_account(&config.evm_loader, &acc_info).unwrap();
+            let account_data = EthereumAccount::from_account(evm_loader, &acc_info).unwrap();
             let contract_code = account_data
                 .contract_data()
                 .map_or_else(Vec::new, |c| c.code().to_vec());

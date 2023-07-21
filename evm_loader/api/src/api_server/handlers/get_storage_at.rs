@@ -14,18 +14,17 @@ pub async fn get_storage_at(
     Query(req_params): Query<GetStorageAtRequest>,
     State(state): State<NeonApiState>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let (rpc_client, blocking_rpc_client) =
-        match context::build_rpc_client(&state.config, req_params.slot) {
-            Ok(rpc_client) => rpc_client,
-            Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
-        };
+    let rpc_client = match context::build_rpc_client(&state.config, req_params.slot) {
+        Ok(rpc_client) => rpc_client,
+        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
+    };
 
-    let context = context::create(rpc_client, state.config.clone(), blocking_rpc_client);
+    let context = context::create(rpc_client, state.config.clone());
 
     process_result(
         &GetStorageAtCommand::execute(
-            &state.config,
-            &context,
+            context.rpc_client.as_ref(),
+            &state.config.evm_loader,
             req_params.contract_id,
             &req_params.index,
         )

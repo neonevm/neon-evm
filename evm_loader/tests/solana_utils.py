@@ -211,10 +211,11 @@ class neon_cli:
         print('cmd:', cmd)
         print("data:", data)
 
+        data_json = ""
         if data:
-            proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, universal_newlines=True)
-        else:
-            proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, universal_newlines=True)
+            data_json = f'{{"data": "0x{data}"}}'
+
+        proc_result = subprocess.run(cmd, input=data_json, text=True, stdout=subprocess.PIPE, universal_newlines=True)
 
         result = json.loads(proc_result.stdout)
         if result["result"] == "error":

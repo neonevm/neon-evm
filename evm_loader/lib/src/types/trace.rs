@@ -1,12 +1,9 @@
+use evm_loader::{account::EthereumAccount, types::Address};
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use {crate::types::Bytes, ethnum::U256, std::collections::HashMap};
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq, /*, RlpEncodable, RlpDecodable */
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some chunk of memory.
 pub struct MemoryDiff {
     /// Offset into memory the change begins.
@@ -15,13 +12,7 @@ pub struct MemoryDiff {
     pub data: Bytes,
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq, /*, RlpEncodable, RlpDecodable */
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some storage value.
 pub struct StorageDiff {
     /// Which key in storage is changed.
@@ -30,13 +21,7 @@ pub struct StorageDiff {
     pub value: [u8; 32],
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq, /*, RlpEncodable, RlpDecodable */
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A record of an executed VM operation.
 pub struct VMExecutedOperation {
     /// The total gas used.
@@ -50,12 +35,7 @@ pub struct VMExecutedOperation {
 }
 
 #[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Default, /*, RlpEncodable, RlpDecodable */
+    Serialize, Deserialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */,
 )]
 /// A record of the execution of a single VM operation.
 pub struct VMOperation {
@@ -70,12 +50,7 @@ pub struct VMOperation {
 }
 
 #[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Default, /*, RlpEncodable, RlpDecodable */
+    Serialize, Deserialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */,
 )]
 /// A record of a full VM trace for a CALL/CREATE.
 #[allow(clippy::module_name_repetitions)]
@@ -91,18 +66,19 @@ pub struct VMTrace {
     pub subs: Vec<VMTrace>,
 }
 
-// OpenEthereum tracer ethcore/src/trace/executive_tracer.rs
+// OpenEthereum tracer ethcore/trace/src/executive_tracer.rs
 #[allow(clippy::module_name_repetitions)]
 pub struct TraceData {
     pub mem_written: Option<(usize, usize)>,
     pub store_written: Option<(U256, [u8; 32])>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FullTraceData {
     pub stack: Vec<[u8; 32]>,
     pub memory: Vec<u8>,
     pub storage: HashMap<U256, [u8; 32]>,
+    pub return_data: Option<Vec<u8>>,
 }
 
 /// Simple VM tracer. Traces all operations.
@@ -118,7 +94,7 @@ impl ExecutiveVMTracer {
         ExecutiveVMTracer {
             data: VMTrace {
                 parent_step: 0,
-                code: vec![],
+                code: Bytes::default(),
                 operations: vec![VMOperation::default()], // prefill with a single entry so that prepare_subtrace can get the parent_step
                 subs: vec![],
             },
@@ -178,7 +154,7 @@ impl VMTracer for ExecutiveVMTracer {
             let parent_step = trace.operations.len() - 1; // won't overflow since we must already have pushed an operation in trace_prepare_execute.
             trace.subs.push(VMTrace {
                 parent_step,
-                code,
+                code: code.into(),
                 operations: vec![],
                 subs: vec![],
             });
@@ -223,9 +199,104 @@ pub trait VMTracer: Send {
     fn drain(self) -> Option<Self::Output>;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TracedCall {
     pub vm_trace: Option<VMTrace>,
     pub full_trace_data: Vec<FullTraceData>,
     pub used_gas: u64,
+    pub result: Vec<u8>,
+    pub exit_status: String,
+}
+
+impl Display for TracedCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ exit_status: {}, used_gas: {}, vm_trace: {}, full_trace_data: {}, result: {} }}",
+            self.exit_status,
+            self.used_gas,
+            if self.vm_trace.is_some() { "yes" } else { "no" },
+            self.full_trace_data.len(),
+            hex::encode(&self.result),
+        )
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockOverrides {
+    pub number: Option<u64>,
+    #[allow(unused)]
+    pub difficulty: Option<U256>, // NOT SUPPORTED by Neon EVM
+    pub time: Option<i64>,
+    #[allow(unused)]
+    pub gas_limit: Option<u64>, // NOT SUPPORTED BY Neon EVM
+    #[allow(unused)]
+    pub coinbase: Option<Address>, // NOT SUPPORTED BY Neon EVM
+    #[allow(unused)]
+    pub random: Option<U256>, // NOT SUPPORTED BY Neon EVM
+    #[allow(unused)]
+    pub base_fee: Option<U256>, // NOT SUPPORTED BY Neon EVM
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountOverride {
+    pub nonce: Option<u64>,
+    pub code: Option<Bytes>,
+    pub balance: Option<U256>,
+    pub state: Option<HashMap<U256, U256>>,
+    pub state_diff: Option<HashMap<U256, U256>>,
+}
+
+impl AccountOverride {
+    pub fn apply(&self, ether_account: &mut EthereumAccount) {
+        if let Some(nonce) = self.nonce {
+            ether_account.trx_count = nonce;
+        }
+        if let Some(balance) = self.balance {
+            ether_account.balance = U256::from(balance);
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        if let Some(code) = &self.code {
+            ether_account.code_size = code.len() as u32;
+        }
+    }
+}
+
+pub type AccountOverrides = HashMap<Address, AccountOverride>;
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::module_name_repetitions, clippy::struct_excessive_bools)]
+pub struct TraceConfig {
+    #[serde(default)]
+    pub enable_memory: bool,
+    #[serde(default)]
+    pub disable_storage: bool,
+    #[serde(default)]
+    pub disable_stack: bool,
+    #[serde(default)]
+    pub enable_return_data: bool,
+    pub tracer: Option<String>,
+    pub timeout: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::module_name_repetitions)]
+pub struct TraceCallConfig {
+    #[serde(flatten)]
+    pub trace_config: TraceConfig,
+    pub block_overrides: Option<BlockOverrides>,
+    pub state_overrides: Option<AccountOverrides>,
+}
+
+impl From<TraceConfig> for TraceCallConfig {
+    fn from(trace_config: TraceConfig) -> Self {
+        Self {
+            trace_config,
+            ..Self::default()
+        }
+    }
 }

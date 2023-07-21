@@ -4,19 +4,15 @@ use crate::types::trace::{FullTraceData, VMTrace, VMTracer};
 pub struct Tracer {
     pub vm: VmTracer,
     pub data: Vec<FullTraceData>,
-}
-
-impl Default for Tracer {
-    fn default() -> Self {
-        Tracer::new()
-    }
+    pub(crate) enable_return_data: bool,
 }
 
 impl Tracer {
-    pub fn new() -> Self {
+    pub fn new(enable_return_data: bool) -> Self {
         Tracer {
             vm: VmTracer::init(),
             data: vec![],
+            enable_return_data,
         }
     }
 

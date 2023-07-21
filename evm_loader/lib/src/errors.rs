@@ -13,6 +13,7 @@ use solana_sdk::signer::SignerError as SolanaSignerError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
+use crate::types::PgError;
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
@@ -75,31 +76,25 @@ pub enum NeonError {
     IncorrectIndex(String),
     #[error("Tx parameters parsing error {0:?}.")]
     TxParametersParsingError(String),
-
     #[error("AddrParseError. {0:?}")]
     AddrParseError(#[from] AddrParseError),
-
     #[error("AxumError. {0:?}")]
     AxumError(#[from] axum::Error),
-
     #[error("SolanaClientError. {0:?}")]
     SolanaClientError(solana_client::client_error::ClientError),
-
     /// Environment Error
     #[error("Environment error {0:?}")]
     EnvironmentError(#[from] EnvironmentError),
-
     /// Environment incomplete and should be corrected (some item missed or can be fixed)
     #[error("Incomplete environment")]
     IncompleteEnvironment,
-
     /// Environment in wrong state (some item in wrong state)
     #[error("Wrong environment")]
     WrongEnvironment,
-
     #[error("Hex Error. {0}")]
     FromHexError(#[from] hex::FromHexError),
-
+    #[error("PostgreSQL Error: {0}")]
+    PostgreError(#[from] PgError),
     #[error("Panic: {0}")]
     Panic(String),
 }
@@ -136,6 +131,7 @@ impl NeonError {
             NeonError::IncorrectAddress(_) => 248,
             NeonError::IncorrectIndex(_) => 249,
             NeonError::TxParametersParsingError(_) => 250,
+            NeonError::PostgreError(_) => 251,
         }
     }
 }

@@ -7,6 +7,10 @@ use evm_loader::evm::tracing::{Event, EventListener};
 use {listener_tracer::ListenerTracer, listener_vm_tracer::ListenerVmTracer, tracer::Tracer};
 
 impl EventListener for Tracer {
+    fn enable_return_data(&self) -> bool {
+        self.enable_return_data
+    }
+
     fn event(&mut self, event: Event) {
         match event {
             Event::BeginVM { context, code } => {
@@ -24,8 +28,11 @@ impl EventListener for Tracer {
                 self.begin_step(stack, memory);
                 self.vm.begin_step(opcode, pc);
             }
-            Event::EndStep { gas_used } => {
-                self.end_step();
+            Event::EndStep {
+                gas_used,
+                return_data,
+            } => {
+                self.end_step(return_data);
                 self.vm.end_step(gas_used);
             }
             Event::StackPush { value } => {

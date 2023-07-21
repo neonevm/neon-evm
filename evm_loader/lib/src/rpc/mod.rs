@@ -6,12 +6,17 @@ pub use db_call_client::CallDbClient;
 pub use db_trx_client::TrxDbClient;
 
 use crate::types::TxParams;
+use crate::{NeonError, NeonResult};
 use async_trait::async_trait;
+use solana_cli::cli::CliError;
 use solana_client::{
     client_error::Result as ClientResult,
+    nonblocking::rpc_client::RpcClient,
     rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
     rpc_response::RpcResult,
 };
+use solana_sdk::message::Message;
+use solana_sdk::native_token::lamports_to_sol;
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
@@ -27,7 +32,7 @@ use solana_transaction_status::{
 use std::any::Any;
 
 #[async_trait]
-pub trait Rpc {
+pub trait Rpc: Send + Sync {
     fn commitment(&self) -> CommitmentConfig;
     async fn confirm_transaction_with_spinner(
         &self,
@@ -97,3 +102,20 @@ macro_rules! e {
     };
 }
 pub(crate) use e;
+
+pub(crate) async fn check_account_for_fee(
+    rpc_client: &RpcClient,
+    account_pubkey: &Pubkey,
+    message: &Message,
+) -> NeonResult<()> {
+    let fee = rpc_client.get_fee_for_message(message).await?;
+    let balance = rpc_client.get_balance(account_pubkey).await?;
+    if balance != 0 && balance >= fee {
+        return Ok(());
+    }
+
+    Err(NeonError::CliError(CliError::InsufficientFundsForFee(
+        lamports_to_sol(fee),
+        *account_pubkey,
+    )))
+}

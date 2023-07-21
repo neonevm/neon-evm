@@ -1,3 +1,4 @@
+use crate::types::trace::{TraceCallConfig, TraceConfig};
 use crate::types::{PubkeyBase58, TxParams};
 use ethnum::U256;
 use evm_loader::types::Address;
@@ -29,6 +30,7 @@ pub struct TxParamsRequestModel {
 impl From<TxParamsRequestModel> for TxParams {
     fn from(model: TxParamsRequestModel) -> Self {
         Self {
+            nonce: None,
             from: model.sender,
             to: model.contract,
             data: model.data,
@@ -89,10 +91,20 @@ pub struct EmulateHashRequestModel {
 pub struct TraceRequestModel {
     #[serde(flatten)]
     pub emulate_request: EmulateRequestModel,
+    pub trace_call_config: Option<TraceCallConfig>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct TraceHashRequestModel {
     #[serde(flatten)]
     pub emulate_hash_request: EmulateHashRequestModel,
+    pub trace_config: Option<TraceConfig>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct TraceNextBlockRequestModel {
+    #[serde(flatten)]
+    pub emulation_params: EmulationParamsRequestModel,
+    pub slot: u64,
+    pub trace_config: Option<TraceConfig>,
 }

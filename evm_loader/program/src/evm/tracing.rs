@@ -4,6 +4,7 @@ use ethnum::U256;
 environmental::environmental!(listener: dyn EventListener + 'static);
 
 pub trait EventListener {
+    fn enable_return_data(&self) -> bool;
     fn event(&mut self, event: Event);
 }
 
@@ -25,6 +26,7 @@ pub enum Event {
     },
     EndStep {
         gas_used: u64,
+        return_data: Option<Vec<u8>>,
     },
     StackPush {
         value: [u8; 32],

@@ -36,6 +36,7 @@ pub struct SolanaAllocator;
 
 unsafe impl std::alloc::GlobalAlloc for SolanaAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        #[allow(clippy::option_if_let_else)]
         if let Ok(non_null) = heap().allocate_first_fit(layout) {
             non_null.as_ptr()
         } else {

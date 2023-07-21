@@ -21,6 +21,7 @@ pub mod get_ether_account_data;
 pub mod get_storage_at;
 pub mod trace;
 pub mod trace_hash;
+pub mod trace_next_block;
 
 #[derive(Debug)]
 pub struct NeonApiError(pub NeonError);
@@ -127,13 +128,7 @@ fn process_result<T: Serialize>(
                 "value": value,
             })),
         ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "result": "error",
-                "error": e.0.to_string(),
-            })),
-        ),
+        Err(e) => process_error(StatusCode::INTERNAL_SERVER_ERROR, &e.0),
     }
 }
 
