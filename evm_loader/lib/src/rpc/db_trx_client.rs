@@ -66,6 +66,7 @@ impl Rpc for TrxDbClient {
     async fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
         self.tracer_db
             .get_account_by_sol_sig(key, &self.sol_sig)
+            .await
             .map_err(|e| e!("load account error", key, e))?
             .ok_or_else(|| e!("account not found", key))
     }
@@ -78,6 +79,7 @@ impl Rpc for TrxDbClient {
         let account = self
             .tracer_db
             .get_account_by_sol_sig(key, &self.sol_sig)
+            .await
             .map_err(|e| e!("load account error", key, e))?;
 
         let slot = self
@@ -105,6 +107,7 @@ impl Rpc for TrxDbClient {
             let account = self
                 .tracer_db
                 .get_account_by_sol_sig(key, &self.sol_sig)
+                .await
                 .map_err(|e| e!("load account error", key, e))?;
             result.push(account);
         }
