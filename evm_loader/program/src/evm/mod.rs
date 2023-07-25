@@ -28,6 +28,7 @@ mod utils;
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;
 pub use precompile::is_precompile_address;
+pub use precompile::precompile;
 
 macro_rules! tracing_event {
     ($x:expr) => {
@@ -283,6 +284,14 @@ impl<B: Database> Machine<B> {
         });
 
         let status = loop {
+            if is_precompile_address(&self.context.contract) {
+                let value = precompile(&self.context.contract, &self.call_data).unwrap_or_default();
+
+                backend.commit_snapshot();
+
+                break ExitStatus::Return(value);
+            }
+
             step += 1;
             if step > step_limit {
                 break ExitStatus::StepLimit;
@@ -321,7 +330,7 @@ impl<B: Database> Machine<B> {
                 Action::Revert(value) => break ExitStatus::Revert(value),
                 Action::Suicide => break ExitStatus::Suicide,
                 Action::Noop => {}
-            }
+            };
         };
 
         tracing_event!(tracing::Event::EndVM {
