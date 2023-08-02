@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn roundtrip_bincode() {
         let action = Action::EvmSetStorage {
-            address: Default::default(),
+            address: Address::default(),
             index: U256::from_le_bytes([
                 255, 46, 185, 41, 144, 201, 3, 36, 227, 18, 148, 147, 106, 131, 110, 6, 229, 235,
                 44, 154, 71, 124, 159, 144, 47, 119, 77, 5, 154, 49, 23, 54,
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn roundtrip_json() {
         let action = Action::EvmSetStorage {
-            address: Default::default(),
+            address: Address::default(),
             index: U256::from_le_bytes([
                 255, 46, 185, 41, 144, 201, 3, 36, 227, 18, 148, 147, 106, 131, 110, 6, 229, 235,
                 44, 154, 71, 124, 159, 144, 47, 119, 77, 5, 154, 49, 23, 54,
