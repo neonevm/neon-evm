@@ -816,6 +816,13 @@ impl<B: Database> Machine<B> {
         Ok(Action::Continue)
     }
 
+    /// Place zero on stack
+    pub fn opcode_push_0(&mut self, _backend: &mut B) -> Result<Action> {
+        self.stack.push_zero()?;
+
+        Ok(Action::Continue)
+    }
+
     /// Place 1 byte item on stack
     /// ~50% of contract bytecode are PUSH opcodes
     pub fn opcode_push_1(&mut self, _backend: &mut B) -> Result<Action> {
