@@ -19,7 +19,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  deploy-neon-evm:
+  build-neon-evm:
     runs-on: build-runner
     steps:
       - uses: actions/checkout@v3
@@ -35,10 +35,10 @@ jobs:
         run: |
           python3 ./.github/workflows/deploy.py publish_image \
           --github_sha=${GITHUB_SHA}
-  run-tests-and-finalize-image:
+  run-neon-evm-tests:
     runs-on: test-runner
     needs:
-      - deploy-neon-evm
+      - build-neon-evm
     steps:
       - uses: actions/checkout@v3
         with:
@@ -47,7 +47,14 @@ jobs:
         run: |
           python3 ./.github/workflows/deploy.py run_tests \
           --github_sha=${GITHUB_SHA}
-
+  trigger-proxy-tests:
+    runs-on: trigger-runner
+    needs:
+      - build-neon-evm
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Trigger proxy build
         run: |
           python3 ./.github/workflows/deploy.py trigger_proxy_action \
@@ -58,7 +65,15 @@ jobs:
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
           --labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
-
+  finalize-image:
+    runs-on: build-runner
+    needs:
+      - trigger-proxy-tests
+      - run-neon-evm-tests
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Finalize image
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
