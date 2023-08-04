@@ -173,7 +173,8 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     elif re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
         proxy_branch = base_ref_branch
     elif is_tag_creating:
-        proxy_branch = github_ref.replace("refs/tags/", "")
+        neon_evm_tag = github_ref.replace("refs/tags/", "")
+        proxy_branch = re.sub(r'\.\d+$', '.x', neon_evm_tag)
     elif is_version_branch:
         proxy_branch = github_ref.replace("refs/heads/", "")
     else:
@@ -189,7 +190,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     proxy_run_id = list(set(runs_after) - set(runs_before))[0]
     link = f"https://github.com/neonlabsorg/proxy-model.py/actions/runs/{proxy_run_id}"
     click.echo(f"Proxy run link: {link}")
-    click.echo("Waiting completed status...")
+    click.echo("Waiting for completed status...")
     wait_condition(lambda: github.get_proxy_run_info(proxy_run_id)["status"] == "completed", timeout_sec=10800, delay=5)
 
     if github.get_proxy_run_info(proxy_run_id)["conclusion"] == "success":
