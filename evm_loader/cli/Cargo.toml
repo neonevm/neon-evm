@@ -1,59 +1,22 @@
 [package]
 name = "neon-cli"
-version = "0.15.0-dev"
+version = "1.1.0-dev"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-chrono = "0.4"
-thiserror = "1.0"
-bincode = "1.3.1"
 clap = "2.33.3"
 evm-loader = { path = "../program", default_features = false, features = ["log", "tracing"] }
-solana-sdk = "~1.14"
-solana-client = "~1.14"
-solana-clap-utils = "~1.14"
-solana-cli-config = "~1.14"
-solana-cli = "~1.14"
-solana-cli-output = "~1.14"
-solana-transaction-status = "~1.14"
-spl-token = { version = "~3.5", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "~1.1", default_features = false, features = ["no-entrypoint"] }
-bs58 = "0.4.0"
+solana-sdk = "=1.14.20"
+solana-client = "=1.14.20"
+solana-clap-utils = "=1.14.20"
+solana-cli-config = "=1.14.20"
 hex = "0.4.2"
-sha3 = "0.10"
-arrayref = "0.3.6"
 serde = "1.0.147"
 serde_json = "1.0.85"
-getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
 log = "0.4.17"
 fern = "0.6"
-rlp = "0.5"
-rand = "0.8"
 ethnum = { version = "1", default_features = false, features = [ "serde" ] }
-goblin = { version = "0.6.0" }
-scroll = "0.11.0"
 tokio = { version = "1", features = ["full"] }
-postgres = { version = "0.19", features = ["with-chrono-0_4", "array-impls"] }
-tokio-postgres = {version="0.7", features=["with-uuid-0_8"]}
-lazy_static = "1.4"
-clickhouse = "0.11.2"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-axum = "0.6"
-tower = { version = "0.4", features = ["make"] }
-
-
-[[bin]]
-name = "neon-cli"
-path = "src/main.rs"
-
-[[bin]]
-name = "neon-api"
-path = "src/api.rs"
-
-[lib]
-name = "neon_cli"
-path = "src/lib.rs"
-
+neon-lib = { path = "../lib" }

@@ -93,9 +93,15 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn code(&self, address: &Address) -> crate::evm::Buffer {
         use crate::evm::Buffer;
 
-        self.ethereum_account(address)
-            .and_then(EthereumAccount::contract_data)
-            .map_or_else(Buffer::empty, |c| Buffer::new(&c.code()))
+        if let Some(account) = self.ethereum_account(address) {
+            if account.code_size() == 0 {
+                return Buffer::empty();
+            }
+
+            Buffer::from_account(account.info, account.code_location())
+        } else {
+            Buffer::empty()
+        }
     }
 
     fn generation(&self, address: &Address) -> u32 {

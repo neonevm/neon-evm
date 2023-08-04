@@ -4,7 +4,7 @@ use std::convert::TryInto;
 
 use super::Address;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Transaction {
     pub nonce: u64,
     pub gas_price: U256,
@@ -72,7 +72,7 @@ impl rlp::Decodable for Transaction {
             }
         };
         let value: U256 = u256(&rlp.at(4)?)?;
-        let call_data = crate::evm::Buffer::new(rlp.at(5)?.data()?);
+        let call_data = crate::evm::Buffer::from_slice(rlp.at(5)?.data()?);
         let v: U256 = u256(&rlp.at(6)?)?;
         let r: U256 = u256(&rlp.at(7)?)?;
         let s: U256 = u256(&rlp.at(8)?)?;

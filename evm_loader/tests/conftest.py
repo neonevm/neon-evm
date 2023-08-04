@@ -51,6 +51,8 @@ def operator_keypair(request, evm_loader) -> Keypair:
     caller, caller_nonce = evm_loader.ether2program(caller_ether)
 
     if get_solana_balance(PublicKey(caller)) == 0:
+        evm_loader.check_account(account.public_key)
+        evm_loader.check_account(PublicKey(caller))
         evm_loader.create_ether_account(caller_ether)
     return account
 

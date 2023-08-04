@@ -28,6 +28,7 @@ mod utils;
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;
 pub use precompile::is_precompile_address;
+pub use precompile::precompile;
 
 macro_rules! tracing_event {
     ($x:expr) => {
@@ -41,6 +42,34 @@ macro_rules! tracing_event {
         }
     };
 }
+
+macro_rules! trace_end_step {
+    ($return_data_vec:expr) => {
+        #[cfg(feature = "tracing")]
+        crate::evm::tracing::with(|listener| {
+            if listener.enable_return_data() {
+                listener.event(crate::evm::tracing::Event::EndStep {
+                    gas_used: 0_u64,
+                    return_data: $return_data_vec,
+                })
+            } else {
+                listener.event(crate::evm::tracing::Event::EndStep {
+                    gas_used: 0_u64,
+                    return_data: None,
+                })
+            }
+        })
+    };
+
+    ($condition:expr; $return_data_vec:expr) => {
+        #[cfg(feature = "tracing")]
+        if $condition {
+            trace_end_step!($return_data_vec)
+        }
+    };
+}
+
+pub(crate) use trace_end_step;
 pub(crate) use tracing_event;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -106,8 +135,27 @@ impl<B: Database> Machine<B> {
         cursor.position().try_into().map_err(Error::from)
     }
 
-    pub fn deserialize_from(buffer: &[u8], _backend: &B) -> Result<Self> {
-        bincode::deserialize(buffer).map_err(Error::from)
+    pub fn deserialize_from(buffer: &[u8], backend: &B) -> Result<Self> {
+        fn reinit_buffer<B: Database>(buffer: &mut Buffer, backend: &B) {
+            if let Some((key, range)) = buffer.uninit_data() {
+                *buffer = backend.map_solana_account(&key, |i| Buffer::from_account(i, range));
+            }
+        }
+
+        fn reinit_machine<B: Database>(machine: &mut Machine<B>, backend: &B) {
+            reinit_buffer(&mut machine.call_data, backend);
+            reinit_buffer(&mut machine.execution_code, backend);
+            reinit_buffer(&mut machine.return_data, backend);
+
+            if let Some(parent) = &mut machine.parent {
+                reinit_machine(parent, backend);
+            }
+        }
+
+        let mut evm: Self = bincode::deserialize(buffer)?;
+        reinit_machine(&mut evm, backend);
+
+        Ok(evm)
     }
 
     pub fn new(trx: Transaction, origin: Address, backend: &mut B) -> Result<Self> {
@@ -224,6 +272,10 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
+        assert!(self.execution_code.uninit_data().is_none());
+        assert!(self.call_data.uninit_data().is_none());
+        assert!(self.return_data.uninit_data().is_none());
+
         let mut step = 0_u64;
 
         tracing_event!(tracing::Event::BeginVM {
@@ -232,6 +284,14 @@ impl<B: Database> Machine<B> {
         });
 
         let status = loop {
+            if is_precompile_address(&self.context.contract) {
+                let value = precompile(&self.context.contract, &self.call_data).unwrap_or_default();
+
+                backend.commit_snapshot();
+
+                break ExitStatus::Return(value);
+            }
+
             step += 1;
             if step > step_limit {
                 break ExitStatus::StepLimit;
@@ -253,12 +313,13 @@ impl<B: Database> Machine<B> {
                 Ok(result) => result,
                 Err(e) => {
                     let message = build_revert_message(&e.to_string());
-                    self.opcode_revert_impl(Buffer::new(&message), backend)?
+                    self.opcode_revert_impl(Buffer::from_slice(&message), backend)?
                 }
             };
 
-            tracing_event!(opcode_result != Action::Noop; tracing::Event::EndStep {
-                gas_used: 0_u64
+            trace_end_step!(opcode_result != Action::Noop; match &opcode_result {
+                Action::Return(value) | Action::Revert(value) => Some(value.clone()),
+                _ => None,
             });
 
             match opcode_result {
@@ -269,7 +330,7 @@ impl<B: Database> Machine<B> {
                 Action::Revert(value) => break ExitStatus::Revert(value),
                 Action::Suicide => break ExitStatus::Suicide,
                 Action::Noop => {}
-            }
+            };
         };
 
         tracing_event!(tracing::Event::EndVM {

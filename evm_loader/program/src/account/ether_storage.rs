@@ -126,8 +126,7 @@ impl<'a> EthereumStorage<'a> {
         &mut self,
         subindex: u8,
         value: &[u8; 32],
-        operator: &Operator<'a>,
-        system: &program::System<'a>,
+        required_account_transfers: &mut std::collections::HashMap<Pubkey, (AccountInfo<'a>, u64)>,
     ) -> Result<(), ProgramError> {
         {
             let mut data = self.info.data.borrow_mut();
@@ -150,7 +149,10 @@ impl<'a> EthereumStorage<'a> {
         let minimum_balance = Rent::get()?.minimum_balance(new_len);
         if self.info.lamports() < minimum_balance {
             let required_lamports = minimum_balance - self.info.lamports();
-            system.transfer(operator, self.info, required_lamports)?;
+
+            // Accumulate the amount of lamports we need to transfer for this account
+            required_account_transfers
+                .insert(*self.info.key, (Clone::clone(self.info), required_lamports));
         }
 
         let mut data = self.info.data.borrow_mut();

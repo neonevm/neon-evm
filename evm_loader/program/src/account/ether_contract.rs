@@ -1,22 +1,23 @@
 use std::cell::RefMut;
 use std::mem::size_of;
+use std::ops::Range;
 
 use ethnum::U256;
 
 use crate::account::EthereumAccount;
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 
+const INTERNAL_STORAGE_SIZE: usize =
+    size_of::<U256>() * STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as usize;
+
 pub struct ContractData<'this, 'acc> {
     account: &'this EthereumAccount<'acc>,
 }
 
 impl<'acc> ContractData<'_, 'acc> {
-    pub const INTERNAL_STORAGE_SIZE: usize =
-        size_of::<U256>() * STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as usize;
-
     #[must_use]
     pub fn code(&self) -> RefMut<'acc, [u8]> {
-        let offset = Self::INTERNAL_STORAGE_SIZE;
+        let offset = INTERNAL_STORAGE_SIZE;
         let len = self.account.code_size as usize;
 
         self.extension_part_borrow_mut(offset, len)
@@ -25,7 +26,7 @@ impl<'acc> ContractData<'_, 'acc> {
     #[must_use]
     pub fn storage(&self) -> RefMut<'acc, [u8]> {
         let offset = 0;
-        let len = Self::INTERNAL_STORAGE_SIZE;
+        let len = INTERNAL_STORAGE_SIZE;
 
         self.extension_part_borrow_mut(offset, len)
     }
@@ -57,6 +58,14 @@ impl<'this, 'acc> EthereumAccount<'acc> {
     }
 
     #[must_use]
+    pub fn code_location(&self) -> Range<usize> {
+        let begin = Self::SIZE + INTERNAL_STORAGE_SIZE;
+        let end = begin.saturating_add(self.code_size());
+
+        begin..end
+    }
+
+    #[must_use]
     pub fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>> {
         if !self.is_contract() {
             return None;
@@ -68,7 +77,7 @@ impl<'this, 'acc> EthereumAccount<'acc> {
     pub fn space_needed(code_size: usize) -> usize {
         EthereumAccount::SIZE
             + if code_size > 0 {
-                code_size + ContractData::INTERNAL_STORAGE_SIZE
+                code_size + INTERNAL_STORAGE_SIZE
             } else {
                 0
             }

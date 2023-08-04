@@ -78,6 +78,7 @@ impl<B: Database> Machine<B> {
         opcodes[0x5A] = Self::opcode_gas;
         opcodes[0x5B] = Self::opcode_jumpdest;
 
+        opcodes[0x5F] = Self::opcode_push_0;
         opcodes[0x60] = Self::opcode_push_1;
         opcodes[0x61] = Self::opcode_push_2_31::<2>;
         opcodes[0x62] = Self::opcode_push_2_31::<3>;

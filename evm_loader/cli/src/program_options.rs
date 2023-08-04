@@ -2,16 +2,9 @@ use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, Sub
 use ethnum::U256;
 use evm_loader::types::Address;
 use hex::FromHex;
+use neon_lib::context::truncate_0x;
 use solana_clap_utils::input_validators::{is_url_or_moniker, is_valid_pubkey};
 use std::fmt::Display;
-
-pub fn truncate(in_str: &str) -> &str {
-    if &in_str[..2] == "0x" {
-        &in_str[2..]
-    } else {
-        in_str
-    }
-}
 
 // Return an error if string cannot be parsed as a Address address
 fn is_valid_address<T>(string: T) -> Result<(), String>
@@ -55,7 +48,7 @@ fn is_valid_h256<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str>,
 {
-    let str = truncate(string.as_ref());
+    let str = truncate_0x(string.as_ref());
     <[u8; 32]>::from_hex(str)
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -76,136 +69,126 @@ where
     }
 }
 
-macro_rules! trx_params {
-    ($cmd:expr, $desc:expr) => {
-        SubCommand::with_name($cmd)
-            .about($desc)
-            .arg(
-                Arg::with_name("sender")
-                    .value_name("SENDER")
-                    .takes_value(true)
-                    .index(1)
-                    .required(true)
-                    .validator(is_valid_address)
-                    .help("The sender of the transaction"),
-            )
-            .arg(
-                Arg::with_name("contract")
-                    .value_name("CONTRACT")
-                    .takes_value(true)
-                    .index(2)
-                    .required(true)
-                    .validator(is_valid_address_or_deploy)
-                    .help("The contract that executes the transaction or 'deploy'"),
-            )
-            .arg(
-                Arg::with_name("value")
-                    .value_name("VALUE")
-                    .takes_value(true)
-                    .index(3)
-                    .required(false)
-                    .validator(is_valid_u256)
-                    .help("Transaction value"),
-            )
-            .arg(
-                Arg::with_name("token_mint")
-                    .long("token_mint")
-                    .value_name("TOKEN_MINT")
-                    .takes_value(true)
-                    .global(true)
-                    .validator(is_valid_pubkey)
-                    .help("Pubkey for token_mint"),
-            )
-            .arg(
-                Arg::with_name("chain_id")
-                    .long("chain_id")
-                    .value_name("CHAIN_ID")
-                    .takes_value(true)
-                    .required(false)
-                    .help("Network chain_id"),
-            )
-            .arg(
-                Arg::with_name("max_steps_to_execute")
-                    .long("max_steps_to_execute")
-                    .value_name("NUMBER_OF_STEPS")
-                    .takes_value(true)
-                    .required(false)
-                    .default_value("100000")
-                    .help("Maximal number of steps to execute in a single run"),
-            )
-            .arg(
-                Arg::with_name("gas_limit")
-                    .short("G")
-                    .long("gas_limit")
-                    .value_name("GAS_LIMIT")
-                    .takes_value(true)
-                    .required(false)
-                    .validator(is_valid_u256)
-                    .help("Gas limit"),
-            )
-            .arg(
-                Arg::with_name("cached_accounts")
-                    .value_name("CACHED_ACCOUNTS")
-                    .long("cached_accounts")
-                    .takes_value(true)
-                    .required(false)
-                    .multiple(true)
-                    .validator(is_valid_address)
-                    .help("List of cached account addresses"),
-            )
-            .arg(
-                Arg::with_name("solana_accounts")
-                    .value_name("SOLANA_ACCOUNTS")
-                    .long("solana_accounts")
-                    .takes_value(true)
-                    .required(false)
-                    .multiple(true)
-                    .validator(is_valid_address)
-                    .help("List of cached solana account pubkeys"),
-            )
-    };
+fn ether_arg<'a, 'b>(idx: u64) -> Arg<'a, 'b> {
+    Arg::with_name("ether")
+        .index(idx)
+        .value_name("ETHER")
+        .takes_value(true)
+        .required(true)
+        .validator(is_valid_address)
+        .help("Ethereum address")
 }
 
-macro_rules! trx_hash {
-    ($cmd:expr, $desc:expr) => {
-        SubCommand::with_name($cmd)
-            .about($desc)
-            .arg(
-                Arg::with_name("hash")
-                    .index(1)
-                    .value_name("hash")
-                    .takes_value(true)
-                    .required(true)
-                    .validator(is_valid_h256)
-                    .help("Neon transaction hash"),
-            )
-            .arg(
-                Arg::with_name("token_mint")
-                    .long("token_mint")
-                    .value_name("TOKEN_MINT")
-                    .takes_value(true)
-                    .global(true)
-                    .validator(is_valid_pubkey)
-                    .help("Pubkey for token_mint"),
-            )
-            .arg(
-                Arg::with_name("chain_id")
-                    .long("chain_id")
-                    .value_name("CHAIN_ID")
-                    .takes_value(true)
-                    .required(false)
-                    .help("Network chain_id"),
-            )
-            .arg(
-                Arg::with_name("max_steps_to_execute")
-                    .long("max_steps_to_execute")
-                    .value_name("NUMBER_OF_STEPS")
-                    .takes_value(true)
-                    .required(false)
-                    .default_value("100000")
-                    .help("Maximal number of steps to execute in a single run"),
-            )
-    };
+fn token_mint_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("token_mint")
+        .long("token_mint")
+        .value_name("TOKEN_MINT")
+        .takes_value(true)
+        .global(true)
+        .validator(is_valid_pubkey)
+        .help("Pubkey for token_mint")
+}
+
+fn chain_id_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("chain_id")
+        .long("chain_id")
+        .value_name("CHAIN_ID")
+        .takes_value(true)
+        .required(false)
+        .help("Network chain_id")
+}
+
+fn max_steps_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("max_steps_to_execute")
+        .long("max_steps_to_execute")
+        .value_name("NUMBER_OF_STEPS")
+        .takes_value(true)
+        .required(false)
+        .default_value("100000")
+        .help("Maximal number of steps to execute in a single run")
+}
+
+fn trx_params<'a, 'b>(cmd: &'static str, desc: &'static str) -> App<'a, 'b> {
+    SubCommand::with_name(cmd)
+        .about(desc)
+        .arg(
+            Arg::with_name("sender")
+                .value_name("SENDER")
+                .takes_value(true)
+                .index(1)
+                .required(true)
+                .validator(is_valid_address)
+                .help("The sender of the transaction"),
+        )
+        .arg(
+            Arg::with_name("contract")
+                .value_name("CONTRACT")
+                .takes_value(true)
+                .index(2)
+                .required(true)
+                .validator(is_valid_address_or_deploy)
+                .help("The contract that executes the transaction or 'deploy'"),
+        )
+        .arg(
+            Arg::with_name("value")
+                .value_name("VALUE")
+                .takes_value(true)
+                .index(3)
+                .required(false)
+                .validator(is_valid_u256)
+                .help("Transaction value"),
+        )
+        .arg(token_mint_arg())
+        .arg(chain_id_arg())
+        .arg(max_steps_arg())
+        .arg(
+            Arg::with_name("gas_limit")
+                .short("G")
+                .long("gas_limit")
+                .value_name("GAS_LIMIT")
+                .takes_value(true)
+                .required(false)
+                .validator(is_valid_u256)
+                .help("Gas limit"),
+        )
+        .arg(
+            Arg::with_name("cached_accounts")
+                .value_name("CACHED_ACCOUNTS")
+                .long("cached_accounts")
+                .takes_value(true)
+                .required(false)
+                .multiple(true)
+                .validator(is_valid_address)
+                .help("List of cached account addresses"),
+        )
+        .arg(
+            Arg::with_name("solana_accounts")
+                .value_name("SOLANA_ACCOUNTS")
+                .long("solana_accounts")
+                .takes_value(true)
+                .required(false)
+                .multiple(true)
+                .validator(is_valid_address)
+                .help("List of cached solana account pubkeys"),
+        )
+}
+
+fn trx_hash<'a, 'b>(cmd: &'static str, alias: &'static str, desc: &'static str) -> App<'a, 'b> {
+    SubCommand::with_name(cmd)
+        .alias(alias)
+        .about(desc)
+        .arg(
+            Arg::with_name("hash")
+                .index(1)
+                .value_name("hash")
+                .takes_value(true)
+                .required(true)
+                .validator(is_valid_h256)
+                .help("Neon transaction hash"),
+        )
+        .arg(token_mint_arg())
+        .arg(chain_id_arg())
+        .arg(max_steps_arg())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -319,29 +302,44 @@ pub fn parse<'a>() -> ArgMatches<'a> {
                 .help("Logging level"),
         )
         .subcommand(
-            trx_params!("emulate", "Emulation transaction")
+            trx_params(
+                "emulate",
+                "Emulation transaction. Additional `TransactionParams` can be provided via STDIN as a JSON object.",
+            )
         )
         .subcommand(
-            trx_params!("trace", "Emulation transaction to collecting traces")
+            trx_params(
+                "trace",
+                "Emulation transaction to collecting traces. Additional `TransactionParams` can be provided via STDIN as a JSON object.",
+            )
         )
         .subcommand(
-            trx_hash!("emulate_hash", "Emulation transaction by hash")
+            trx_hash(
+                "emulate-hash",
+                "emulate_hash",
+                "Emulation transaction by hash. Additional `TransactionHashParams` can be provided via STDIN as a JSON object.",
+            )
         )
         .subcommand(
-            trx_hash!("trace_hash", "Emulation transaction by hash to collecting traces")
+            trx_hash(
+                "trace-hash",
+                "trace_hash",
+                "Emulation transaction by hash to collecting traces. Additional `TransactionHashParams` can be provided via STDIN as a JSON object.",
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("trace-next-block")
+                .about("Tracing all transactions in the block next to a given block (slot) number. \
+                    For this command, SLOT argument is required. \
+                    Additional `TraceNextBlockParams` can be provided via STDIN as a JSON object.")
+                .arg(token_mint_arg())
+                .arg(chain_id_arg())
+                .arg(max_steps_arg())
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")
                 .about("Create ethereum account")
-                .arg(
-                    Arg::with_name("ether")
-                        .index(1)
-                        .value_name("ether")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_address)
-                        .help("Ethereum address"),
-                )
+                .arg(ether_arg(1))
         )
         .subcommand(
             SubCommand::with_name("deposit")
@@ -355,28 +353,12 @@ pub fn parse<'a>() -> ArgMatches<'a> {
                         .validator(is_amount::<u64, _>)
                         .help("Amount to deposit"),
                 )
-                .arg(
-                    Arg::with_name("ether")
-                        .index(2)
-                        .value_name("ETHER")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_address)
-                        .help("Ethereum address"),
-                )
+                .arg(ether_arg(2))
         )
         .subcommand(
             SubCommand::with_name("get-ether-account-data")
                 .about("Get values stored in associated with given address account data")
-                .arg(
-                    Arg::with_name("ether")
-                        .index(1)
-                        .value_name("ether")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_address)
-                        .help("Ethereum address"),
-                )
+                .arg(ether_arg(1))
         )
         .subcommand(
             SubCommand::with_name("cancel-trx")

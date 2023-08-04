@@ -195,11 +195,7 @@ pub fn log_return_value(status: &ExitStatus) {
     sol_log_data(&[b"RETURN", &[code]]);
 }
 
-fn serialize_evm_state<'a>(
-    state: &mut State<'a>,
-    backend: &EvmBackend,
-    machine: &Evm,
-) -> Result<()> {
+fn serialize_evm_state(state: &mut State, backend: &EvmBackend, machine: &Evm) -> Result<()> {
     let (evm_state_len, evm_machine_len) = {
         let mut buffer = state.evm_data_mut();
         let backend_bytes = backend.serialize_into(&mut buffer)?;

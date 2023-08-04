@@ -3,7 +3,7 @@
 
 [package]
 name = "evm-loader"
-version = "0.15.0-dev"
+version = "1.1.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2021"
@@ -19,6 +19,8 @@ mainnet = []
 testnet = []
 ## Builds NeonEVM for devnet deployment
 devnet = []
+## Builds NeonEVM for CI environment
+ci = []
 
 ## Builds NeonEVM program for `emergency` mode. In this mode, NeonEVM doesn't process
 ## any transaction and return error `ProgramError::InvalidInstructionData` with comment
@@ -37,10 +39,10 @@ tracing = ["environmental"]
 [dependencies]
 linked_list_allocator = { version = "0.10", default_features = false }
 evm-loader-macro = { path = "../program-macro" }
-solana-program = { version = "~1.14", default_features = false }
+solana-program = { version = "=1.14.20", default_features = false }
 spl-token = { version = "~3.5", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "~1.1", default_features = false, features = ["no-entrypoint"] }
-mpl-token-metadata = { version = "=1.3.2", default_features = false, features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "1.12", default_features = false, features = ["no-entrypoint"] }
 thiserror = "1.0"
 arrayref = "0.3.6"
 hex = "0.4.2"
@@ -56,6 +58,9 @@ const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
 environmental = { version = "1", default-features = false, optional = true}
+
+[dev-dependencies]
+serde_json = "1"
 
 [lib]
 crate-type = ["cdylib", "lib"]

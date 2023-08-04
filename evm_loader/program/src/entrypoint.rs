@@ -99,5 +99,9 @@ fn process_instruction<'a>(
             instruction::account_block_add::process(program_id, accounts, instruction)
                 .map_err(ProgramError::from)
         }
+        EvmInstruction::TestAccountUpdateNonce => {
+            instruction::test_account_update_nonce::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
+        }
     }
 }

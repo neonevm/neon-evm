@@ -90,14 +90,14 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         &mut self,
         instruction: Instruction,
         seeds: Vec<Vec<u8>>,
-        allocate: usize,
+        fee: u64,
     ) {
         let action = Action::ExternalInstruction {
             program_id: instruction.program_id,
             data: instruction.data,
             accounts: instruction.accounts,
             seeds,
-            allocate,
+            fee,
         };
 
         self.actions.push(action);
@@ -378,6 +378,13 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     fn block_timestamp(&self) -> Result<U256> {
         let cache = self.cache.borrow();
         Ok(cache.block_timestamp)
+    }
+
+    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    where
+        F: FnOnce(&solana_program::account_info::AccountInfo) -> R,
+    {
+        self.backend.map_solana_account(address, action)
     }
 
     fn snapshot(&mut self) {

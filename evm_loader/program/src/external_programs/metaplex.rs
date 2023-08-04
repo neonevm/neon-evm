@@ -77,7 +77,6 @@ fn create_metadata_accounts_v3(
         &metadata,
         false,
         meta[4].is_signer,
-        false,
     )?;
 
     metadata.mint = *mint_key;
