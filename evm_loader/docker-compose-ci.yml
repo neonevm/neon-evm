@@ -13,3 +13,40 @@ services:
       - "8899"
     entrypoint:
       /opt/solana/bin/solana-run-neon.sh
+    networks:
+      - net
+
+  dk-neon-api:
+    restart: unless-stopped
+    container_name: dk-neon-api
+    hostname: neon_api
+    command: /opt/neon-api -H 0.0.0.0:8085
+    environment:
+      RUST_BACKTRACE: 1
+      RUST_LOG: debug
+      NEON_API_LISTENER_ADDR: 0.0.0.0:8085
+      SOLANA_URL: http://solana:8899
+      EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
+      NEON_TOKEN_MINT: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
+      NEON_CHAIN_ID: 111
+      COMMITMENT: confirmed
+      NEON_DB_CLICKHOUSE_URLS: "http://45.250.253.36:8123;http://45.250.253.38:8123"
+      NEON_DB_INDEXER_HOST: 45.250.253.32
+      NEON_DB_INDEXER_PORT: 5432
+      NEON_DB_INDEXER_DATABASE: indexer
+      NEON_DB_INDEXER_USER: postgres
+      NEON_DB_INDEXER_PASSWORD: ""
+      KEYPAIR: /opt/id.json
+      FEEPAIR: /opt/id.json
+    image: neonlabsorg/evm_loader:latest
+    expose:
+    - "8085"
+    ports:
+    - 8085:8085
+    volumes:
+    - ./files/id.json:/opt/id.json
+    networks:
+      - net
+
+networks:
+  net:
