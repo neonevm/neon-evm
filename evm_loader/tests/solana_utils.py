@@ -335,6 +335,7 @@ class EvmLoader:
     def create_ether_account(self, ether):
         (trx, sol) = self.create_ether_account_trx(ether)
         signer = self.acc.get_acc()
+        self.check_account(signer.public_key)
         send_transaction(solana_client, trx, signer)
         return sol
 
