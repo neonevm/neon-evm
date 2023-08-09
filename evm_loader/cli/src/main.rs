@@ -21,6 +21,7 @@ pub use context::Context;
 use std::io::Read;
 
 use ethnum::U256;
+use evm_loader::evm::tracing::event_listener::trace::{TraceCallConfig, TraceConfig};
 use serde_json::json;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of, values_of};
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -33,10 +34,7 @@ use tokio::time::Instant;
 use crate::{
     errors::NeonError,
     rpc::Rpc,
-    types::{
-        trace::{TraceCallConfig, TraceConfig},
-        IndexerDb, TraceNextBlockParams, TransactionHashParams, TransactionParams, TxParams,
-    },
+    types::{IndexerDb, TraceNextBlockParams, TransactionHashParams, TransactionParams, TxParams},
 };
 use evm_loader::types::Address;
 

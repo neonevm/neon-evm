@@ -1,4 +1,4 @@
-use crate::types::trace::{ExecutiveVMTracer, MemoryDiff, StorageDiff};
+use crate::evm::tracing::event_listener::trace::{ExecutiveVMTracer, MemoryDiff, StorageDiff};
 use ethnum::U256;
 
 #[derive(Debug, Default, Clone)]

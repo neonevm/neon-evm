@@ -1,4 +1,3 @@
-
 # Note: This crate must be built using cargo build-bpf
 
 [package]
@@ -34,7 +33,8 @@ no-entrypoint = []
 test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
-tracing = ["environmental"]
+
+tracing = []
 
 [dependencies]
 linked_list_allocator = { version = "0.10", default_features = false }
@@ -53,11 +53,10 @@ borsh = "0.9"
 bincode = "1"
 serde_bytes = "0.11"
 serde = { version = "1", features = ["derive"] }
-ethnum = { version = "1", default_features = false, features = [ "serde" ] }
+ethnum = { version = "1", default_features = false, features = ["serde"] }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
-environmental = { version = "1", default-features = false, optional = true}
 
 [dev-dependencies]
 serde_json = "1"

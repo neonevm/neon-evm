@@ -38,7 +38,13 @@ pub fn do_begin<'a>(
     account_storage.block_accounts(true);
 
     let mut backend = ExecutorState::new(account_storage);
-    let evm = Machine::new(trx, caller, &mut backend)?;
+    let evm = Machine::new(
+        trx,
+        caller,
+        &mut backend,
+        #[cfg(feature = "tracing")]
+        None,
+    )?;
 
     serialize_evm_state(&mut storage, &backend, &evm)?;
 

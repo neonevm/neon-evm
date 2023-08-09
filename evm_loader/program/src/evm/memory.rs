@@ -1,10 +1,16 @@
-use solana_program::program_memory::{sol_memcpy, sol_memset};
 use std::alloc::{GlobalAlloc, Layout};
 use std::ops::Range;
 
+use solana_program::program_memory::{sol_memcpy, sol_memset};
+
+use crate::error::Error;
+#[cfg(feature = "tracing")]
+use crate::evm::tracing::event_listener::tracer::TracerType;
+#[cfg(feature = "tracing")]
+use crate::evm::tracing::EventListener;
+
 use super::utils::checked_next_multiple_of_32;
 use super::{tracing_event, Buffer};
-use crate::error::Error;
 
 const MAX_MEMORY_SIZE: usize = 64 * 1024;
 const MEMORY_CAPACITY: usize = 1024;
@@ -16,14 +22,20 @@ pub struct Memory {
     data: *mut u8,
     capacity: usize,
     size: usize,
+    #[cfg(feature = "tracing")]
+    tracer: TracerType,
 }
 
 impl Memory {
-    pub fn new() -> Self {
-        Self::with_capacity(MEMORY_CAPACITY)
+    pub fn new(#[cfg(feature = "tracing")] tracer: TracerType) -> Self {
+        Self::with_capacity(
+            MEMORY_CAPACITY,
+            #[cfg(feature = "tracing")]
+            tracer,
+        )
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, #[cfg(feature = "tracing")] tracer: TracerType) -> Self {
         unsafe {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
             let data = crate::allocator::EVM.alloc_zeroed(layout);
@@ -35,6 +47,8 @@ impl Memory {
                 data,
                 capacity,
                 size: 0,
+                #[cfg(feature = "tracing")]
+                tracer,
             }
         }
     }
@@ -55,6 +69,8 @@ impl Memory {
                 data,
                 capacity,
                 size: v.len(),
+                #[cfg(feature = "tracing")]
+                tracer: None,
             }
         }
     }
@@ -140,10 +156,13 @@ impl Memory {
     }
 
     pub fn write_32(&mut self, offset: usize, value: &[u8; 32]) -> Result<(), Error> {
-        tracing_event!(super::tracing::Event::MemorySet {
-            offset,
-            data: value.to_vec()
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::MemorySet {
+                offset,
+                data: value.to_vec()
+            }
+        );
 
         self.realloc(offset, 32)?;
 
@@ -156,10 +175,13 @@ impl Memory {
     }
 
     pub fn write_byte(&mut self, offset: usize, value: u8) -> Result<(), Error> {
-        tracing_event!(super::tracing::Event::MemorySet {
-            offset,
-            data: vec![value]
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::MemorySet {
+                offset,
+                data: vec![value]
+            }
+        );
 
         self.realloc(offset, 1)?;
 
@@ -191,24 +213,30 @@ impl Memory {
 
         match source_offset {
             source_offset if source_offset >= source.len() => {
-                tracing_event!(super::tracing::Event::MemorySet {
-                    offset,
-                    data: vec![0; length]
-                });
+                tracing_event!(
+                    self,
+                    super::tracing::Event::MemorySet {
+                        offset,
+                        data: vec![0; length]
+                    }
+                );
 
                 sol_memset(data, 0, length);
             }
             source_offset if (source_offset + length) > source.len() => {
                 let source = &source[source_offset..];
 
-                tracing_event!(super::tracing::Event::MemorySet {
-                    offset,
-                    data: {
-                        let mut buffer = vec![0_u8; length];
-                        buffer[..source.len()].copy_from_slice(source);
-                        buffer
+                tracing_event!(
+                    self,
+                    super::tracing::Event::MemorySet {
+                        offset,
+                        data: {
+                            let mut buffer = vec![0_u8; length];
+                            buffer[..source.len()].copy_from_slice(source);
+                            buffer
+                        }
                     }
-                });
+                );
 
                 data[..source.len()].copy_from_slice(source);
                 data[source.len()..].fill(0_u8);
@@ -216,10 +244,13 @@ impl Memory {
             source_offset => {
                 let source = &source[source_offset..source_offset + length];
 
-                tracing_event!(super::tracing::Event::MemorySet {
-                    offset,
-                    data: source.to_vec()
-                });
+                tracing_event!(
+                    self,
+                    super::tracing::Event::MemorySet {
+                        offset,
+                        data: source.to_vec()
+                    }
+                );
 
                 sol_memcpy(data, source, length);
             }

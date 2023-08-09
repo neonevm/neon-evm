@@ -54,7 +54,13 @@ pub fn execute<'a>(
     let (exit_reason, apply_state) = {
         let mut backend = ExecutorState::new(account_storage);
 
-        let mut evm = Machine::new(trx, caller_address, &mut backend)?;
+        let mut evm = Machine::new(
+            trx,
+            caller_address,
+            &mut backend,
+            #[cfg(feature = "tracing")]
+            None,
+        )?;
         let (result, _) = evm.execute(u64::MAX, &mut backend)?;
 
         let actions = backend.into_actions();

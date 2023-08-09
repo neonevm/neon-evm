@@ -1,3 +1,5 @@
+#[cfg(feature = "tracing")]
+use crate::evm::tracing::EventListener;
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
 use solana_program::log::sol_log_data;
@@ -735,7 +737,7 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = backend.storage(&self.context.contract, &index)?;
 
-        tracing_event!(super::tracing::Event::StorageAccess { index, value });
+        tracing_event!(self, super::tracing::Event::StorageAccess { index, value });
 
         self.stack.push_array(&value)?;
 
@@ -751,8 +753,8 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = *self.stack.pop_array()?;
 
-        tracing_event!(super::tracing::Event::StorageSet { index, value });
-        tracing_event!(super::tracing::Event::StorageAccess { index, value });
+        tracing_event!(self, super::tracing::Event::StorageSet { index, value });
+        tracing_event!(self, super::tracing::Event::StorageAccess { index, value });
 
         backend.set_storage(self.context.contract, index, value)?;
 
@@ -981,10 +983,13 @@ impl<B: Database> Machine<B> {
             code_address: None,
         };
 
-        tracing_event!(super::tracing::Event::BeginVM {
-            context,
-            code: init_code.to_vec()
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::BeginVM {
+                context,
+                code: init_code.to_vec()
+            }
+        );
 
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
         backend.snapshot();
@@ -1028,10 +1033,13 @@ impl<B: Database> Machine<B> {
             code_address: Some(address),
         };
 
-        tracing_event!(super::tracing::Event::BeginVM {
-            context,
-            code: code.to_vec()
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::BeginVM {
+                context,
+                code: code.to_vec()
+            }
+        );
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
         backend.snapshot();
@@ -1074,10 +1082,13 @@ impl<B: Database> Machine<B> {
             code_address: Some(address),
         };
 
-        tracing_event!(super::tracing::Event::BeginVM {
-            context,
-            code: code.to_vec()
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::BeginVM {
+                context,
+                code: code.to_vec()
+            }
+        );
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
         backend.snapshot();
@@ -1112,10 +1123,13 @@ impl<B: Database> Machine<B> {
             ..self.context
         };
 
-        tracing_event!(super::tracing::Event::BeginVM {
-            context,
-            code: code.to_vec()
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::BeginVM {
+                context,
+                code: code.to_vec()
+            }
+        );
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
         backend.snapshot();
@@ -1148,10 +1162,13 @@ impl<B: Database> Machine<B> {
             code_address: Some(address),
         };
 
-        tracing_event!(super::tracing::Event::BeginVM {
-            context,
-            code: code.to_vec()
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::BeginVM {
+                context,
+                code: code.to_vec()
+            }
+        );
 
         self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
         self.is_static = true;
@@ -1213,10 +1230,13 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Return(return_data.to_vec()));
         }
 
-        trace_end_step!(Some(return_data.to_vec()));
-        tracing_event!(super::tracing::Event::EndVM {
-            status: super::ExitStatus::Return(return_data.to_vec())
-        });
+        trace_end_step!(self, Some(return_data.to_vec()));
+        tracing_event!(
+            self,
+            super::tracing::Event::EndVM {
+                status: super::ExitStatus::Return(return_data.to_vec())
+            }
+        );
 
         let returned = self.join();
         match returned.reason {
@@ -1253,10 +1273,13 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Revert(return_data.to_vec()));
         }
 
-        trace_end_step!(Some(return_data.to_vec()));
-        tracing_event!(super::tracing::Event::EndVM {
-            status: super::ExitStatus::Revert(return_data.to_vec())
-        });
+        trace_end_step!(self, Some(return_data.to_vec()));
+        tracing_event!(
+            self,
+            super::tracing::Event::EndVM {
+                status: super::ExitStatus::Revert(return_data.to_vec())
+            }
+        );
 
         let returned = self.join();
         match returned.reason {
@@ -1301,10 +1324,13 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Suicide);
         }
 
-        trace_end_step!(None);
-        tracing_event!(super::tracing::Event::EndVM {
-            status: super::ExitStatus::Suicide
-        });
+        trace_end_step!(self, None);
+        tracing_event!(
+            self,
+            super::tracing::Event::EndVM {
+                status: super::ExitStatus::Suicide
+            }
+        );
 
         let returned = self.join();
         match returned.reason {
@@ -1329,10 +1355,13 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Stop);
         }
 
-        trace_end_step!(None);
-        tracing_event!(super::tracing::Event::EndVM {
-            status: super::ExitStatus::Stop
-        });
+        trace_end_step!(self, None);
+        tracing_event!(
+            self,
+            super::tracing::Event::EndVM {
+                status: super::ExitStatus::Stop
+            }
+        );
 
         let returned = self.join();
         match returned.reason {
