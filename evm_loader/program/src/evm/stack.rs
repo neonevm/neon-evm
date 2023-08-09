@@ -1,12 +1,19 @@
 #![allow(clippy::inline_always)]
 
-use super::tracing_event;
-use crate::{error::Error, types::Address};
-use ethnum::{I256, U256};
 use std::{
     alloc::{GlobalAlloc, Layout},
     convert::TryInto,
 };
+
+use ethnum::{I256, U256};
+
+#[cfg(feature = "tracing")]
+use crate::evm::tracing::event_listener::tracer::TracerType;
+#[cfg(feature = "tracing")]
+use crate::evm::tracing::EventListener;
+use crate::{error::Error, types::Address};
+
+use super::tracing_event;
 
 const ELEMENT_SIZE: usize = 32;
 const STACK_SIZE: usize = ELEMENT_SIZE * 128;
@@ -15,10 +22,12 @@ pub struct Stack {
     begin: *mut u8,
     end: *mut u8,
     top: *mut u8,
+    #[cfg(feature = "tracing")]
+    tracer: TracerType,
 }
 
 impl Stack {
-    pub fn new() -> Self {
+    pub fn new(#[cfg(feature = "tracing")] tracer: TracerType) -> Self {
         let (begin, end) = unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
             let begin = crate::allocator::EVM.alloc(layout);
@@ -35,6 +44,8 @@ impl Stack {
             begin,
             end,
             top: begin,
+            #[cfg(feature = "tracing")]
+            tracer,
         }
     }
 
@@ -61,9 +72,12 @@ impl Stack {
             return Err(Error::StackOverflow);
         }
 
-        tracing_event!(super::tracing::Event::StackPush {
-            value: unsafe { *self.read() }
-        });
+        tracing_event!(
+            self,
+            super::tracing::Event::StackPush {
+                value: unsafe { *self.read() }
+            }
+        );
 
         unsafe {
             self.top = self.top.add(32);
@@ -303,7 +317,10 @@ impl<'de> serde::Deserialize<'de> for Stack {
                     return Err(E::invalid_length(v.len(), &self));
                 }
 
-                let mut stack = Stack::new();
+                let mut stack = Stack::new(
+                    #[cfg(feature = "tracing")]
+                    None,
+                );
                 unsafe {
                     stack.top = stack.begin.add(v.len());
 

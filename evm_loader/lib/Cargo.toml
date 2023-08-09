@@ -22,12 +22,12 @@ hex = "0.4.2"
 serde = "1.0.147"
 log = "0.4.17"
 rand = "0.8"
-ethnum = { version = "1", default_features = false, features = [ "serde" ] }
+ethnum = { version = "1", default_features = false, features = ["serde"] }
 goblin = { version = "0.6.0" }
 scroll = "0.11.0"
 tokio = { version = "1", features = ["full"] }
 postgres = { version = "0.19", features = ["with-chrono-0_4", "array-impls"] }
-tokio-postgres = {version="0.7", features=["with-uuid-0_8"]}
+tokio-postgres = { version = "0.7", features = ["with-uuid-0_8"] }
 lazy_static = "1.4"
 clickhouse = "0.11.5"
 tracing = "0.1"

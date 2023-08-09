@@ -1,7 +1,12 @@
-use log::{debug, info};
 use std::fmt::{Display, Formatter};
 
 use ethnum::U256;
+use log::{debug, info};
+use serde::{Deserialize, Serialize};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+
+use evm_loader::evm::tracing::event_listener::trace::TraceCallConfig;
+use evm_loader::evm::tracing::event_listener::tracer::TracerType;
 use evm_loader::{
     account_storage::AccountStorage,
     config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE},
@@ -10,18 +15,15 @@ use evm_loader::{
     gasometer::LAMPORTS_PER_SIGNATURE,
     types::{Address, Transaction},
 };
-use serde::{Deserialize, Serialize};
 
-use crate::types::block;
+use crate::types::{block, TxParams};
 use crate::{
     account_storage::{EmulatorAccountStorage, NeonAccount, SolanaAccount},
     errors::NeonError,
     rpc::Rpc,
     syscall_stubs::Stubs,
-    types::{trace::TraceCallConfig, TxParams},
     NeonResult,
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmulationResult {
@@ -119,6 +121,7 @@ pub async fn execute(
         accounts,
         solana_accounts,
         trace_call_config,
+        None,
     )
     .await?;
     let accounts = block(storage.accounts.read()).values().cloned().collect();
@@ -147,6 +150,7 @@ pub(crate) async fn emulate_transaction<'a>(
     accounts: &[Address],
     solana_accounts: &[Pubkey],
     trace_call_config: TraceCallConfig,
+    tracer: TracerType,
 ) -> Result<(EmulationResult, EmulatorAccountStorage<'a>), NeonError> {
     setup_syscall_stubs(rpc_client).await?;
 
@@ -163,7 +167,7 @@ pub(crate) async fn emulate_transaction<'a>(
     )
     .await?;
 
-    emulate_trx(tx_params, &storage, chain_id, step_limit)
+    emulate_trx(tx_params, &storage, chain_id, step_limit, tracer)
         .await
         .map(move |result| (result, storage))
 }
@@ -173,6 +177,7 @@ pub(crate) async fn emulate_trx<'a>(
     storage: &'a EmulatorAccountStorage<'a>,
     chain_id: u64,
     step_limit: u64,
+    tracer: TracerType,
 ) -> Result<EmulationResult, NeonError> {
     let (exit_status, actions, steps_executed) = {
         let mut backend = ExecutorState::new(storage);
@@ -188,7 +193,7 @@ pub(crate) async fn emulate_trx<'a>(
             chain_id: Some(chain_id.into()),
             ..Transaction::default()
         };
-        let mut evm = Machine::new(trx, tx_params.from, &mut backend)?;
+        let mut evm = Machine::new(trx, tx_params.from, &mut backend, tracer)?;
 
         let (result, steps_executed) = evm.execute(step_limit, &mut backend)?;
         if result == ExitStatus::StepLimit {

@@ -1,18 +1,20 @@
+use std::fmt::{Display, Formatter};
+use std::sync::{Arc, RwLock};
+
+use serde::{Deserialize, Serialize};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+
+use evm_loader::evm::tracing::event_listener::trace::{TraceCallConfig, TraceConfig, TracedCall};
+use evm_loader::evm::tracing::event_listener::tracer::Tracer;
+use evm_loader::types::Address;
+
 use crate::{
     account_storage::EmulatorAccountStorage,
     commands::emulate::{emulate_transaction, emulate_trx, setup_syscall_stubs},
     errors::NeonError,
-    event_listener::tracer::Tracer,
     rpc::Rpc,
-    types::{
-        trace::{TraceCallConfig, TraceConfig, TracedCall},
-        TxParams,
-    },
+    types::TxParams,
 };
-use evm_loader::types::Address;
-use serde::{Deserialize, Serialize};
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
-use std::fmt::{Display, Formatter};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn trace_transaction(
@@ -27,26 +29,31 @@ pub async fn trace_transaction(
     solana_accounts: &[Pubkey],
     trace_call_config: TraceCallConfig,
 ) -> Result<TracedCall, NeonError> {
-    let mut tracer = Tracer::new(trace_call_config.trace_config.enable_return_data);
+    let tracer = Arc::new(RwLock::new(Some(Tracer::new(
+        trace_call_config.trace_config.enable_return_data,
+    ))));
 
-    let (emulation_result, _storage) = evm_loader::evm::tracing::using(&mut tracer, || async {
-        emulate_transaction(
-            rpc_client,
-            evm_loader,
-            tx,
-            token,
-            chain_id,
-            steps,
-            commitment,
-            accounts,
-            solana_accounts,
-            trace_call_config,
-        )
-        .await
-    })
+    let (emulation_result, _storage) = emulate_transaction(
+        rpc_client,
+        evm_loader,
+        tx,
+        token,
+        chain_id,
+        steps,
+        commitment,
+        accounts,
+        solana_accounts,
+        trace_call_config,
+        Some(tracer.clone()),
+    )
     .await?;
 
-    let (vm_trace, full_trace_data) = tracer.into_traces();
+    let (vm_trace, full_trace_data) = tracer
+        .write()
+        .expect("lock acquire should be successful")
+        .take()
+        .expect("Option should not be empty")
+        .into_traces();
 
     Ok(TracedCall {
         vm_trace,
@@ -110,14 +117,19 @@ async fn trace_trx<'a>(
     steps: u64,
     trace_config: &TraceConfig,
 ) -> Result<TracedCall, NeonError> {
-    let mut tracer = Tracer::new(trace_config.enable_return_data);
+    let tracer = Arc::new(RwLock::new(Some(Tracer::new(
+        trace_config.enable_return_data,
+    ))));
 
-    let emulation_result = evm_loader::evm::tracing::using(&mut tracer, || {
-        emulate_trx(tx_params, storage, chain_id, steps)
-    })
-    .await?;
+    let emulation_result =
+        emulate_trx(tx_params, storage, chain_id, steps, Some(tracer.clone())).await?;
 
-    let (vm_trace, full_trace_data) = tracer.into_traces();
+    let (vm_trace, full_trace_data) = tracer
+        .write()
+        .expect("lock acquire should be successful")
+        .take()
+        .expect("Option should not be empty")
+        .into_traces();
 
     Ok(TracedCall {
         vm_trace,

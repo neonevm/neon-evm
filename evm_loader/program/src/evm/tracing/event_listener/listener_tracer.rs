@@ -1,5 +1,5 @@
 use super::tracer::Tracer;
-use crate::types::trace::FullTraceData;
+use crate::evm::tracing::event_listener::trace::FullTraceData;
 
 pub trait ListenerTracer {
     fn begin_step(&mut self, stack: Vec<[u8; 32]>, memory: Vec<u8>);

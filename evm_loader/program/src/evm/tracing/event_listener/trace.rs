@@ -1,7 +1,9 @@
-use evm_loader::{account::EthereumAccount, types::Address};
+use crate::account::EthereumAccount;
+use crate::types::hexbytes::HexBytes;
+use crate::types::Address;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use {crate::types::Bytes, ethnum::U256, std::collections::HashMap};
+use {ethnum::U256, std::collections::HashMap};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some chunk of memory.
@@ -9,7 +11,7 @@ pub struct MemoryDiff {
     /// Offset into memory the change begins.
     pub offset: usize,
     /// The changed data.
-    pub data: Bytes,
+    pub data: HexBytes,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
@@ -58,7 +60,7 @@ pub struct VMTrace {
     /// The step (i.e. index into operations) at which this trace corresponds.
     pub parent_step: usize,
     /// The code to be executed.
-    pub code: Bytes,
+    pub code: HexBytes,
     /// The operations executed.
     pub operations: Vec<VMOperation>,
     /// The sub traces for each interior action performed as part of this call/create.
@@ -90,11 +92,12 @@ pub struct ExecutiveVMTracer {
 
 impl ExecutiveVMTracer {
     /// Create a new top-level instance.
+    #[must_use]
     pub fn toplevel() -> Self {
         ExecutiveVMTracer {
             data: VMTrace {
                 parent_step: 0,
-                code: Bytes::default(),
+                code: HexBytes::default(),
                 operations: vec![VMOperation::default()], // prefill with a single entry so that prepare_subtrace can get the parent_step
                 subs: vec![],
             },
@@ -243,7 +246,7 @@ pub struct BlockOverrides {
 #[serde(rename_all = "camelCase")]
 pub struct AccountOverride {
     pub nonce: Option<u64>,
-    pub code: Option<Bytes>,
+    pub code: Option<HexBytes>,
     pub balance: Option<U256>,
     pub state: Option<HashMap<U256, U256>>,
     pub state_diff: Option<HashMap<U256, U256>>,
