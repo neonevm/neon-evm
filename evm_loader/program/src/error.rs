@@ -145,6 +145,54 @@ pub enum Error {
 
     #[error("Holder Account - invalid transaction hash {}, expected = {}", hex::encode(.0), hex::encode(.1))]
     HolderInvalidHash([u8; 32], [u8; 32]),
+
+    #[error("Unexpected end of file")]
+    UnexpectedEndOfFile,
+
+    #[error("Invalid magic: want 0xEF00")]
+    InvalidMagic,
+
+    #[error("Invalid version: have {0}, want 1")]
+    InvalidVersion(u8),
+
+    #[error("Missing section header: found section kind {:?} instead of {:?}", .0, .1)]
+    MissingSectionHeader(u8, u8),
+
+    #[error("Invalid type section size: type section size must be divisible by 4, have {0}")]
+    InvalidTypeSizeMustBeDivisibleBy4(u16),
+
+    #[error("Invalid type section size: type section must not exceed 4*1024, have {0}")]
+    InvalidTypeSizeExceed(u16),
+
+    #[error("Invalid code header")]
+    InvalidCodeHeader,
+
+    #[error("Invalid code size: mismatch of code sections cound and type signatures, types {0}, code {1}")]
+    MismatchCodeSize(usize, usize),
+
+    #[error("Invalid code size for section {0}: size must not be 0")]
+    InvalidCodeSize(usize),
+
+    #[error("Missing header terminator: have ({:#x?})", .0)]
+    MissingTerminator(u8),
+
+    #[error("Invalid type content, too many inputs for section {0}: have {1}")]
+    TooManyInputs(u8, u8),
+
+    #[error("Invalid type content, too many outputs for section {0}: have {1}")]
+    TooManyOutputs(u8, u8),
+
+    #[error("Invalid type content, max stack height exceeds limit for section {0}: have {1}")]
+    TooLargeMaxStackHeight(u8, u8),
+
+    #[error("Invalid section 0 type, input and output should be zero: have {0}, {1}")]
+    InvalidSection0Type(u8, u8),
+
+    #[error("Invalid container size: have {0}, want {1}")]
+    InvalidContainerSize(usize, usize),
+
+    #[error("Unknown section header ({:#x?})", .0)]
+    UnknownSectionHeader(u8),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -16,6 +16,7 @@ use crate::{
 
 mod buffer;
 pub mod database;
+mod eof;
 mod memory;
 mod opcode;
 mod opcode_table;
