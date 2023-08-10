@@ -1,5 +1,6 @@
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
+use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
 use super::{database::Database, tracing_event, Context, Machine, Reason};
@@ -8,6 +9,14 @@ use crate::{
     evm::{trace_end_step, Buffer},
     types::Address,
 };
+use crate::evm::opcode::Action::Jump;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct ReturnContext {
+    pub section: usize,
+    pub pc: usize,
+    pub stack_height: usize,
+}
 
 #[derive(Eq, PartialEq)]
 pub enum Action {
@@ -816,16 +825,31 @@ impl<B: Database> Machine<B> {
         Ok(Action::Continue)
     }
 
+    /// move pc past op and operand (+3), add relative offset, subtract 1 to
+    /// account for interpreter loop.
     pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
-        unimplemented!()
+        let offset = self.execution_code.get_i16_or_default(self.pc + 1);
+        Ok(Action::Jump(((self.pc + 3) as isize + offset as isize - 1) as usize))
     }
 
     pub fn opcode_rjumpi(&mut self, _backend: &mut B) -> Result<Action> {
-        unimplemented!()
+        let condition = self.stack.pop_u256()?;
+        if condition == U256::ZERO {
+            // Not branching, just skip over immediate argument.
+            Ok(Action::Jump(self.pc + 2))
+        } else {
+            self.opcode_rjump(_backend)
+        }
     }
 
     pub fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
-        unimplemented!()
+        let count = self.execution_code.get_or_default(self.pc + 1) as usize;
+        let idx = self.stack.pop_u256()?;
+        if idx > U256::new(u64::MAX as u128) || idx > U256::new(count as u128) {
+            return Ok(Action::Jump(self.pc + 1 + count * 2));
+        }
+        let offset = self.execution_code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
+        return Ok(Action::Jump(((self.pc + 2 + count * 2) as isize + offset as isize - 1) as usize));
     }
 
     /// Place zero on stack
@@ -838,11 +862,12 @@ impl<B: Database> Machine<B> {
     /// Place 1 byte item on stack
     /// ~50% of contract bytecode are PUSH opcodes
     pub fn opcode_push_1(&mut self, _backend: &mut B) -> Result<Action> {
-        if self.execution_code.len() <= self.pc + 1 {
+        let code = self.get_code();
+        if code.len() <= self.pc + 1 {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
-        let value = unsafe { *self.execution_code.get_unchecked(self.pc + 1) };
+        let value = unsafe { *code.get_unchecked(self.pc + 1) };
 
         self.stack.push_byte(value)?;
 
@@ -851,12 +876,13 @@ impl<B: Database> Machine<B> {
 
     /// Place 2-31 byte item on stack.
     pub fn opcode_push_2_31<const N: usize>(&mut self, _backend: &mut B) -> Result<Action> {
-        if self.execution_code.len() <= self.pc + 1 + N {
+        let code = self.get_code();
+        if code.len() <= self.pc + 1 + N {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
         let value = unsafe {
-            let ptr = self.execution_code.as_ptr().add(self.pc + 1);
+            let ptr = code.as_ptr().add(self.pc + 1);
             &*ptr.cast::<[u8; N]>()
         };
 
@@ -867,12 +893,13 @@ impl<B: Database> Machine<B> {
 
     /// Place 32 byte item on stack
     pub fn opcode_push_32(&mut self, _backend: &mut B) -> Result<Action> {
-        if self.execution_code.len() <= self.pc + 1 + 32 {
+        let code = self.get_code();
+        if code.len() <= self.pc + 1 + 32 {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
         let value = unsafe {
-            let ptr = self.execution_code.as_ptr().add(self.pc + 1);
+            let ptr = code.as_ptr().add(self.pc + 1);
             &*ptr.cast::<[u8; 32]>()
         };
 
@@ -919,10 +946,10 @@ impl<B: Database> Machine<B> {
         let address = self.context.contract.as_bytes();
 
         match N {
-            0 => sol_log_data(&[b"LOG0", address, &[0], data]),                                                
-            1 => sol_log_data(&[b"LOG1", address, &[1], &topics[0], data]),                                    
-            2 => sol_log_data(&[b"LOG2", address, &[2], &topics[0], &topics[1], data]),                        
-            3 => sol_log_data(&[b"LOG3", address, &[3], &topics[0], &topics[1], &topics[2], data]),            
+            0 => sol_log_data(&[b"LOG0", address, &[0], data]),
+            1 => sol_log_data(&[b"LOG1", address, &[1], &topics[0], data]),
+            2 => sol_log_data(&[b"LOG2", address, &[2], &topics[0], &topics[1], data]),
+            3 => sol_log_data(&[b"LOG3", address, &[3], &topics[0], &topics[1], &topics[2], data]),
             4 => sol_log_data(&[b"LOG4", address, &[4], &topics[0], &topics[1], &topics[2], &topics[3], data]),
             _ => unreachable!(),
         }
@@ -931,11 +958,37 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
-        unimplemented!()
+        let code = self.get_code();
+        let idx = code.get_u16_or_default(self.pc + 1);
+        let typ = &self.container.as_ref().unwrap().types[idx as usize]; //TODO: remove unwrap
+
+        if self.stack.len() + typ.max_stack_height as usize >= 1024 {
+            return Err(Error::StackOverflow);
+        }
+
+        let ret_ctx = ReturnContext {
+            section: self.code_section,
+            pc: self.pc + 3,
+            stack_height: self.stack.len() - typ.input as usize,
+        };
+
+        self.return_stack.push(ret_ctx);
+        self.code_section = idx as usize;
+
+        Ok(Action::Jump(0)) //TODO check 0 or -1
     }
 
     pub fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
-        unimplemented!()
+        let ret_ctx = self.return_stack.pop().unwrap(); //TODO: remove unwrap
+
+
+        self.code_section = ret_ctx.section;
+        // If returning from top frame, exit cleanly.
+        if self.return_stack.is_empty() {
+            return Ok(Action::Stop);
+        }
+
+        Ok(Jump(ret_ctx.pc - 1))
     }
 
     /// Create a new account with associated code.

@@ -74,6 +74,8 @@ macro_rules! trace_end_step {
 
 pub(crate) use trace_end_step;
 pub(crate) use tracing_event;
+use crate::evm::eof::Container;
+use crate::evm::opcode::ReturnContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ExitStatus {
@@ -112,6 +114,7 @@ pub struct Machine<B: Database> {
     gas_limit: U256,
 
     execution_code: Buffer,
+    container: Option<Container>,
     call_data: Buffer,
     return_data: Buffer,
     return_range: Range<usize>,
@@ -119,6 +122,8 @@ pub struct Machine<B: Database> {
     stack: stack::Stack,
     memory: memory::Memory,
     pc: usize,
+    code_section: usize,
+    return_stack: Vec<ReturnContext>,
 
     is_static: bool,
     reason: Reason,
@@ -221,12 +226,15 @@ impl<B: Database> Machine<B> {
             gas_price: trx.gas_price,
             gas_limit: trx.gas_limit,
             execution_code,
+            container: None, // TODO: set if need
             call_data: trx.call_data,
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
+            code_section: 0, // TODO: set if need
+            return_stack: vec![],
             is_static: false,
             reason: Reason::Call,
             parent: None,
@@ -265,9 +273,12 @@ impl<B: Database> Machine<B> {
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
+            code_section: 0_usize, // TODO: set if need
+            return_stack: vec![], // TODO: set if need
             is_static: false,
             reason: Reason::Create,
             execution_code: trx.call_data,
+            container: None, // TODO: set if need
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,
@@ -343,6 +354,17 @@ impl<B: Database> Machine<B> {
         Ok((status, step))
     }
 
+    pub fn get_code(&self) -> &Buffer {
+        self.code_at(self.code_section)
+    }
+
+    pub fn code_at(&self, code_section: usize) -> &Buffer {
+        match &self.container {
+            Some(container) => &container.code[code_section],
+            None => &self.execution_code
+        }
+    }
+
     fn fork(
         &mut self,
         reason: Reason,
@@ -357,12 +379,15 @@ impl<B: Database> Machine<B> {
             gas_price: self.gas_price,
             gas_limit: gas_limit.unwrap_or(self.gas_limit),
             execution_code,
+            container: None, // TODO: set if need
             call_data,
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
+            code_section: 0, // TODO: set if need
+            return_stack: vec![], // TODO: set if need
             is_static: self.is_static,
             reason,
             parent: None,
