@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 
 use thiserror::Error;
 
+use super::Buffer;
 use crate::error::{Error, Result};
 
 pub const OFFSET_VERSION: u8 = 2;
@@ -16,11 +17,11 @@ pub const EOF_MAGIC: [u8; 2] = [0xef, 0x00];
 const HEADER_LEN_WITHOUT_TERMINATOR: usize = 14;
 const SECTION_LEN: usize = 3;
 
-fn u16_from_slice(source: &Vec<u8>, from: usize) -> u16 {
+fn u16_from_slice(source: &Buffer, from: usize) -> u16 {
     u16::from_be_bytes(*arrayref::array_ref![source, from, 2])
 }
 
-fn assert_eof_version_1(bytes: &Vec<u8>) -> Result<()> {
+fn assert_eof_version_1(bytes: &Buffer) -> Result<()> {
     if 2 < bytes.len() && bytes[2] == EOF1_VERSION {
         return Ok(());
     }
@@ -28,11 +29,11 @@ fn assert_eof_version_1(bytes: &Vec<u8>) -> Result<()> {
     Err(Error::InvalidVersion(bytes[2]))
 }
 
-pub fn has_eof_byte(bytes: &Vec<u8>) -> bool {
+pub fn has_eof_byte(bytes: &Buffer) -> bool {
     bytes.len() != 0 && bytes[0] == EOF_FORMAT_BYTE
 }
 
-pub fn has_eof_magic(bytes: &Vec<u8>) -> bool {
+pub fn has_eof_magic(bytes: &Buffer) -> bool {
     EOF_MAGIC.len() <= bytes.len() && bytes.starts_with(&EOF_MAGIC)
 }
 
@@ -91,7 +92,7 @@ pub struct Section {
 
 impl Section {
     /// parse_section decodes a (kind, size) [pair][Section] from an EOF header.
-    fn parse(bytes: &Vec<u8>, idx: usize) -> Result<Self> {
+    fn parse(bytes: &Buffer, idx: usize) -> Result<Self> {
         if idx + SECTION_LEN >= bytes.len() {
             return Err(Error::UnexpectedEndOfFile);
         }
@@ -111,7 +112,7 @@ pub struct SectionList {
 
 impl SectionList {
     /// parse_section_list decodes a (kind, len, []codeSize) [section list][SectionList] from an EOF header.
-    fn parse(bytes: &Vec<u8>, idx: usize) -> Result<Self> {
+    fn parse(bytes: &Buffer, idx: usize) -> Result<Self> {
         if idx >= bytes.len() {
             return Err(Error::UnexpectedEndOfFile);
         }
@@ -123,7 +124,7 @@ impl SectionList {
     }
 
     // parse_list decodes a list of u16..
-    fn parse_list(bytes: &Vec<u8>, idx: usize) -> Result<Vec<u16>> {
+    fn parse_list(bytes: &Buffer, idx: usize) -> Result<Vec<u16>> {
         if bytes.len() < idx + 2 {
             return Err(Error::UnexpectedEndOfFile);
         }
@@ -180,7 +181,7 @@ impl TryFrom<u8> for SectionKind {
 
 impl Container {
     /// marshal_binary encodes an EOF [Container] into binary format.
-    pub fn marshal_binary(&self) -> Vec<u8> {
+    pub fn marshal_binary(&self) -> Buffer {
         let mut bytes = Vec::from(EOF_MAGIC);
 
         bytes.push(EOF1_VERSION);
@@ -217,11 +218,11 @@ impl Container {
         bytes.extend(self.code.clone().into_iter().flatten());
         bytes.extend(self.data.clone());
 
-        bytes
+        Buffer::from_slice(&bytes)
     }
 
     /// unmarshal_binary decodes an EOF [Container].
-    pub fn unmarshal_binary(bytes: &Vec<u8>) -> Result<Self> {
+    pub fn unmarshal_binary(bytes: &Buffer) -> Result<Self> {
         if !has_eof_magic(bytes) {
             return Err(Error::InvalidMagic);
         }
@@ -382,7 +383,7 @@ mod tests {
         let expected_bytes = Vec::from(BYTES_WITH_EMPTY_DATA);
         let container = get_container_with_empty_data();
 
-        let bytes = container.marshal_binary();
+        let bytes = container.marshal_binary().to_vec();
 
         assert_eq!(bytes.len(), expected_bytes.len());
         assert_eq!(bytes, expected_bytes);
@@ -393,7 +394,7 @@ mod tests {
         let expected_bytes = Vec::from(BYTES_WITH_DATA);
         let container = get_container_with_data();
 
-        let bytes = container.marshal_binary();
+        let bytes = container.marshal_binary().to_vec();
 
         assert_eq!(bytes.len(), expected_bytes.len());
         assert_eq!(bytes, expected_bytes);
@@ -401,7 +402,7 @@ mod tests {
 
     #[test]
     fn unmarshal_binary_with_data() {
-        let bytes = Vec::from(BYTES_WITH_DATA);
+        let bytes = Buffer::from_slice(BYTES_WITH_DATA);
         let expected_container = get_container_with_data();
 
         let container = Container::unmarshal_binary(&bytes).unwrap();
@@ -411,7 +412,7 @@ mod tests {
 
     #[test]
     fn unmarshal_binary_with_empty_data() {
-        let bytes = Vec::from(BYTES_WITH_EMPTY_DATA);
+        let bytes = Buffer::from_slice(BYTES_WITH_EMPTY_DATA);
         let expected_container = get_container_with_empty_data();
 
         let container = Container::unmarshal_binary(&bytes).unwrap();
@@ -422,7 +423,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "InvalidMagic")]
     fn unmarshal_binary_without_magic() {
-        let bytes = Vec::from(&BYTES_WITH_EMPTY_DATA[2..]);
+        let bytes = Buffer::from_slice(&BYTES_WITH_EMPTY_DATA[2..]);
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
@@ -430,7 +431,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "UnexpectedEndOfFile")]
     fn unmarshal_binary_when_lenght_is_less_than_14() {
-        let bytes = Vec::from(&BYTES_WITH_EMPTY_DATA[..6]);
+        let bytes = Buffer::from_slice(&BYTES_WITH_EMPTY_DATA[..6]);
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
@@ -438,8 +439,11 @@ mod tests {
     #[test]
     #[should_panic(expected = "InvalidVersion")]
     fn unmarshal_binary_with_invalid_version() {
-        let mut bytes = Vec::from(BYTES_WITH_EMPTY_DATA);
+        let mut bytes = Vec::from(BYTES_WITH_DATA);
+
         bytes[2] = 100;
+
+        let bytes = Buffer::from_slice(&bytes);
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
@@ -451,6 +455,8 @@ mod tests {
         // type section kind
         bytes[3] = 15;
 
+        let bytes = Buffer::from_slice(&bytes);
+
         Container::unmarshal_binary(&bytes).unwrap();
     }
 
@@ -460,6 +466,8 @@ mod tests {
         let mut bytes = Vec::from(BYTES_WITH_DATA);
         // type section kind
         bytes[3] = SectionKind::Data as u8;
+
+        let bytes = Buffer::from_slice(&bytes);
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
@@ -475,6 +483,8 @@ mod tests {
         bytes[4] = new_size[0];
         bytes[5] = new_size[1];
 
+        let bytes = Buffer::from_slice(&bytes);
+
         Container::unmarshal_binary(&bytes).unwrap();
     }
 
@@ -484,10 +494,11 @@ mod tests {
         let mut bytes = Vec::from(BYTES_WITH_DATA);
 
         let new_size = (1024u16 * 5).to_be_bytes();
-
         // type section size bytes
         bytes[4] = new_size[0];
         bytes[5] = new_size[1];
+
+        let bytes = Buffer::from_slice(&bytes);
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
@@ -496,12 +507,13 @@ mod tests {
     #[should_panic(expected = "MismatchCodeSize(514, 1)")]
     fn unmarshal_binary_with_mismatched_code_size() {
         let mut bytes = Vec::from(BYTES_WITH_DATA);
-
         let new_size = (513u16 * 4 + 4).to_be_bytes();
 
         // type section size bytes
         bytes[4] = new_size[0];
         bytes[5] = new_size[1];
+
+        let bytes = Buffer::from_slice(&bytes);
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
@@ -514,15 +526,15 @@ mod tests {
         // terminator
         bytes[14] = 1;
 
+        let bytes = Buffer::from_slice(&bytes);
+
         Container::unmarshal_binary(&bytes).unwrap();
     }
 
     #[test]
     #[should_panic(expected = "InvalidContainerSize(26, 25)")]
     fn unmarshal_binary_with_invalid_container_size() {
-        let mut bytes = Vec::from(BYTES_WITH_DATA);
-
-        bytes.push(5);
+        let mut bytes = Buffer::from_slice(&[BYTES_WITH_DATA, &[5u8]].concat());
 
         Container::unmarshal_binary(&bytes).unwrap();
     }
