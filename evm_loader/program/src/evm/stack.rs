@@ -9,7 +9,7 @@ use std::{
 };
 
 const ELEMENT_SIZE: usize = 32;
-const STACK_SIZE: usize = ELEMENT_SIZE * 128;
+pub const STACK_SIZE: usize = ELEMENT_SIZE * 128;
 
 pub struct Stack {
     begin: *mut u8,

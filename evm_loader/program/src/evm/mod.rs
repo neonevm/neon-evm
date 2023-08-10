@@ -14,8 +14,10 @@ use crate::{
     types::{Address, Transaction},
 };
 
+mod analysis;
 mod buffer;
 pub mod database;
+mod eof;
 mod memory;
 mod opcode;
 mod opcode_table;
@@ -24,6 +26,7 @@ mod stack;
 #[cfg(feature = "tracing")]
 pub mod tracing;
 mod utils;
+mod validate;
 
 use self::{database::Database, memory::Memory, stack::Stack};
 pub use buffer::Buffer;

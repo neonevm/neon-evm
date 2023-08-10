@@ -145,6 +145,42 @@ pub enum Error {
 
     #[error("Holder Account - invalid transaction hash {}, expected = {}", hex::encode(.0), hex::encode(.1))]
     HolderInvalidHash([u8; 32], [u8; 32]),
+
+    #[error("EVM jump table size missing, contract = {0}, offset = {1}")]
+    JumpTableSizeMissing(Address, usize),
+
+    #[error("EVM branch count must not be 0, contract = {0}, offset = {1}")]
+    InvalidBranchCount(Address, usize),
+
+    #[error("EVM jump table truncated, contract = {0}, offset = {1}")]
+    JumpTableTruncated(Address, usize),
+
+    #[error("EVM truncated immediate, opcode = {1:X}, offset = {0}")]
+    TruncatedImmediate(u8, usize),
+
+    #[error("EVM invalid section argument, arg {0}, last {1}, pos {2}")]
+    InvalidSectionArgument(u16, usize, usize),
+
+    #[error("EVM invalid code termination, opcode {0:X}, pos {1}")]
+    InvalidCodeTermination(u8, usize),
+
+    #[error("EVM unreachable code")]
+    UnreachableCode,
+
+    #[error("EVM unexpected EOF")]
+    UnexpectedEOF,
+
+    #[error("EVM conflict stack, have {0}, want {1}")]
+    ConflictingStack(usize, usize),
+
+    #[error("Opcode not supported, opcode {0:X}")]
+    UnsupportedOpcode(u8),
+
+    #[error("EVM: invalid number of outputs, have {0}, want {1}, at pos {2}")]
+    InvalidOutputs(u8, usize, usize),
+
+    #[error("EVM: invalid max stack height, section {0}: have {1}, want {2}")]
+    InvalidMaxStackHeight(usize, usize, usize)
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

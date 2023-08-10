@@ -118,6 +118,18 @@ impl Buffer {
             0
         }
     }
+
+    #[inline]
+    #[must_use]
+    pub fn get_u16_or_default(&self, index: usize) -> u16 {
+        u16::from_be_bytes([self.get_or_default(index), self.get_or_default(index + 1)])
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn get_i16_or_default(&self, index: usize) -> i16 {
+        i16::from_be_bytes([self.get_or_default(index), self.get_or_default(index + 1)])
+    }
 }
 
 impl Drop for Buffer {

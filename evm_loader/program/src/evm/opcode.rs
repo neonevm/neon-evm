@@ -816,6 +816,18 @@ impl<B: Database> Machine<B> {
         Ok(Action::Continue)
     }
 
+    pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
+        unimplemented!()
+    }
+
+    pub fn opcode_rjumpi(&mut self, _backend: &mut B) -> Result<Action> {
+        unimplemented!()
+    }
+
+    pub fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
+        unimplemented!()
+    }
+
     /// Place zero on stack
     pub fn opcode_push_0(&mut self, _backend: &mut B) -> Result<Action> {
         self.stack.push_zero()?;
@@ -916,6 +928,14 @@ impl<B: Database> Machine<B> {
         }
 
         Ok(Action::Continue)
+    }
+
+    pub fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
+        unimplemented!()
+    }
+
+    pub fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
+        unimplemented!()
     }
 
     /// Create a new account with associated code.
