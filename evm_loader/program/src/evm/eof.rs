@@ -289,7 +289,6 @@ impl Container {
 
         let types = (0..type_section_size)
             .map(|section_index| {
-                let section_index = section_index as usize;
                 let signature = FunctionMetadata {
                     input: bytes[idx + section_index * 4],
                     output: bytes[idx + section_index * 4 + 1],
