@@ -41,8 +41,8 @@ pub fn has_eof_magic(bytes: &Buffer) -> bool {
 #[derive(Debug, PartialEq)]
 pub struct Container {
     pub types: Vec<FunctionMetadata>,
-    pub code: Vec<Vec<u8>>,
-    pub data: Vec<u8>,
+    pub code: Vec<Buffer>,
+    pub data: Buffer,
 }
 
 /// FunctionMetadata is an EOF function signature.
@@ -215,8 +215,9 @@ impl Container {
             .collect::<Vec<_>>();
 
         bytes.extend(type_section_content);
-        bytes.extend(self.code.clone().into_iter().flatten());
-        bytes.extend(self.data.clone());
+
+        bytes.extend(self.code.clone().iter().map(|buf| buf.to_vec()).flatten());
+        bytes.extend(self.data.to_vec());
 
         Buffer::from_slice(&bytes)
     }
@@ -319,7 +320,12 @@ impl Container {
             idx += size;
         }
 
-        let data = Vec::from(&bytes[idx..idx + (data_section.size as usize)]);
+        let data = Buffer::from_slice(&bytes[idx..idx + (data_section.size as usize)]);
+
+        let code = code
+            .iter()
+            .map(|v| Buffer::from_slice(&v))
+            .collect::<Vec<_>>();
 
         Ok(Container { code, data, types })
     }
@@ -345,8 +351,8 @@ mod tests {
                 output: 0,
                 max_stack_height: 1,
             }],
-            code: vec![hex::decode("604200").unwrap()],
-            data: vec![0x01, 0x02, 0x03],
+            code: vec![Buffer::from_slice(&hex::decode("604200").unwrap())],
+            data: Buffer::from_slice(&[0x01, 0x02, 0x03]),
         }
     }
 
@@ -370,11 +376,11 @@ mod tests {
                 },
             ],
             code: vec![
-                hex::decode("604200").unwrap(),
-                hex::decode("6042604200").unwrap(),
-                hex::decode("00").unwrap(),
+                Buffer::from_slice(&hex::decode("604200").unwrap()),
+                Buffer::from_slice(&hex::decode("6042604200").unwrap()),
+                Buffer::from_slice(&hex::decode("00").unwrap()),
             ],
-            data: Vec::default(),
+            data: Buffer::empty(),
         }
     }
 
