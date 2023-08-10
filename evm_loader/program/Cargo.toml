@@ -34,7 +34,7 @@ test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
 
-tracing = ["serde_json"]
+library = ["serde_json", "maybe-async", "async-trait"]
 
 [dependencies]
 linked_list_allocator = { version = "0.10", default_features = false }
@@ -58,6 +58,8 @@ ethnum = { version = "1", default_features = false, features = ["serde"] }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
+maybe-async = { version = "0.2.7", optional = true }
+async-trait = { version = "0.1.72", optional = true }
 
 [lib]
 crate-type = ["cdylib", "lib"]

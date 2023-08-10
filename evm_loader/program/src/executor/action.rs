@@ -167,6 +167,7 @@ mod tests {
         let _deserialized: Action = bincode::deserialize(&serialized).unwrap();
     }
 
+    #[cfg(feature = "library")]
     #[test]
     fn roundtrip_json() {
         let action = Action::EvmSetStorage {

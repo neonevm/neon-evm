@@ -8,7 +8,6 @@ RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_BPF_VERSION}"/insta
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-
 # Build evm_loader
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
@@ -16,15 +15,23 @@ WORKDIR /opt/evm_loader
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo fmt --check && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features devnet,maybe-async/is_sync && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features testnet,maybe-async/is_sync && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features govertest,maybe-async/is_sync && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features govertest,emergency,maybe-async/is_sync && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features mainnet,maybe-async/is_sync && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features mainnet,emergency,maybe-async/is_sync && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet-emergency.so && \
+    cargo build-sbf --manifest-path program/Cargo.toml --arch bpf --features ci,maybe-async/is_sync --dump
+
+# Build neon-api and neon-cli
+FROM solanalabs/rust:1.65.0 AS neon-api-cli-builder
+COPY ./evm_loader/ /opt/evm_loader/
+WORKDIR /opt/evm_loader
+ARG REVISION
+ENV NEON_REVISION=${REVISION}
+RUN cargo fmt --check && \
     cargo clippy --release && \
-    cargo build --release && \
-    cargo build-sbf --arch bpf --features devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
-    cargo build-sbf --arch bpf --features testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
-    cargo build-sbf --arch bpf --features govertest && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
-    cargo build-sbf --arch bpf --features govertest,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
-    cargo build-sbf --arch bpf --features mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
-    cargo build-sbf --arch bpf --features mainnet,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet-emergency.so && \
-    cargo build-sbf --arch bpf --features ci --dump
+    cargo build --release
 
 # Build Solidity contracts
 FROM ethereum/solc:0.8.0 AS solc
@@ -75,8 +82,8 @@ COPY evm_loader/solana-run-neon.sh \
 
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader-dump.txt /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-api /opt/
+COPY --from=neon-api-cli-builder /opt/evm_loader/target/release/neon-cli /opt/
+COPY --from=neon-api-cli-builder /opt/evm_loader/target/release/neon-api /opt/
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc

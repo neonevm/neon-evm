@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
@@ -103,7 +103,7 @@ fn read_keys_dir(keys_dir: &str) -> Result<HashMap<Pubkey, Keypair>, NeonError> 
 #[allow(clippy::too_many_lines)]
 pub async fn execute(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
     send_trx: bool,
     force: bool,
     keys_dir: Option<&str>,
@@ -116,13 +116,13 @@ pub async fn execute(
         send_trx,
         force
     );
-    let second_signer: Arc<dyn Signer> = Arc::from(context.signer()?);
-    let fee_payer = config
-        .fee_payer
-        .as_ref()
-        .map_or_else(move || second_signer, |v| v.clone());
-    let executor = Arc::new(TransactionExecutor::new(
-        context.rpc_client.clone(),
+    let second_signer: &dyn Signer = &*context.signer()?;
+    let fee_payer: &dyn Signer = match config.fee_payer.as_ref() {
+        Some(fee_payer) => fee_payer,
+        None => second_signer,
+    };
+    let executor = Rc::new(TransactionExecutor::new(
+        context.rpc_client,
         fee_payer,
         send_trx,
     ));
@@ -327,8 +327,10 @@ pub async fn execute(
 
     executor.checkpoint(context.rpc_client.commitment()).await?;
 
-    let stats = executor.stats.read().await;
-    info!("Stats: {:?}", stats);
+    {
+        let stats = executor.stats.borrow();
+        info!("Stats: {:?}", stats);
+    }
 
     let signatures = executor
         .signatures
@@ -341,6 +343,8 @@ pub async fn execute(
     let result = InitEnvironmentReturn {
         transactions: signatures,
     };
+
+    let stats = executor.stats.borrow();
 
     if stats.total_objects == stats.corrected_objects {
         Ok(result)

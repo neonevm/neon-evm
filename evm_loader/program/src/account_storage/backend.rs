@@ -4,12 +4,14 @@ use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::OwnedAccountInfo;
 use crate::types::Address;
 use ethnum::U256;
+use maybe_async::maybe_async;
 use solana_program::account_info::AccountInfo;
 use solana_program::{pubkey::Pubkey, sysvar::slot_hashes};
 use std::convert::TryInto;
 
 use super::find_slot_hash;
 
+#[maybe_async(?Send)]
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn neon_token_mint(&self) -> &Pubkey {
         &crate::config::token_mint::ID
@@ -34,7 +36,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             .expect("Timestamp is positive")
     }
 
-    fn block_hash(&self, slot: u64) -> [u8; 32] {
+    async fn block_hash(&self, slot: u64) -> [u8; 32] {
         let slot_hashes_account = self
             .solana_accounts
             .get(&slot_hashes::ID)

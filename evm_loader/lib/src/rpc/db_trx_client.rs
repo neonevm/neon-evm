@@ -46,7 +46,7 @@ impl TrxDbClient {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Rpc for TrxDbClient {
     fn commitment(&self) -> CommitmentConfig {
         CommitmentConfig::default()

@@ -4,11 +4,9 @@ use ethnum::U256;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::account_storage::ProgramAccountStorage;
+use crate::evm::opcode_table::OPCODES;
 use crate::evm::tracing::TraceConfig;
 use crate::evm::tracing::{EmulationResult, Event, EventListener};
-use crate::evm::Machine;
-use crate::executor::ExecutorState;
 use crate::types::hexbytes::HexBytes;
 
 /// `StructLoggerResult` groups all structured logs emitted by the EVM
@@ -68,7 +66,7 @@ impl StructLog {
         stack: Option<Vec<U256>>,
         storage: Option<BTreeMap<U256, U256>>,
     ) -> Self {
-        let (op, _) = Machine::<ExecutorState<ProgramAccountStorage>>::OPCODES[opcode as usize];
+        let op = OPCODES[opcode as usize];
         Self {
             pc,
             op,

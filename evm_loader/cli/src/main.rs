@@ -2,7 +2,6 @@
 #![deny(clippy::all, clippy::pedantic)]
 
 mod config;
-mod context;
 mod logs;
 mod program_options;
 
@@ -17,7 +16,6 @@ use neon_lib::{
 
 use clap::ArgMatches;
 pub use config::Config;
-pub use context::Context;
 use std::io::Read;
 
 use ethnum::U256;
@@ -28,8 +26,13 @@ use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
-use std::sync::Arc;
 use tokio::time::Instant;
+
+use hex::FromHex;
+use neon_lib::context::truncate_0x;
+pub use neon_lib::context::*;
+use neon_lib::rpc::CallDbClient;
+use neon_lib::rpc::TrxDbClient;
 
 use crate::{
     errors::NeonError,
@@ -44,10 +47,40 @@ async fn run<'a>(options: &'a ArgMatches<'a>) -> NeonCliResult {
     let slot: Option<u64> = options
         .value_of("slot")
         .map(|slot_str| slot_str.parse().expect("slot parse error"));
+
+    let config = config::create(options)?;
+
     let (cmd, params) = options.subcommand();
-    let config = Arc::new(config::create(options)?);
-    let context: Context =
-        context::create_from_config_and_options(options, config.clone(), &slot).await?;
+
+    let rpc_client: Box<dyn rpc::Rpc> = match (cmd, params) {
+        ("emulate-hash" | "trace-hash" | "emulate_hash" | "trace_hash", Some(params)) => {
+            let hash = params.value_of("hash").expect("hash not found");
+            let hash = <[u8; 32]>::from_hex(truncate_0x(hash)).expect("hash cast error");
+
+            Box::new(
+                TrxDbClient::new(
+                    config.db_config.as_ref().expect("db-config not found"),
+                    hash,
+                )
+                .await,
+            )
+        }
+        _ => {
+            if let Some(slot) = slot {
+                Box::new(CallDbClient::new(
+                    config.db_config.as_ref().expect("db-config not found"),
+                    slot,
+                ))
+            } else {
+                Box::new(RpcClient::new_with_commitment(
+                    config.json_rpc_url.clone(),
+                    config.commitment,
+                ))
+            }
+        }
+    };
+
+    let context: Context = create(&*rpc_client, &config);
 
     execute(cmd, params, &config, &context, slot).await
 }
@@ -74,7 +107,7 @@ fn print_result(result: &NeonCliResult) {
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     let time_start = Instant::now();
 
@@ -101,7 +134,7 @@ async fn execute<'a>(
     cmd: &str,
     params: Option<&'a ArgMatches<'a>>,
     config: &'a Config,
-    context: &'a Context,
+    context: &'a Context<'_>,
     slot: Option<u64>,
 ) -> NeonCliResult {
     match (cmd, params) {
@@ -110,7 +143,7 @@ async fn execute<'a>(
             let (token, chain, steps, accounts, solana_accounts) =
                 parse_tx_params(config, context, params).await;
             emulate::execute(
-                context.rpc_client.as_ref(),
+                context.rpc_client,
                 config.evm_loader,
                 tx,
                 token,
@@ -130,7 +163,7 @@ async fn execute<'a>(
             let (token, chain, steps, accounts, solana_accounts) =
                 parse_tx_params(config, context, params).await;
             emulate::execute(
-                context.rpc_client.as_ref(),
+                context.rpc_client,
                 config.evm_loader,
                 tx,
                 token,
@@ -150,7 +183,7 @@ async fn execute<'a>(
             let (token, chain, steps, accounts, solana_accounts) =
                 parse_tx_params(config, context, params).await;
             trace::trace_transaction(
-                context.rpc_client.as_ref(),
+                context.rpc_client,
                 config.evm_loader,
                 tx,
                 token,
@@ -165,11 +198,11 @@ async fn execute<'a>(
             .map(|trace| json!(trace))
         }
         ("trace-hash", Some(params)) => {
-            let (tx, trace_config) = parse_tx_hash(context.rpc_client.as_ref()).await;
+            let (tx, trace_config) = parse_tx_hash(context.rpc_client).await;
             let (token, chain, steps, accounts, solana_accounts) =
                 parse_tx_params(config, context, params).await;
             trace::trace_transaction(
-                context.rpc_client.as_ref(),
+                context.rpc_client,
                 config.evm_loader,
                 tx,
                 token,
@@ -205,7 +238,7 @@ async fn execute<'a>(
                     )))
                 })?;
             trace::trace_block(
-                context.rpc_client.as_ref(),
+                context.rpc_client,
                 config.evm_loader,
                 transactions,
                 token,
@@ -255,7 +288,7 @@ async fn execute<'a>(
         }
         ("get-ether-account-data", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
-            get_ether_account_data::execute(context.rpc_client.as_ref(), &config.evm_loader, &ether)
+            get_ether_account_data::execute(context.rpc_client, &config.evm_loader, &ether)
                 .await
                 .map(|result| json!(result))
         }
@@ -263,7 +296,7 @@ async fn execute<'a>(
             let storage_account =
                 pubkey_of(params, "storage_account").expect("storage_account parse error");
             cancel_trx::execute(
-                context.rpc_client.as_ref(),
+                context.rpc_client,
                 context.signer()?.as_ref(),
                 config.evm_loader,
                 &storage_account,
@@ -292,14 +325,9 @@ async fn execute<'a>(
         ("get-storage-at", Some(params)) => {
             let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
             let index = u256_of(params, "index").expect("index parse error");
-            get_storage_at::execute(
-                context.rpc_client.as_ref(),
-                &config.evm_loader,
-                contract_id,
-                &index,
-            )
-            .await
-            .map(|hash| json!(hex::encode(hash.0)))
+            get_storage_at::execute(context.rpc_client, &config.evm_loader, contract_id, &index)
+                .await
+                .map(|hash| json!(hex::encode(hash.0)))
         }
         _ => unreachable!(),
     }
@@ -350,7 +378,7 @@ async fn parse_tx_hash(rpc_client: &dyn Rpc) -> (TxParams, TraceConfig) {
 
 pub async fn parse_tx_params<'a>(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
     params: &'a ArgMatches<'a>,
 ) -> (Pubkey, u64, u64, Vec<Address>, Vec<Pubkey>) {
     // Read ELF params only if token_mint or chain_id is not set.

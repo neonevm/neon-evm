@@ -36,7 +36,7 @@ impl CallDbClient {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Rpc for CallDbClient {
     fn commitment(&self) -> CommitmentConfig {
         CommitmentConfig::default()

@@ -6,7 +6,8 @@
 #![allow(
     clippy::module_name_repetitions,
     clippy::missing_const_for_fn,
-    clippy::use_self
+    clippy::use_self,
+    clippy::future_not_send
 )]
 #![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
@@ -18,11 +19,13 @@ pub mod error;
 pub mod account;
 pub mod account_storage;
 pub mod config;
+#[cfg(not(feature = "library"))]
 pub mod entrypoint;
 pub mod evm;
 pub mod executor;
 pub mod external_programs;
 pub mod gasometer;
+#[cfg(not(feature = "library"))]
 pub mod instruction;
 pub mod state_account;
 pub mod types;

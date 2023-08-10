@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     rpc::CallDbClient,
     rpc::{self, TrxDbClient},
@@ -14,10 +12,10 @@ use solana_sdk::signature::Signer;
 pub async fn build_hash_rpc_client(
     config: &Config,
     hash: &str,
-) -> Result<Arc<dyn rpc::Rpc>, NeonError> {
+) -> Result<Box<dyn rpc::Rpc>, NeonError> {
     let hash = <[u8; 32]>::from_hex(truncate_0x(hash))?;
 
-    Ok(Arc::new(
+    Ok(Box::new(
         TrxDbClient::new(
             config.db_config.as_ref().expect("db-config not found"),
             hash,
@@ -34,19 +32,19 @@ pub fn truncate_0x(in_str: &str) -> &str {
     }
 }
 
-pub struct Context {
-    pub rpc_client: Arc<dyn rpc::Rpc>,
-    signer_config: Arc<Config>,
+pub struct Context<'a> {
+    pub rpc_client: &'a dyn rpc::Rpc,
+    signer_config: &'a Config,
 }
 
-impl Context {
+impl Context<'_> {
     pub fn signer(&self) -> Result<Box<dyn Signer>, NeonError> {
-        build_signer(&self.signer_config)
+        build_signer(self.signer_config)
     }
 }
 
 #[must_use]
-pub fn create(rpc_client: Arc<dyn rpc::Rpc>, signer_config: Arc<Config>) -> Context {
+pub fn create<'a>(rpc_client: &'a dyn rpc::Rpc, signer_config: &'a Config) -> Context<'a> {
     Context {
         rpc_client,
         signer_config,
@@ -68,26 +66,27 @@ pub fn build_signer(config: &Config) -> Result<Box<dyn Signer>, NeonError> {
     Ok(signer)
 }
 
+/// TODO Break usages of this function into separate slot endpoints
 /// # Errors
 pub fn build_rpc_client(
     config: &Config,
     slot: Option<u64>,
-) -> Result<Arc<dyn rpc::Rpc>, NeonError> {
+) -> Result<Box<dyn rpc::Rpc>, NeonError> {
     if let Some(slot) = slot {
         return build_call_db_client(config, slot);
     }
 
-    Ok(Arc::new(RpcClient::new_with_commitment(
+    Ok(Box::new(RpcClient::new_with_commitment(
         config.json_rpc_url.clone(),
         config.commitment,
     )))
 }
 
 /// # Errors
-pub fn build_call_db_client(config: &Config, slot: u64) -> Result<Arc<dyn rpc::Rpc>, NeonError> {
+pub fn build_call_db_client(config: &Config, slot: u64) -> Result<Box<dyn rpc::Rpc>, NeonError> {
     let config = config
         .db_config
         .clone()
         .ok_or(NeonError::InvalidChDbConfig)?;
-    Ok(Arc::new(CallDbClient::new(&config, slot)))
+    Ok(Box::new(CallDbClient::new(&config, slot)))
 }

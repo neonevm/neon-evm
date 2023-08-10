@@ -13,7 +13,6 @@ use std::{
         Ordering::{Equal, Greater, Less},
     },
     convert::TryFrom,
-    sync::Arc,
     time::Instant,
 };
 use thiserror::Error;
@@ -28,10 +27,9 @@ pub enum ChError {
 
 pub type ChResult<T> = std::result::Result<T, ChError>;
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct ClickHouseDb {
-    pub client: Arc<Client>,
+    pub client: Client,
 }
 
 pub enum SlotStatus {
@@ -86,7 +84,6 @@ impl TryInto<Account> for AccountRow {
     }
 }
 
-#[allow(dead_code)]
 impl ClickHouseDb {
     pub fn new(config: &ChDbConfig) -> Self {
         let url_id = rand::thread_rng().gen_range(0..config.clickhouse_url.len());
@@ -101,9 +98,7 @@ impl ClickHouseDb {
                 .with_password(password),
         };
 
-        ClickHouseDb {
-            client: Arc::new(client),
-        }
+        ClickHouseDb { client }
     }
 
     // return value is not used for tracer methods
@@ -300,7 +295,7 @@ impl ClickHouseDb {
                 self.client
                     .query(query)
                     .bind(pubkey_str.clone())
-                    .bind(&branch.as_slice())
+                    .bind(branch.as_slice())
                     .fetch_one::<AccountRow>()
                     .await,
             )

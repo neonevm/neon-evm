@@ -4,11 +4,8 @@ mod tracer_ch_db;
 
 pub use evm_loader::types::Address;
 pub use indexer_db::IndexerDb;
-use lazy_static::lazy_static;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
-use tokio::runtime::Runtime;
-use tokio::task::block_in_place;
 pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
 
 use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
@@ -87,20 +84,6 @@ pub async fn do_connect(
         }
     });
     client
-}
-
-lazy_static! {
-    pub static ref RT: Runtime = Runtime::new().unwrap();
-}
-
-pub fn block<Fu>(f: Fu) -> Fu::Output
-where
-    Fu: std::future::Future,
-{
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => block_in_place(|| handle.block_on(f)),
-        Err(_) => RT.block_on(f),
-    }
 }
 
 #[derive(Error, Debug)]

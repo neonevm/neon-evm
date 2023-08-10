@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, Json};
+use actix_web::{http::StatusCode, routes, web::Json, Responder};
 use std::convert::Into;
 
 use crate::{
@@ -8,10 +8,13 @@ use crate::{
 
 use super::{parse_emulation_params, process_error, process_result};
 
+#[routes]
+#[post("/emulate_hash")] // Obsolete
+#[post("/emulate-hash")]
 pub async fn emulate_hash(
-    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    state: NeonApiState,
     Json(emulate_hash_request): Json<EmulateHashRequestModel>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> impl Responder {
     let rpc_client =
         match context::build_hash_rpc_client(&state.config, &emulate_hash_request.hash).await {
             Ok(rpc_client) => rpc_client,
@@ -28,7 +31,7 @@ pub async fn emulate_hash(
         }
     };
 
-    let context = context::create(rpc_client, state.config.clone());
+    let context = context::create(&*rpc_client, &state.config);
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,
@@ -39,7 +42,7 @@ pub async fn emulate_hash(
 
     process_result(
         &EmulateCommand::execute(
-            context.rpc_client.as_ref(),
+            context.rpc_client,
             state.config.evm_loader,
             tx,
             token,

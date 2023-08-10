@@ -16,7 +16,7 @@ pub struct CachedElfParams {
 }
 
 impl CachedElfParams {
-    pub async fn new(config: &Config, context: &Context) -> Self {
+    pub async fn new(config: &Config, context: &Context<'_>) -> Self {
         Self {
             elf_params: read_elf_parameters_from_account(config, context)
                 .await
@@ -84,7 +84,7 @@ pub fn read_elf_parameters(_config: &Config, program_data: &[u8]) -> GetNeonElfR
 
 pub async fn read_elf_parameters_from_account(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
 ) -> Result<GetNeonElfReturn, NeonError> {
     let (_, program_data) =
         read_program_data_from_account(config, context, &config.evm_loader).await?;
@@ -93,7 +93,7 @@ pub async fn read_elf_parameters_from_account(
 
 pub async fn read_program_data_from_account(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
     evm_loader: &Pubkey,
 ) -> Result<(Option<Pubkey>, Vec<u8>), NeonError> {
     let account = context
@@ -167,14 +167,14 @@ fn read_program_params_from_file(
 
 async fn read_program_params_from_account(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
 ) -> NeonResult<GetNeonElfReturn> {
     read_elf_parameters_from_account(config, context).await
 }
 
 pub async fn execute(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
     program_location: Option<&str>,
 ) -> NeonResult<GetNeonElfReturn> {
     if let Some(program_location) = program_location {

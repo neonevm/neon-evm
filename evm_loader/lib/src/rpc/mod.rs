@@ -31,8 +31,8 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
-#[async_trait]
-pub trait Rpc: Send + Sync {
+#[async_trait(?Send)]
+pub trait Rpc {
     fn commitment(&self) -> CommitmentConfig;
     async fn confirm_transaction_with_spinner(
         &self,

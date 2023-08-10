@@ -1,17 +1,25 @@
-use crate::account::{EthereumAccount, EthereumStorage};
+use crate::account::EthereumAccount;
 use crate::executor::{Action, OwnedAccountInfo};
 use crate::types::Address;
 use ethnum::U256;
+use maybe_async::maybe_async;
 use solana_program::account_info::AccountInfo;
-use solana_program::clock::Clock;
+#[cfg(not(feature = "library"))]
+use {
+    crate::account::EthereumStorage, solana_program::clock::Clock, std::cell::RefCell,
+    std::collections::HashSet,
+};
+
 use solana_program::pubkey::Pubkey;
 use solana_program::slot_history::Slot;
-use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+#[cfg(not(feature = "library"))]
 mod apply;
+#[cfg(not(feature = "library"))]
 mod backend;
+#[cfg(not(feature = "library"))]
 mod base;
 
 #[derive(Debug)]
@@ -29,6 +37,7 @@ pub enum AccountsReadiness {
     NeedMoreReallocations,
 }
 
+#[cfg(not(feature = "library"))]
 pub struct ProgramAccountStorage<'a> {
     program_id: &'a Pubkey,
     operator: &'a Pubkey,
@@ -45,6 +54,7 @@ pub struct ProgramAccountStorage<'a> {
 
 /// Account storage
 /// Trait to access account info
+#[maybe_async(?Send)]
 pub trait AccountStorage {
     /// Get `NEON` token mint
     fn neon_token_mint(&self) -> &Pubkey;
@@ -60,34 +70,34 @@ pub trait AccountStorage {
     /// Get block timestamp
     fn block_timestamp(&self) -> U256;
     /// Get block hash
-    fn block_hash(&self, number: u64) -> [u8; 32];
+    async fn block_hash(&self, number: u64) -> [u8; 32];
     /// Get chain id
     fn chain_id(&self) -> u64;
 
     /// Check if ethereum account exists
-    fn exists(&self, address: &Address) -> bool;
+    async fn exists(&self, address: &Address) -> bool;
     /// Get account nonce
-    fn nonce(&self, address: &Address) -> u64;
+    async fn nonce(&self, address: &Address) -> u64;
     /// Get account balance
-    fn balance(&self, address: &Address) -> U256;
+    async fn balance(&self, address: &Address) -> U256;
 
     /// Get code size
-    fn code_size(&self, address: &Address) -> usize;
+    async fn code_size(&self, address: &Address) -> usize;
     /// Get code hash
-    fn code_hash(&self, address: &Address) -> [u8; 32];
+    async fn code_hash(&self, address: &Address) -> [u8; 32];
     /// Get code data
-    fn code(&self, address: &Address) -> crate::evm::Buffer;
+    async fn code(&self, address: &Address) -> crate::evm::Buffer;
     /// Get contract generation
-    fn generation(&self, address: &Address) -> u32;
+    async fn generation(&self, address: &Address) -> u32;
 
     /// Get data from storage
-    fn storage(&self, address: &Address, index: &U256) -> [u8; 32];
+    async fn storage(&self, address: &Address, index: &U256) -> [u8; 32];
 
     /// Clone existing solana account
-    fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo;
+    async fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo;
 
     /// Map existing solana account
-    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    async fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
     where
         F: FnOnce(&AccountInfo) -> R;
 
@@ -97,9 +107,9 @@ pub trait AccountStorage {
     }
 
     /// Solana account data len
-    fn solana_account_space(&self, address: &Address) -> Option<usize>;
+    async fn solana_account_space(&self, address: &Address) -> Option<usize>;
 
-    fn calc_accounts_operations(&self, actions: &[Action]) -> AccountsOperations {
+    async fn calc_accounts_operations(&self, actions: &[Action]) -> AccountsOperations {
         let mut accounts = HashMap::new();
         for action in actions {
             let (address, code_size) = match action {
@@ -117,27 +127,28 @@ pub trait AccountStorage {
             accounts.insert(address, space_needed);
         }
 
-        accounts
-            .into_iter()
-            .filter_map(
-                |(address, space_needed)| match self.solana_account_space(address) {
-                    None => Some((
-                        *address,
-                        AccountOperation::Create {
-                            space: space_needed,
-                        },
-                    )),
-                    Some(space_current) if space_current < space_needed => Some((
-                        *address,
-                        AccountOperation::Resize {
-                            from: space_current,
-                            to: space_needed,
-                        },
-                    )),
-                    _ => None,
-                },
-            )
-            .collect()
+        let mut result = AccountsOperations::new();
+
+        for (address, space_needed) in accounts {
+            match self.solana_account_space(address).await {
+                None => result.push((
+                    *address,
+                    AccountOperation::Create {
+                        space: space_needed,
+                    },
+                )),
+                Some(space_current) if space_current < space_needed => result.push((
+                    *address,
+                    AccountOperation::Resize {
+                        from: space_current,
+                        to: space_needed,
+                    },
+                )),
+                _ => (),
+            }
+        }
+
+        result
     }
 }
 

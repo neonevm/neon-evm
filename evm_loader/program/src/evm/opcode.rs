@@ -1,5 +1,6 @@
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
+use maybe_async::maybe_async;
 use solana_program::log::sol_log_data;
 
 use super::{database::Database, tracing_event, Context, Machine, Reason};
@@ -444,10 +445,11 @@ impl<B: Database> Machine<B> {
     }
 
     /// address balance in wei
-    pub fn opcode_balance(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_balance(&mut self, backend: &mut B) -> Result<Action> {
         let balance = {
             let address = self.stack.pop_address()?;
-            backend.balance(address)?
+            backend.balance(address).await?
         };
 
         self.stack.push_u256(balance)?;
@@ -550,10 +552,11 @@ impl<B: Database> Machine<B> {
 
     /// length of the contract bytecode at addr, in bytes
     /// address(addr).code.size
-    pub fn opcode_extcodesize(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_extcodesize(&mut self, backend: &mut B) -> Result<Action> {
         let code_size = {
             let address = self.stack.pop_address()?;
-            backend.code_size(address)?
+            backend.code_size(address).await?
         };
 
         self.stack.push_usize(code_size)?;
@@ -562,13 +565,14 @@ impl<B: Database> Machine<B> {
     }
 
     /// copy contract's bytecode
-    pub fn opcode_extcodecopy(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_extcodecopy(&mut self, backend: &mut B) -> Result<Action> {
         let address = *self.stack.pop_address()?;
         let memory_offset = self.stack.pop_usize()?;
         let data_offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let code = backend.code(&address)?;
+        let code = backend.code(&address).await?;
 
         self.memory
             .write_buffer(memory_offset, length, &code, data_offset)?;
@@ -600,10 +604,11 @@ impl<B: Database> Machine<B> {
     }
 
     /// Constantinople hardfork, EIP-1052: hash of the contract bytecode at addr
-    pub fn opcode_extcodehash(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_extcodehash(&mut self, backend: &mut B) -> Result<Action> {
         let code_hash = {
             let address = self.stack.pop_address()?;
-            backend.code_hash(address)?
+            backend.code_hash(address).await?
         };
 
         self.stack.push_array(&code_hash)?;
@@ -613,11 +618,12 @@ impl<B: Database> Machine<B> {
 
     /// hash of the specific block, only valid for the 256 most recent blocks, excluding the current one
     /// Solana limits to 150 most recent blocks
-    pub fn opcode_blockhash(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_blockhash(&mut self, backend: &mut B) -> Result<Action> {
         let block_hash = {
             let block_number = self.stack.pop_u256()?;
 
-            backend.block_hash(block_number)?
+            backend.block_hash(block_number).await?
         };
 
         self.stack.push_array(&block_hash)?;
@@ -677,8 +683,9 @@ impl<B: Database> Machine<B> {
     }
 
     /// Istanbul hardfork, EIP-1884: balance of the executing contract in wei
-    pub fn opcode_selfbalance(&mut self, backend: &mut B) -> Result<Action> {
-        let balance = backend.balance(&self.context.contract)?;
+    #[maybe_async]
+    pub async fn opcode_selfbalance(&mut self, backend: &mut B) -> Result<Action> {
+        let balance = backend.balance(&self.context.contract).await?;
 
         self.stack.push_u256(balance)?;
 
@@ -731,9 +738,10 @@ impl<B: Database> Machine<B> {
     }
 
     /// reads a (u)int256 from storage
-    pub fn opcode_sload(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_sload(&mut self, backend: &mut B) -> Result<Action> {
         let index = self.stack.pop_u256()?;
-        let value = backend.storage(&self.context.contract, &index)?;
+        let value = backend.storage(&self.context.contract, &index).await?;
 
         tracing_event!(self, super::tracing::Event::StorageAccess { index, value });
 
@@ -919,7 +927,8 @@ impl<B: Database> Machine<B> {
     }
 
     /// Create a new account with associated code.
-    pub fn opcode_create(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_create(&mut self, backend: &mut B) -> Result<Action> {
         if self.is_static {
             return Err(Error::StaticModeViolation(self.context.contract));
         }
@@ -929,15 +938,17 @@ impl<B: Database> Machine<B> {
         let length = self.stack.pop_usize()?;
 
         let created_address = {
-            let nonce = backend.nonce(&self.context.contract)?;
+            let nonce = backend.nonce(&self.context.contract).await?;
             Address::from_create(&self.context.contract, nonce)
         };
 
         self.opcode_create_impl(created_address, value, offset, length, backend)
+            .await
     }
 
     /// Constantinople harfork, EIP-1014: creates a create a new account with a deterministic address
-    pub fn opcode_create2(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_create2(&mut self, backend: &mut B) -> Result<Action> {
         if self.is_static {
             return Err(Error::StaticModeViolation(self.context.contract));
         }
@@ -953,9 +964,11 @@ impl<B: Database> Machine<B> {
         };
 
         self.opcode_create_impl(created_address, value, offset, length, backend)
+            .await
     }
 
-    fn opcode_create_impl(
+    #[maybe_async]
+    async fn opcode_create_impl(
         &mut self,
         address: Address,
         value: U256,
@@ -963,7 +976,7 @@ impl<B: Database> Machine<B> {
         length: usize,
         backend: &mut B,
     ) -> Result<Action> {
-        if backend.nonce(&self.context.contract)? == u64::MAX {
+        if backend.nonce(&self.context.contract).await? == u64::MAX {
             return Err(Error::NonceOverflow(self.context.contract));
         }
 
@@ -994,22 +1007,25 @@ impl<B: Database> Machine<B> {
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
 
-        if (backend.nonce(&address)? != 0) || (backend.code_size(&address)? != 0) {
+        if (backend.nonce(&address).await? != 0) || (backend.code_size(&address).await? != 0) {
             return Err(Error::DeployToExistingAccount(address, self.context.caller));
         }
 
-        if backend.balance(&self.context.caller)? < value {
+        if backend.balance(&self.context.caller).await? < value {
             return Err(Error::InsufficientBalance(self.context.caller, value));
         }
 
         backend.increment_nonce(address)?;
-        backend.transfer(self.context.caller, address, value)?;
+        backend
+            .transfer(self.context.caller, address, value)
+            .await?;
 
         Ok(Action::Noop)
     }
 
     /// Message-call into an account
-    pub fn opcode_call(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_call(&mut self, backend: &mut B) -> Result<Action> {
         let gas_limit = self.stack.pop_u256()?;
         let address = *self.stack.pop_address()?;
         let value = self.stack.pop_u256()?;
@@ -1022,7 +1038,7 @@ impl<B: Database> Machine<B> {
         self.return_range = return_offset..(return_offset + return_length);
 
         let call_data = self.memory.read_buffer(args_offset, args_length)?;
-        let code = backend.code(&address)?;
+        let code = backend.code(&address).await?;
 
         let context = Context {
             caller: self.context.contract,
@@ -1048,17 +1064,20 @@ impl<B: Database> Machine<B> {
             return Err(Error::StaticModeViolation(self.context.caller));
         }
 
-        if backend.balance(&self.context.caller)? < value {
+        if backend.balance(&self.context.caller).await? < value {
             return Err(Error::InsufficientBalance(self.context.caller, value));
         }
 
-        backend.transfer(self.context.caller, self.context.contract, value)?;
+        backend
+            .transfer(self.context.caller, self.context.contract, value)
+            .await?;
 
-        self.opcode_call_precompile_impl(backend, &address)
+        self.opcode_call_precompile_impl(backend, &address).await
     }
 
     /// Message-call into this account with an alternative account’s code
-    pub fn opcode_callcode(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_callcode(&mut self, backend: &mut B) -> Result<Action> {
         let gas_limit = self.stack.pop_u256()?;
         let address = *self.stack.pop_address()?;
         let value = self.stack.pop_u256()?;
@@ -1071,7 +1090,7 @@ impl<B: Database> Machine<B> {
         self.return_range = return_offset..(return_offset + return_length);
 
         let call_data = self.memory.read_buffer(args_offset, args_length)?;
-        let code = backend.code(&address)?;
+        let code = backend.code(&address).await?;
 
         let context = Context {
             caller: self.context.contract,
@@ -1093,16 +1112,17 @@ impl<B: Database> Machine<B> {
 
         sol_log_data(&[b"ENTER", b"CALLCODE", address.as_bytes()]);
 
-        if backend.balance(&self.context.caller)? < value {
+        if backend.balance(&self.context.caller).await? < value {
             return Err(Error::InsufficientBalance(self.context.caller, value));
         }
 
-        self.opcode_call_precompile_impl(backend, &address)
+        self.opcode_call_precompile_impl(backend, &address).await
     }
 
     /// Homestead hardfork, EIP-7: Message-call into this account with an alternative account’s code,
     /// but persisting the current values for sender and value
-    pub fn opcode_delegatecall(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_delegatecall(&mut self, backend: &mut B) -> Result<Action> {
         let gas_limit = self.stack.pop_u256()?;
         let address = *self.stack.pop_address()?;
         let args_offset = self.stack.pop_usize()?;
@@ -1114,7 +1134,7 @@ impl<B: Database> Machine<B> {
         self.return_range = return_offset..(return_offset + return_length);
 
         let call_data = self.memory.read_buffer(args_offset, args_length)?;
-        let code = backend.code(&address)?;
+        let code = backend.code(&address).await?;
 
         let context = Context {
             code_address: Some(address),
@@ -1134,12 +1154,13 @@ impl<B: Database> Machine<B> {
 
         sol_log_data(&[b"ENTER", b"DELEGATECALL", address.as_bytes()]);
 
-        self.opcode_call_precompile_impl(backend, &address)
+        self.opcode_call_precompile_impl(backend, &address).await
     }
 
     /// Byzantium hardfork, EIP-214: Static message-call into an account
     /// Disallowed contract creation, event emission, storage modification and contract destruction
-    pub fn opcode_staticcall(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_staticcall(&mut self, backend: &mut B) -> Result<Action> {
         let gas_limit = self.stack.pop_u256()?;
         let address = *self.stack.pop_address()?;
         let args_offset = self.stack.pop_usize()?;
@@ -1151,7 +1172,7 @@ impl<B: Database> Machine<B> {
         self.return_range = return_offset..(return_offset + return_length);
 
         let call_data = self.memory.read_buffer(args_offset, args_length)?;
-        let code = backend.code(&address)?;
+        let code = backend.code(&address).await?;
 
         let context = Context {
             caller: self.context.contract,
@@ -1175,20 +1196,25 @@ impl<B: Database> Machine<B> {
 
         sol_log_data(&[b"ENTER", b"STATICCALL", address.as_bytes()]);
 
-        self.opcode_call_precompile_impl(backend, &address)
+        self.opcode_call_precompile_impl(backend, &address).await
     }
 
     /// Call precompile contract.
     /// Returns `Action::Noop` if address is not a precompile
-    fn opcode_call_precompile_impl(
+    #[maybe_async]
+    async fn opcode_call_precompile_impl(
         &mut self,
         backend: &mut B,
         address: &Address,
     ) -> Result<Action> {
-        let result = Self::precompile(address, &self.call_data).map(Ok);
-        let result = result.or_else(|| {
-            backend.precompile_extension(&self.context, address, &self.call_data, self.is_static)
-        });
+        let result = match Self::precompile(address, &self.call_data).map(Ok) {
+            Some(x) => Some(x),
+            None => {
+                backend
+                    .precompile_extension(&self.context, address, &self.call_data, self.is_static)
+                    .await
+            }
+        };
 
         if let Some(return_data) = result.transpose()? {
             return self.opcode_return_impl(Buffer::from_slice(&return_data), backend);
@@ -1301,15 +1327,18 @@ impl<B: Database> Machine<B> {
     }
 
     /// Halt execution, destroys the contract and send all funds to address
-    pub fn opcode_selfdestruct(&mut self, backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_selfdestruct(&mut self, backend: &mut B) -> Result<Action> {
         if self.is_static {
             return Err(Error::StaticModeViolation(self.context.contract));
         }
 
         let address = *self.stack.pop_address()?;
 
-        let value = backend.balance(&self.context.contract)?;
-        backend.transfer(self.context.contract, address, value)?;
+        let value = backend.balance(&self.context.contract).await?;
+        backend
+            .transfer(self.context.contract, address, value)
+            .await?;
         backend.selfdestruct(self.context.contract)?;
 
         backend.commit_snapshot();

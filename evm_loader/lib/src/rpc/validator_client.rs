@@ -22,7 +22,7 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Rpc for RpcClient {
     fn commitment(&self) -> CommitmentConfig {
         self.commitment()

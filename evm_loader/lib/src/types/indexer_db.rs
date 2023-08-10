@@ -1,12 +1,10 @@
+use std::sync::Arc;
 use {
     super::{do_connect, ChDbConfig, PgError, PgResult, TxParams},
     ethnum::U256,
     evm_loader::types::Address,
     solana_sdk::clock::Slot,
-    std::{
-        convert::{TryFrom, TryInto},
-        sync::Arc,
-    },
+    std::convert::{TryFrom, TryInto},
     tokio_postgres::Client,
 };
 

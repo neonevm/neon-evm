@@ -5,23 +5,22 @@ use crate::{
     types::{request_models::TraceNextBlockRequestModel, IndexerDb},
     NeonApiState,
 };
-use axum::http::StatusCode;
-use axum::Json;
-use std::sync::Arc;
+use actix_web::{http::StatusCode, post, web::Json, Responder};
 
 use super::{parse_emulation_params, process_result};
 
+#[post("/trace-next-block")]
 pub async fn trace_next_block(
-    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    state: NeonApiState,
     Json(trace_next_block_request): Json<TraceNextBlockRequestModel>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> impl Responder {
     let rpc_client =
         match context::build_call_db_client(&state.config, trace_next_block_request.slot) {
             Ok(rpc_client) => rpc_client,
             Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
         };
 
-    let context = context::create(rpc_client, Arc::clone(&state.config));
+    let context = context::create(&*rpc_client, &state.config);
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,
@@ -55,7 +54,7 @@ pub async fn trace_next_block(
 
     process_result(
         &trace_block(
-            context.rpc_client.as_ref(),
+            context.rpc_client,
             state.config.evm_loader,
             transactions,
             token,

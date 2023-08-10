@@ -15,7 +15,6 @@ use evm_loader::{
 use crate::{
     account_storage::{account_info, EmulatorAccountStorage},
     rpc::Rpc,
-    types::block,
     NeonResult,
 };
 
@@ -24,7 +23,7 @@ pub struct GetStorageAtReturn(pub [u8; 32]);
 
 impl Display for GetStorageAtReturn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{}", hex::encode(&self.0))
+        write!(f, "0x{}", hex::encode(self.0))
     }
 }
 
@@ -52,7 +51,7 @@ pub async fn execute(
                 let address =
                     EthereumStorageAddress::new(evm_loader, account_data.info.key, &index);
 
-                if let Ok(mut account) = block(rpc_client.get_account(address.pubkey())) {
+                if let Ok(mut account) = rpc_client.get_account(address.pubkey()).await {
                     if solana_sdk::system_program::check_id(&account.owner) {
                         Default::default()
                     } else {

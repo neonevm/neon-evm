@@ -199,6 +199,7 @@ macro_rules! Err {
 /// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
 /// ```
 ///
+#[cfg(not(feature = "library"))]
 macro_rules! E {
     ( $n:expr; $($args:expr),* ) => ({
         #[cfg(target_os = "solana")]
@@ -211,6 +212,7 @@ macro_rules! E {
     });
 }
 
+#[cfg(not(feature = "library"))]
 #[must_use]
 fn format_revert_error(msg: &[u8]) -> Option<&str> {
     if msg.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
@@ -238,6 +240,7 @@ fn format_revert_error(msg: &[u8]) -> Option<&str> {
     }
 }
 
+#[cfg(not(feature = "library"))]
 #[must_use]
 fn format_revert_panic(msg: &[u8]) -> Option<U256> {
     if msg.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
@@ -254,6 +257,7 @@ fn format_revert_panic(msg: &[u8]) -> Option<U256> {
     }
 }
 
+#[cfg(not(feature = "library"))]
 pub fn print_revert_message(msg: &[u8]) {
     if msg.is_empty() {
         return solana_program::msg!("Revert");
