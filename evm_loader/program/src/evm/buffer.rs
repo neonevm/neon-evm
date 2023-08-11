@@ -122,13 +122,13 @@ impl Buffer {
     #[inline]
     #[must_use]
     pub fn get_u16_or_default(&self, index: usize) -> u16 {
-        u16::from_be_bytes([self.get_or_default(index), self.get_or_default(index + 1)])
+        u16::from_be_bytes(*arrayref::array_ref![*self, index, 2])
     }
 
     #[inline]
     #[must_use]
     pub fn get_i16_or_default(&self, index: usize) -> i16 {
-        i16::from_be_bytes([self.get_or_default(index), self.get_or_default(index + 1)])
+        i16::from_be_bytes(*arrayref::array_ref![*self, index, 2])
     }
 }
 
