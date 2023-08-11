@@ -6,7 +6,10 @@ use solana_program::log::sol_log_data;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
 use crate::{
     error::{Error, Result},
-    evm::{trace_end_step, Buffer},
+    evm::{
+        eof::{has_eof_magic, Container},
+        trace_end_step, Buffer,
+    },
     types::Address,
 };
 use crate::evm::opcode::Action::Jump;
@@ -1001,10 +1004,10 @@ impl<B: Database> Machine<B> {
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let created_address = {
-            let nonce = backend.nonce(&self.context.contract)?;
-            Address::from_create(&self.context.contract, nonce)
-        };
+        let nonce = backend.nonce(&self.context.contract)?;
+        let initialization_code = self.memory.read(offset, length)?;
+
+        let created_address = Address::from_create(&self.context.contract, nonce);
 
         self.opcode_create_impl(created_address, value, offset, length, backend)
     }
@@ -1020,10 +1023,9 @@ impl<B: Database> Machine<B> {
         let length = self.stack.pop_usize()?;
         let salt = *self.stack.pop_array()?;
 
-        let created_address = {
-            let initialization_code = self.memory.read(offset, length)?;
-            Address::from_create2(&self.context.contract, &salt, initialization_code)
-        };
+        let initialization_code = self.memory.read(offset, length)?;
+        let created_address =
+            Address::from_create2(&self.context.contract, &salt, initialization_code);
 
         self.opcode_create_impl(created_address, value, offset, length, backend)
     }
@@ -1058,6 +1060,11 @@ impl<B: Database> Machine<B> {
             context,
             code: init_code.to_vec()
         });
+
+        if has_eof_magic(&init_code) {
+            let container = Container::unmarshal_binary(&init_code)?;
+            container.validate_code()?;
+        }
 
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
         backend.snapshot();
