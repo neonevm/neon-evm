@@ -10,6 +10,7 @@ use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use solana_program::sysvar::Sysvar;
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn new(

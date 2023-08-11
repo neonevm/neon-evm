@@ -44,6 +44,8 @@ impl Bitvec {
     pub fn is_code_segment(&self, pos: usize) -> bool {
         return ((self.0[pos / 8] >> (pos % 8)) & 1) == 0;
     }
+
+    #[allow(dead_code)]
     pub fn to_vec(&self) -> &Vec<u8> {
         &self.0
     }
