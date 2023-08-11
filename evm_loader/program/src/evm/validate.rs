@@ -9,7 +9,7 @@ use crate::evm::opcode_table::OpCode::*;
 use crate::evm::stack::STACK_SIZE;
 
 impl<B: Database> Machine<B> {
-    pub fn validate_code(&self, code: &Buffer, _section: usize, metadata: &Vec<FunctionMetadata>) -> Result<()> {
+    pub fn validate_code(&self, code: &Buffer, section: usize, metadata: &Vec<FunctionMetadata>) -> Result<()> {
         let mut i: usize = 0;
         let mut count: u8 = 0;
         let mut analysis: Option<Bitvec> = None;
@@ -21,7 +21,7 @@ impl<B: Database> Machine<B> {
             if !OpCode::has_opcode(opcode) {
                 return Err(Error::UnknownOpcode(
                     self.context.contract,
-                    self.execution_code[self.pc],
+                    code[i],
                 ));
             }
 
@@ -78,7 +78,7 @@ impl<B: Database> Machine<B> {
             return Err(Error::InvalidCodeTermination(opcode, i - 1));
         }
 
-        let path = self.validate_control_flow(code, _section, metadata)?;
+        let path = self.validate_control_flow(code, section, metadata)?;
         if path != count as usize {
             return Err(Error::UnreachableCode);
         }
