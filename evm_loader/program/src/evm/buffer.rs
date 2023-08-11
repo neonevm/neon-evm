@@ -138,12 +138,6 @@ impl PartialEq for Buffer {
     }
 }
 
-impl PartialEq for Buffer {
-    fn eq(&self, other: &Self) -> bool {
-        self.deref().eq(other.deref())
-    }
-}
-
 impl Drop for Buffer {
     fn drop(&mut self) {
         if let Inner::Owned { ptr, len } = self.inner {

@@ -1,8 +1,6 @@
 use std::convert::TryFrom;
 use serde::{Deserialize, Serialize};
 
-use thiserror::Error;
-
 use super::Buffer;
 use crate::error::{Error, Result};
 
@@ -540,7 +538,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "InvalidContainerSize(26, 25)")]
     fn unmarshal_binary_with_invalid_container_size() {
-        let mut bytes = Buffer::from_slice(&[BYTES_WITH_DATA, &[5u8]].concat());
+        let bytes = Buffer::from_slice(&[BYTES_WITH_DATA, &[5u8]].concat());
 
         Container::unmarshal_binary(&bytes).unwrap();
     }

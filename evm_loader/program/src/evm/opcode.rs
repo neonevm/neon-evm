@@ -1005,7 +1005,7 @@ impl<B: Database> Machine<B> {
         let length = self.stack.pop_usize()?;
 
         let nonce = backend.nonce(&self.context.contract)?;
-        let initialization_code = self.memory.read(offset, length)?;
+        let _initialization_code = self.memory.read(offset, length)?;
 
         let created_address = Address::from_create(&self.context.contract, nonce);
 
