@@ -8,7 +8,7 @@ use crate::evm::stack::STACK_SIZE;
 use super::{database::Database, opcode::Action, Machine};
 
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpCode {
     STOP = 0x00,
     ADD = 0x01,

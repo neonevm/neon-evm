@@ -173,6 +173,12 @@ pub enum Error {
     #[error("EVM conflict stack, have {0}, want {1}")]
     ConflictingStack(usize, usize),
 
+    #[error("EVM Empty stack")]
+    EmptyStack,
+
+    #[error("EVM container not found")]
+    ContainerNotFound,
+
     #[error("Opcode not supported, opcode {0:X}")]
     UnsupportedOpcode(u8),
 
