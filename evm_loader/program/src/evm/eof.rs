@@ -4,11 +4,11 @@ use std::convert::TryFrom;
 use super::Buffer;
 use crate::error::{Error, Result};
 
-pub const OFFSET_VERSION: u8 = 2;
+pub const _OFFSET_VERSION: u8 = 2;
 pub const OFFSET_TYPES_KIND: usize = 3;
 pub const OFFSET_CODE_KIND: usize = 6;
 
-pub const EOF_FORMAT_BYTE: u8 = 0xef;
+pub const _EOF_FORMAT_BYTE: u8 = 0xef;
 pub const EOF1_VERSION: u8 = 1;
 
 pub const EOF_MAGIC: [u8; 2] = [0xef, 0x00];
@@ -28,8 +28,8 @@ fn assert_eof_version_1(bytes: &Buffer) -> Result<()> {
     Err(Error::InvalidVersion(bytes[2]))
 }
 
-pub fn has_eof_byte(bytes: &Buffer) -> bool {
-    bytes.len() != 0 && bytes[0] == EOF_FORMAT_BYTE
+pub fn _has_eof_byte(bytes: &Buffer) -> bool {
+    bytes.len() != 0 && bytes[0] == _EOF_FORMAT_BYTE
 }
 
 pub fn has_eof_magic(bytes: &Buffer) -> bool {
