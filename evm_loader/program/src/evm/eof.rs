@@ -329,7 +329,7 @@ impl Container {
         Ok(Container { code, data, types })
     }
 
-    pub fn validate_code(&self) -> bool {
+    pub fn validate_code(&self) -> Result<()> {
         unimplemented!()
     }
 }
