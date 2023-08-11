@@ -1063,7 +1063,8 @@ impl<B: Database> Machine<B> {
 
         if has_eof_magic(&init_code) {
             let container = Container::unmarshal_binary(&init_code)?;
-            container.validate_code()?;
+
+            self.validate_container_code(&container)?;
         }
 
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None);

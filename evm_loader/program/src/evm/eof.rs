@@ -1,5 +1,5 @@
-use std::convert::TryFrom;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 use super::Buffer;
 use crate::error::{Error, Result};
@@ -326,10 +326,6 @@ impl Container {
             .collect::<Vec<_>>();
 
         Ok(Container { code, data, types })
-    }
-
-    pub fn validate_code(&self) -> Result<()> {
-        unimplemented!()
     }
 }
 

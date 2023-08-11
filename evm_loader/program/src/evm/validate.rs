@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::evm::Buffer;
-use super::{database::Database, Machine};
-use crate::{error::{Error, Result}};
+use super::{database::Database, Machine, eof::Container};
+use crate::error::{Error, Result};
 use crate::evm::analysis::Bitvec;
 use crate::evm::eof::FunctionMetadata;
 use crate::evm::opcode_table::OpCode;
@@ -9,6 +9,14 @@ use crate::evm::opcode_table::OpCode::*;
 use crate::evm::stack::STACK_SIZE;
 
 impl<B: Database> Machine<B> {
+    pub fn validate_container_code(&self, container: &Container) -> Result<()> {
+        for (section, code) in container.code.iter().enumerate() {
+            self.validate_code(code, section, &container.types)?;
+        }
+
+        Ok(())
+    }
+   
     pub fn validate_code(&self, code: &Buffer, _section: usize, metadata: &Vec<FunctionMetadata>) -> Result<()> {
         let mut i: usize = 0;
         let mut count: u8 = 0;
