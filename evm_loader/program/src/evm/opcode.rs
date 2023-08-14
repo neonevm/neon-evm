@@ -7,7 +7,6 @@ use super::{database::Database, tracing_event, Context, Machine, Reason};
 use crate::{
     error::{Error, Result},
     evm::{
-        eof::{has_eof_magic, Container},
         trace_end_step, Buffer,
     },
     types::Address,
@@ -1063,13 +1062,10 @@ impl<B: Database> Machine<B> {
             code: init_code.to_vec()
         });
 
-        if has_eof_magic(&init_code) {
-            let container = Container::unmarshal_binary(&init_code)?;
-
+        self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
+        if let Some(container) = &self.container {
             container.validate_container()?;
         }
-
-        self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
