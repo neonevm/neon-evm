@@ -74,7 +74,7 @@ macro_rules! trace_end_step {
 
 pub(crate) use trace_end_step;
 pub(crate) use tracing_event;
-use crate::evm::eof::Container;
+use crate::evm::eof::{Container, has_eof_magic};
 use crate::evm::opcode::ReturnContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -215,6 +215,12 @@ impl<B: Database> Machine<B> {
 
         let execution_code = backend.code(&target)?;
 
+        let container = if has_eof_magic(&execution_code) {
+            Some(Container::unmarshal_binary(&execution_code)?)
+        } else {
+            None
+        };
+
         Ok(Self {
             origin,
             context: Context {
@@ -226,15 +232,15 @@ impl<B: Database> Machine<B> {
             gas_price: trx.gas_price,
             gas_limit: trx.gas_limit,
             execution_code,
-            container: None, // TODO: set if need
+            container,
             call_data: trx.call_data,
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
-            code_section: 0, // TODO: set if need
-            return_stack: vec![],
+            code_section: 0,
+            return_stack: vec![ReturnContext {stack_height: 0, pc: 0, section: 0} ],
             is_static: false,
             reason: Reason::Call,
             parent: None,
@@ -258,6 +264,16 @@ impl<B: Database> Machine<B> {
         backend.increment_nonce(target)?;
         backend.transfer(origin, target, trx.value)?;
 
+        let code = trx.call_data;
+
+        let container = if has_eof_magic(&code) {
+            let container = Container::unmarshal_binary(&code)?;
+            container.validate_container()?;
+            Some(container)
+        } else {
+            None
+        };
+
         Ok(Self {
             origin,
             context: Context {
@@ -273,12 +289,12 @@ impl<B: Database> Machine<B> {
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
-            code_section: 0_usize, // TODO: set if need
-            return_stack: vec![], // TODO: set if need
+            code_section: 0,
+            return_stack: vec![ReturnContext {stack_height: 0, pc: 0, section: 0} ],
             is_static: false,
             reason: Reason::Create,
-            execution_code: trx.call_data,
-            container: None, // TODO: set if need
+            execution_code: code,
+            container,
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,
@@ -286,7 +302,11 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
-        assert!(self.execution_code.uninit_data().is_none());
+        let code = match &self.container {
+            Some(container) => &container.code[self.code_section],
+            None => &self.execution_code
+        }.clone();
+        assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
         assert!(self.return_data.uninit_data().is_none());
 
@@ -294,7 +314,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(tracing::Event::BeginVM {
             context: self.context,
-            code: self.execution_code.to_vec()
+            code: code.clone().to_vec()
         });
 
         let status = loop {
@@ -311,7 +331,7 @@ impl<B: Database> Machine<B> {
                 break ExitStatus::StepLimit;
             }
 
-            let opcode = self.execution_code.get_or_default(self.pc);
+            let opcode = code.get_or_default(self.pc);
 
             tracing_event!(tracing::Event::BeginStep {
                 opcode,
@@ -372,14 +392,20 @@ impl<B: Database> Machine<B> {
         execution_code: Buffer,
         call_data: Buffer,
         gas_limit: Option<U256>,
-    ) {
+    ) -> Result<()> {
+        let container = if has_eof_magic(&execution_code) {
+            Some(Container::unmarshal_binary(&execution_code)?)
+        } else {
+            None
+        };
+
         let mut other = Self {
             origin: self.origin,
             context,
             gas_price: self.gas_price,
             gas_limit: gas_limit.unwrap_or(self.gas_limit),
             execution_code,
-            container: None, // TODO: set if need
+            container,
             call_data,
             return_data: Buffer::empty(),
             return_range: 0..0,
@@ -387,7 +413,7 @@ impl<B: Database> Machine<B> {
             memory: Memory::new(),
             pc: 0_usize,
             code_section: 0, // TODO: set if need
-            return_stack: vec![], // TODO: set if need
+            return_stack: vec![ReturnContext {stack_height: 0, pc: 0, section: 0} ], // TODO: set if need
             is_static: self.is_static,
             reason,
             parent: None,
@@ -396,6 +422,7 @@ impl<B: Database> Machine<B> {
 
         core::mem::swap(self, &mut other);
         self.parent = Some(Box::new(other));
+        Ok(())
     }
 
     fn join(&mut self) -> Self {

@@ -1069,7 +1069,7 @@ impl<B: Database> Machine<B> {
             container.validate_container()?;
         }
 
-        self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
+        self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
@@ -1116,7 +1116,7 @@ impl<B: Database> Machine<B> {
             code: code.to_vec()
         });
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CALL", address.as_bytes()]);
@@ -1162,7 +1162,7 @@ impl<B: Database> Machine<B> {
             code: code.to_vec()
         });
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CALLCODE", address.as_bytes()]);
@@ -1200,7 +1200,7 @@ impl<B: Database> Machine<B> {
             code: code.to_vec()
         });
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"DELEGATECALL", address.as_bytes()]);
@@ -1236,7 +1236,7 @@ impl<B: Database> Machine<B> {
             code: code.to_vec()
         });
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         self.is_static = true;
 
         backend.snapshot();
