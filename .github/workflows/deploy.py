@@ -137,7 +137,7 @@ def get_solana_container_name(project_name):
         f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml ps",
         shell=True, capture_output=True, text=True).stdout
     click.echo(data)
-    pattern = rf'{project_name}_[a-zA-Z0-9_]+'
+    pattern = rf'{project_name}_solana_[1-9]+'
 
     match = re.search(pattern, data)
     return match.group(0)
