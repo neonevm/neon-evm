@@ -963,7 +963,10 @@ impl<B: Database> Machine<B> {
     pub fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let idx = code.get_u16_or_default(self.pc + 1);
-        let typ = &self.container.as_ref().unwrap().types[idx as usize]; //TODO: remove unwrap
+        let typ = &self.container
+            .as_ref()
+            .ok_or(Error::ContainerNotFound)?
+            .types[idx as usize];
 
         if self.stack.len() + typ.max_stack_height as usize >= 1024 {
             return Err(Error::StackOverflow);
@@ -982,8 +985,7 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
-        let ret_ctx = self.return_stack.pop().unwrap(); //TODO: remove unwrap
-
+        let ret_ctx = self.return_stack.pop().ok_or(Error::EmptyStack)?;
 
         self.code_section = ret_ctx.section;
         // If returning from top frame, exit cleanly.

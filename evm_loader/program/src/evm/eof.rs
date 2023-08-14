@@ -16,10 +16,6 @@ pub const EOF_MAGIC: [u8; 2] = [0xef, 0x00];
 const HEADER_LEN_WITHOUT_TERMINATOR: usize = 14;
 const SECTION_LEN: usize = 3;
 
-fn u16_from_slice(source: &Buffer, from: usize) -> u16 {
-    u16::from_be_bytes(*arrayref::array_ref![source, from, 2])
-}
-
 fn assert_eof_version_1(bytes: &Buffer) -> Result<()> {
     if 2 < bytes.len() && bytes[2] == EOF1_VERSION {
         return Ok(());
@@ -98,7 +94,7 @@ impl Section {
 
         Ok(Section {
             kind: SectionKind::try_from(u8::from(bytes[idx]))?,
-            size: u16_from_slice(bytes, idx + 1),
+            size:  bytes.get_u16_or_default(idx+1),
         })
     }
 }
@@ -128,14 +124,14 @@ impl SectionList {
             return Err(Error::UnexpectedEndOfFile);
         }
 
-        let count = u16_from_slice(&bytes, idx);
+        let count = bytes.get_u16_or_default(idx);
 
         if bytes.len() <= idx + 2 + (count as usize) * 2 {
             return Err(Error::UnexpectedEndOfFile);
         }
 
         Ok((0..(count as usize))
-            .map(|i| u16_from_slice(&bytes, idx + 2 + 2 * i))
+            .map(|i| bytes.get_u16_or_default( idx + 2 + 2 * i))
             .collect::<Vec<_>>())
     }
 
@@ -291,7 +287,7 @@ impl Container {
                 let signature = FunctionMetadata {
                     input: bytes[idx + section_index * 4],
                     output: bytes[idx + section_index * 4 + 1],
-                    max_stack_height: u16_from_slice(&bytes, idx + section_index * 4 + 2),
+                    max_stack_height: bytes.get_u16_or_default(idx + section_index * 4 + 2),
                 };
 
                 signature.assert_valid(section_index as u8)?;

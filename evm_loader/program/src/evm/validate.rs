@@ -138,7 +138,8 @@ impl Container {
 
                 heights.insert(pos, height);
 
-                let opcode_info = OpCode::opcode_info(op.try_into().unwrap()); //TODO: remove unwrap
+                let op_code: OpCode = op.try_into()?;
+                let opcode_info = OpCode::opcode_info(op_code);
                 if opcode_info.min_stack > height {
                     return Err(Error::StackUnderflow);
                 }
@@ -148,17 +149,17 @@ impl Container {
 
                 height = height + STACK_SIZE - opcode_info.max_stack;
 
-                match op.try_into().unwrap() { //TODO: remove unwrap
+                match op_code {
                     CALLF => {
-                        let arg = code.get_u16_or_default(pos + 1);
-                        if metadata[arg as usize].input as usize > height { // TODO: check exists
+                        let arg = code.get_u16_or_default(pos + 1) as usize;
+                        if metadata[arg].input as usize > height { // TODO: check exists
                             return Err(Error::StackUnderflow);
                         }
-                        if metadata[arg as usize].output as usize + height > STACK_SIZE {// TODO: check exists
+                        if metadata[arg].output as usize + height > STACK_SIZE {// TODO: check exists
                             return Err(Error::StackOverflow);
                         }
-                        height -= metadata[arg as usize].input as usize;
-                        height += metadata[arg as usize].output as usize;
+                        height -= metadata[arg].input as usize;
+                        height += metadata[arg].output as usize;
                         pos += 3;
                     }
                     RETF => {

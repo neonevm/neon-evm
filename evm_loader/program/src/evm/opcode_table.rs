@@ -8,7 +8,7 @@ use crate::evm::stack::STACK_SIZE;
 use super::{database::Database, opcode::Action, Machine};
 
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpCode {
     STOP = 0x00,
     ADD = 0x01,
@@ -350,7 +350,7 @@ impl OpCode {
         opcode.is_ok()
     }
 
-    pub fn is_terminal_opcode(op: u8) -> bool {
+    pub  fn is_terminal_opcode(op: u8) -> bool {
         let opcode: Result<OpCode> = op.try_into();
         match opcode {
             Ok(opcode) => Self::opcode_info(opcode).terminal,
@@ -358,35 +358,59 @@ impl OpCode {
         }
     }
 
-    pub fn u8(self) -> u8 {
+    pub const fn u8(self) -> u8 {
         self as u8
     }
 
-    fn max_stack(pop: usize, push: usize) -> usize {
+    const fn max_stack(pop: usize, push: usize) -> usize {
         STACK_SIZE + pop - push
     }
 
-    fn min_stack(pops: usize, _push: usize) -> usize {
+    const fn min_stack(pops: usize, _push: usize) -> usize {
         pops
     }
 
-    fn min_swap_stack(n: usize) -> usize {
+    const fn min_swap_stack(n: usize) -> usize {
         return Self::min_stack(n, n);
     }
 
-    fn max_swap_stack(n: usize) -> usize {
+    const fn max_swap_stack(n: usize) -> usize {
         return Self::max_stack(n, n);
     }
 
-    fn min_dup_stack(n: usize) -> usize {
+    const fn min_dup_stack(n: usize) -> usize {
         return Self::min_stack(n, n + 1);
     }
 
-    fn max_dup_stack(n: usize) -> usize {
+    const fn max_dup_stack(n: usize) -> usize {
         return Self::max_stack(n, n + 1);
     }
 
-    pub fn opcode_info(op: OpCode) -> OpcodeInfo {
+    const fn create_dup_opcode_info(n: usize) -> OpcodeInfo {
+        OpcodeInfo {
+            min_stack: Self::min_dup_stack(n),
+            max_stack: Self::max_dup_stack(n),
+            terminal: false,
+        }
+    }
+
+    const fn create_swap_opcode_info(n: usize) -> OpcodeInfo {
+        OpcodeInfo {
+            min_stack: Self::min_swap_stack(n),
+            max_stack: Self::max_swap_stack(n),
+            terminal: false,
+        }
+    }
+
+    const fn create_log_opcode_info(n: usize) -> OpcodeInfo {
+        OpcodeInfo {
+            min_stack: Self::min_stack(n, 0),
+            max_stack: Self::max_stack(n, 0),
+            terminal: false,
+        }
+    }
+
+    pub const fn opcode_info(op: OpCode) -> OpcodeInfo {
         match op {
             STOP => OpcodeInfo {
                 min_stack: Self::min_stack(0, 0),
@@ -663,351 +687,50 @@ impl OpCode {
                 max_stack: Self::max_stack(0, 0),
                 terminal: false,
             },
-            PUSH1 => OpcodeInfo {
+            PUSH1 | PUSH2 | PUSH3 | PUSH4 | PUSH5 | PUSH6 | PUSH7 | PUSH8 | PUSH9 | PUSH10 | 
+            PUSH11 | PUSH12 | PUSH13 | PUSH14 | PUSH15  | PUSH16  | PUSH17  | PUSH18 | PUSH19 | PUSH20 | 
+            PUSH21 | PUSH22 | PUSH23 | PUSH24 | PUSH25 | PUSH26 | PUSH27 | PUSH28 | PUSH29 | PUSH30 | PUSH31 | PUSH32 => OpcodeInfo {
                 min_stack: Self::min_stack(0, 1),
                 max_stack: Self::max_stack(0, 1),
                 terminal: false,
             },
-            PUSH2 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH3 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH4 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH5 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH6 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH7 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH8 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH9 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH10 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH11 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH12 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH13 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH14 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH15 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH16 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH17 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH18 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH19 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH20 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH21 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH22 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH23 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH24 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH25 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH26 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH27 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH28 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH29 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH30 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH31 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            PUSH32 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            DUP1 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(1),
-                max_stack: Self::max_dup_stack(1),
-                terminal: false,
-            },
-            DUP2 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(2),
-                max_stack: Self::max_dup_stack(2),
-                terminal: false,
-            },
-            DUP3 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(3),
-                max_stack: Self::max_dup_stack(3),
-                terminal: false,
-            },
-            DUP4 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(4),
-                max_stack: Self::max_dup_stack(4),
-                terminal: false,
-            },
-            DUP5 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(5),
-                max_stack: Self::max_dup_stack(5),
-                terminal: false,
-            },
-            DUP6 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(6),
-                max_stack: Self::max_dup_stack(6),
-                terminal: false,
-            },
-            DUP7 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(7),
-                max_stack: Self::max_dup_stack(7),
-                terminal: false,
-            },
-            DUP8 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(8),
-                max_stack: Self::max_dup_stack(8),
-                terminal: false,
-            },
-            DUP9 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(9),
-                max_stack: Self::max_dup_stack(9),
-                terminal: false,
-            },
-            DUP10 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(10),
-                max_stack: Self::max_dup_stack(10),
-                terminal: false,
-            },
-            DUP11 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(11),
-                max_stack: Self::max_dup_stack(11),
-                terminal: false,
-            },
-            DUP12 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(12),
-                max_stack: Self::max_dup_stack(12),
-                terminal: false,
-            },
-            DUP13 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(13),
-                max_stack: Self::max_dup_stack(13),
-                terminal: false,
-            },
-            DUP14 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(14),
-                max_stack: Self::max_dup_stack(14),
-                terminal: false,
-            },
-            DUP15 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(15),
-                max_stack: Self::max_dup_stack(15),
-                terminal: false,
-            },
-            DUP16 => OpcodeInfo {
-                min_stack: Self::min_dup_stack(16),
-                max_stack: Self::max_dup_stack(16),
-                terminal: false,
-            },
-            SWAP1 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(2),
-                max_stack: Self::max_swap_stack(2),
-                terminal: false,
-            },
-            SWAP2 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(3),
-                max_stack: Self::max_swap_stack(3),
-                terminal: false,
-            },
-            SWAP3 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(4),
-                max_stack: Self::max_swap_stack(4),
-                terminal: false,
-            },
-            SWAP4 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(5),
-                max_stack: Self::max_swap_stack(5),
-                terminal: false,
-            },
-            SWAP5 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(6),
-                max_stack: Self::max_swap_stack(6),
-                terminal: false,
-            },
-            SWAP6 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(7),
-                max_stack: Self::max_swap_stack(7),
-                terminal: false,
-            },
-            SWAP7 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(8),
-                max_stack: Self::max_swap_stack(8),
-                terminal: false,
-            },
-            SWAP8 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(9),
-                max_stack: Self::max_swap_stack(9),
-                terminal: false,
-            },
-            SWAP9 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(10),
-                max_stack: Self::max_swap_stack(10),
-                terminal: false,
-            },
-            SWAP10 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(11),
-                max_stack: Self::max_swap_stack(11),
-                terminal: false,
-            },
-            SWAP11 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(12),
-                max_stack: Self::max_swap_stack(12),
-                terminal: false,
-            },
-            SWAP12 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(13),
-                max_stack: Self::max_swap_stack(13),
-                terminal: false,
-            },
-            SWAP13 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(14),
-                max_stack: Self::max_swap_stack(14),
-                terminal: false,
-            },
-            SWAP14 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(15),
-                max_stack: Self::max_swap_stack(15),
-                terminal: false,
-            },
-            SWAP15 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(16),
-                max_stack: Self::max_swap_stack(16),
-                terminal: false,
-            },
-            SWAP16 => OpcodeInfo {
-                min_stack: Self::min_swap_stack(17),
-                max_stack: Self::max_swap_stack(17),
-                terminal: false,
-            },
-            LOG0 => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: false,
-            },
-            LOG1 => OpcodeInfo {
-                min_stack: Self::min_stack(3, 0),
-                max_stack: Self::max_stack(3, 0),
-                terminal: false,
-            },
-            LOG2 => OpcodeInfo {
-                min_stack: Self::min_stack(4, 0),
-                max_stack: Self::max_stack(4, 0),
-                terminal: false,
-            },
-            LOG3 => OpcodeInfo {
-                min_stack: Self::min_stack(5, 0),
-                max_stack: Self::max_stack(5, 0),
-                terminal: false,
-            },
-            LOG4 => OpcodeInfo {
-                min_stack: Self::min_stack(6, 0),
-                max_stack: Self::max_stack(6, 0),
-                terminal: false,
-            },
+            DUP1 => Self::create_dup_opcode_info(1),
+            DUP2 => Self::create_dup_opcode_info(2),
+            DUP3 => Self::create_dup_opcode_info(3),
+            DUP4 => Self::create_dup_opcode_info(4),
+            DUP5 => Self::create_dup_opcode_info(5),
+            DUP6 => Self::create_dup_opcode_info(6),
+            DUP7 => Self::create_dup_opcode_info(7),
+            DUP8 => Self::create_dup_opcode_info(8),
+            DUP9 => Self::create_dup_opcode_info(9),
+            DUP10 => Self::create_dup_opcode_info(10),
+            DUP11 => Self::create_dup_opcode_info(11),
+            DUP12 => Self::create_dup_opcode_info(12),
+            DUP13 => Self::create_dup_opcode_info(13),
+            DUP14 => Self::create_dup_opcode_info(14),
+            DUP15 => Self::create_dup_opcode_info(15),
+            DUP16 => Self::create_dup_opcode_info(16),
+            SWAP1 => Self::create_swap_opcode_info(2),
+            SWAP2 => Self::create_swap_opcode_info(3),
+            SWAP3 => Self::create_swap_opcode_info(4),
+            SWAP4 => Self::create_swap_opcode_info(5),
+            SWAP5 => Self::create_swap_opcode_info(6),
+            SWAP6 => Self::create_swap_opcode_info(7),
+            SWAP7 => Self::create_swap_opcode_info(8),
+            SWAP8 => Self::create_swap_opcode_info(9),
+            SWAP9 => Self::create_swap_opcode_info(10),
+            SWAP10 => Self::create_swap_opcode_info(11),
+            SWAP11 => Self::create_swap_opcode_info(12),
+            SWAP12 => Self::create_swap_opcode_info(13),
+            SWAP13 => Self::create_swap_opcode_info(14),
+            SWAP14 => Self::create_swap_opcode_info(15),
+            SWAP15 => Self::create_swap_opcode_info(16),
+            SWAP16 => Self::create_swap_opcode_info(17),
+            LOG0 => Self::create_log_opcode_info(2),
+            LOG1 => Self::create_log_opcode_info(3),
+            LOG2 => Self::create_log_opcode_info(4),
+            LOG3 => Self::create_log_opcode_info(5),
+            LOG4 => Self::create_log_opcode_info(6),
             CREATE => OpcodeInfo {
                 min_stack: Self::min_stack(3, 1),
                 max_stack: Self::max_stack(3, 1),
