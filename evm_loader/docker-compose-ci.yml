@@ -18,7 +18,6 @@ services:
 
   dk-neon-api:
     restart: unless-stopped
-    container_name: dk-neon-api
     hostname: neon_api
     command: /opt/neon-api -H 0.0.0.0:8085
     environment:
@@ -38,11 +37,9 @@ services:
       NEON_DB_INDEXER_PASSWORD: ""
       KEYPAIR: /opt/id.json
       FEEPAIR: /opt/id.json
-    image: neonlabsorg/evm_loader:latest
-    expose:
-    - "8085"
+    image: ${EVM_LOADER_IMAGE}
     ports:
-    - 8085:8085
+    - 8085
     volumes:
     - ./files/id.json:/opt/id.json
     networks:
