@@ -63,7 +63,7 @@ impl FunctionMetadata {
         Ok(())
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn _to_bytes(&self) -> Vec<u8> {
         vec![
             self.input,
             self.output,
@@ -171,7 +171,7 @@ impl TryFrom<u8> for SectionKind {
 impl Container {
     #[allow(dead_code)]
     /// marshal_binary encodes an EOF [Container] into binary format.
-    pub fn marshal_binary(&self) -> Buffer {
+    pub fn _marshal_binary(&self) -> Buffer {
         let mut bytes = Vec::from(EOF_MAGIC);
 
         bytes.push(EOF1_VERSION);
@@ -201,7 +201,7 @@ impl Container {
         let type_section_content = self
             .types
             .iter()
-            .flat_map(FunctionMetadata::to_bytes)
+            .flat_map(FunctionMetadata::_to_bytes)
             .collect::<Vec<_>>();
 
         bytes.extend(type_section_content);
