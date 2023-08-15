@@ -72,10 +72,10 @@ macro_rules! trace_end_step {
     };
 }
 
+use crate::evm::eof::{has_eof_magic, Container};
+use crate::evm::opcode::ReturnContext;
 pub(crate) use trace_end_step;
 pub(crate) use tracing_event;
-use crate::evm::eof::{Container, has_eof_magic};
-use crate::evm::opcode::ReturnContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ExitStatus {
@@ -240,7 +240,11 @@ impl<B: Database> Machine<B> {
             memory: Memory::new(),
             pc: 0_usize,
             code_section: 0,
-            return_stack: vec![ReturnContext {stack_height: 0, pc: 0, section: 0} ],
+            return_stack: vec![ReturnContext {
+                stack_height: 0,
+                pc: 0,
+                section: 0,
+            }],
             is_static: false,
             reason: Reason::Call,
             parent: None,
@@ -290,7 +294,11 @@ impl<B: Database> Machine<B> {
             memory: Memory::new(),
             pc: 0_usize,
             code_section: 0,
-            return_stack: vec![ReturnContext {stack_height: 0, pc: 0, section: 0} ],
+            return_stack: vec![ReturnContext {
+                stack_height: 0,
+                pc: 0,
+                section: 0,
+            }],
             is_static: false,
             reason: Reason::Create,
             execution_code: code,
@@ -304,8 +312,9 @@ impl<B: Database> Machine<B> {
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
         let code = match &self.container {
             Some(container) => &container.code[self.code_section],
-            None => &self.execution_code
-        }.clone();
+            None => &self.execution_code,
+        }
+        .clone();
         assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
         assert!(self.return_data.uninit_data().is_none());
@@ -340,8 +349,14 @@ impl<B: Database> Machine<B> {
                 memory: self.memory.to_vec()
             });
 
+            let opcode_table = if self.container.is_some() {
+                Self::EOF_OPCODES
+            } else {
+                Self::OPCODES
+            };
+
             // SAFETY: OPCODES.len() == 256, opcode <= 255
-            let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
+            let opcode_fn = unsafe { opcode_table.get_unchecked(opcode as usize) };
 
             let opcode_result = match opcode_fn(self, backend) {
                 Ok(result) => result,
@@ -381,7 +396,7 @@ impl<B: Database> Machine<B> {
     pub fn code_at(&self, code_section: usize) -> &Buffer {
         match &self.container {
             Some(container) => &container.code[code_section],
-            None => &self.execution_code
+            None => &self.execution_code,
         }
     }
 
@@ -413,7 +428,11 @@ impl<B: Database> Machine<B> {
             memory: Memory::new(),
             pc: 0_usize,
             code_section: 0, // TODO: set if need
-            return_stack: vec![ReturnContext {stack_height: 0, pc: 0, section: 0} ], // TODO: set if need
+            return_stack: vec![ReturnContext {
+                stack_height: 0,
+                pc: 0,
+                section: 0,
+            }], // TODO: set if need
             is_static: self.is_static,
             reason,
             parent: None,
