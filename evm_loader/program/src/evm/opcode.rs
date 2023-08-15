@@ -34,9 +34,10 @@ pub enum Action {
 impl<B: Database> Machine<B> {
     /// Unknown instruction
     pub fn opcode_unknown(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
         Err(Error::UnknownOpcode(
             self.context.contract,
-            self.execution_code[self.pc],
+            code[self.pc],
         ))
     }
 
@@ -830,7 +831,8 @@ impl<B: Database> Machine<B> {
     /// move pc past op and operand (+3), add relative offset, subtract 1 to
     /// account for interpreter loop.
     pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
-        let offset = self.execution_code.get_i16_or_default(self.pc + 1);
+        let code = self.get_code();
+        let offset = code.get_i16_or_default(self.pc + 1);
         Ok(Action::Jump(((self.pc + 3) as isize + offset as isize - 1) as usize))
     }
 
@@ -845,12 +847,13 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
-        let count = self.execution_code.get_or_default(self.pc + 1) as usize;
-        let idx = self.stack.pop_u256()?;
+        let idx = self.stack.pop_u256()?.clone();
+        let code = self.get_code();
+        let count = code.get_or_default(self.pc + 1) as usize;
         if idx > U256::new(u64::MAX as u128) || idx > U256::new(count as u128) {
             return Ok(Action::Jump(self.pc + 1 + count * 2));
         }
-        let offset = self.execution_code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
+        let offset = code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
         return Ok(Action::Jump(((self.pc + 2 + count * 2) as isize + offset as isize - 1) as usize));
     }
 
@@ -1355,9 +1358,10 @@ impl<B: Database> Machine<B> {
 
     /// Invalid instruction
     pub fn opcode_invalid(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
         Err(Error::InvalidOpcode(
             self.context.contract,
-            self.execution_code[self.pc],
+            code[self.pc],
         ))
     }
 
