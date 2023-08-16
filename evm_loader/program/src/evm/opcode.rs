@@ -833,14 +833,14 @@ impl<B: Database> Machine<B> {
     pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let offset = code.get_i16_or_default(self.pc + 1);
-        Ok(Action::Jump(((self.pc + 3) as isize + offset as isize - 1) as usize))
+        Ok(Action::Jump(((self.pc + 3) as isize + offset as isize) as usize))
     }
 
     pub fn opcode_rjumpi(&mut self, _backend: &mut B) -> Result<Action> {
         let condition = self.stack.pop_u256()?;
         if condition == U256::ZERO {
             // Not branching, just skip over immediate argument.
-            Ok(Action::Jump(self.pc + 2))
+            Ok(Action::Jump(self.pc + 3))
         } else {
             self.opcode_rjump(_backend)
         }
@@ -851,10 +851,10 @@ impl<B: Database> Machine<B> {
         let code = self.get_code();
         let count = code.get_or_default(self.pc + 1) as usize;
         if idx > U256::new(u64::MAX as u128) || idx > U256::new(count as u128) {
-            return Ok(Action::Jump(self.pc + 1 + count * 2));
+            return Ok(Action::Jump(self.pc + 2 + count * 2));
         }
         let offset = code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
-        return Ok(Action::Jump(((self.pc + 2 + count * 2) as isize + offset as isize - 1) as usize));
+        return Ok(Action::Jump(((self.pc + 2 + count * 2) as isize + offset as isize) as usize));
     }
 
     /// Place zero on stack
