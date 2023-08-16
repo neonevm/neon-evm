@@ -14,6 +14,7 @@ pub use neon_lib::errors;
 pub use neon_lib::rpc;
 pub use neon_lib::syscall_stubs;
 pub use neon_lib::types;
+use tracing_appender::non_blocking::NonBlockingBuilder;
 
 use std::sync::Arc;
 use std::{env, net::SocketAddr, str::FromStr};
@@ -30,11 +31,15 @@ async fn main() -> NeonApiResult<()> {
     let options = api_options::parse();
 
     // initialize tracing
-    tracing_subscriber::fmt::init();
+    let (non_blocking, _guard) = NonBlockingBuilder::default()
+        .lossy(false)
+        .finish(std::io::stdout());
+
+    tracing_subscriber::fmt().with_writer(non_blocking).init();
 
     let api_config = config::load_api_config_from_enviroment();
 
-    let config = config::create_from_api_comnfig(&api_config)?;
+    let config = config::create_from_api_config(&api_config)?;
 
     let state: NeonApiState = Arc::new(api_server::state::State::new(config));
 
