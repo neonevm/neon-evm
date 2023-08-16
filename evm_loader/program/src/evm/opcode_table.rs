@@ -1055,11 +1055,11 @@ impl<B: Database> Machine<B> {
         opcodes[RETF as usize] = Self::opcode_retf;
 
         // Deprecated opcodes
-        opcodes[CALLCODE as usize] = Self::opcode_deprecate;
-        opcodes[SELFDESTRUCT as usize] = Self::opcode_deprecate;
-        opcodes[JUMP as usize] = Self::opcode_deprecate;
-        opcodes[JUMPI as usize] = Self::opcode_deprecate;
-        opcodes[PC as usize] = Self::opcode_deprecate;
+        opcodes[CALLCODE as usize] = Self::opcode_deprecated;
+        opcodes[SELFDESTRUCT as usize] = Self::opcode_deprecated;
+        opcodes[JUMP as usize] = Self::opcode_deprecated;
+        opcodes[JUMPI as usize] = Self::opcode_deprecated;
+        opcodes[PC as usize] = Self::opcode_deprecated;
 
         opcodes
     };
