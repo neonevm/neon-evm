@@ -4,8 +4,9 @@ use crate::evm::tracing::event_listener::trace::{FullTraceData, VMTrace, VMTrace
 
 use super::vm_tracer::VmTracer;
 
-pub type TracerType = Option<Arc<RwLock<Option<Tracer>>>>;
+pub type TracerType = Option<Arc<RwLock<Tracer>>>;
 
+#[derive(Debug)]
 pub struct Tracer {
     pub vm: VmTracer,
     pub data: Vec<FullTraceData>,

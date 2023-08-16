@@ -23,7 +23,10 @@ impl ListenerTracer for Tracer {
     }
 
     fn end_step(&mut self, return_data: Option<Vec<u8>>) {
-        let data = self.data.last_mut().expect("data was pushed in begin_step");
+        let data = self
+            .data
+            .last_mut()
+            .expect("No data were pushed in `begin_step`");
         data.return_data = return_data;
         if let Some((index, value)) = self.vm.step_diff().storage_access {
             data.storage.insert(index, value);

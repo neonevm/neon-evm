@@ -39,14 +39,14 @@ macro_rules! tracing_event {
     ($self:ident, $x:expr) => {
         #[cfg(feature = "tracing")]
         if let Some(tracer) = &$self.tracer {
-            tracer.write().unwrap().as_mut().unwrap().event($x);
+            tracer.write().expect("Poisoned RwLock").event($x);
         }
     };
     ($self:ident, $condition:expr, $x:expr) => {
         #[cfg(feature = "tracing")]
         if let Some(tracer) = &$self.tracer {
             if $condition {
-                tracer.write().unwrap().as_mut().unwrap().event($x);
+                tracer.write().expect("Poisoned RwLock").event($x);
             }
         }
     };
@@ -56,15 +56,14 @@ macro_rules! trace_end_step {
     ($self:ident, $return_data_vec:expr) => {
         #[cfg(feature = "tracing")]
         if let Some(tracer) = &$self.tracer {
-            let mut tracer = tracer.write().unwrap();
-            let tracer = tracer.as_mut().unwrap();
-            if tracer.enable_return_data() {
-                tracer.event(crate::evm::tracing::Event::EndStep {
+            let mut tracer_write_guard = tracer.write().expect("Poisoned RwLock");
+            if tracer_write_guard.enable_return_data() {
+                tracer_write_guard.event(crate::evm::tracing::Event::EndStep {
                     gas_used: 0_u64,
                     return_data: $return_data_vec,
                 })
             } else {
-                tracer.event(crate::evm::tracing::Event::EndStep {
+                tracer_write_guard.event(crate::evm::tracing::Event::EndStep {
                     gas_used: 0_u64,
                     return_data: None,
                 })

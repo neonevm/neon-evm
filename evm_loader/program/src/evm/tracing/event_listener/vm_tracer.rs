@@ -9,6 +9,7 @@ pub struct StepDiff {
     pub stack_push: Vec<[u8; 32]>,
 }
 
+#[derive(Debug)]
 pub struct VmTracer {
     pub tracer: ExecutiveVMTracer,
     step_diff: Vec<StepDiff>,
