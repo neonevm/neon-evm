@@ -5,6 +5,7 @@ use crate::evm::opcode_table::OpCode::*;
 use crate::evm::stack::STACK_SIZE;
 use std::convert::*;
 
+use super::eof::Container;
 use super::{database::Database, opcode::Action, Machine};
 
 #[repr(u8)]
@@ -1055,11 +1056,11 @@ impl<B: Database> Machine<B> {
         opcodes[RETF as usize] = Self::opcode_retf;
 
         // Deprecated opcodes
-        opcodes[CALLCODE as usize] = Self::opcode_deprecated;
-        opcodes[SELFDESTRUCT as usize] = Self::opcode_deprecated;
-        opcodes[JUMP as usize] = Self::opcode_deprecated;
-        opcodes[JUMPI as usize] = Self::opcode_deprecated;
-        opcodes[PC as usize] = Self::opcode_deprecated;
+        let mut i = 0;
+        while i < Container::DEPRECATED_OPCODES.len() {
+            opcodes[Container::DEPRECATED_OPCODES[i] as usize] = Self::opcode_deprecated;
+            i += 1;
+        }
 
         opcodes
     };
