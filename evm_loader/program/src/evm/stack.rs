@@ -38,6 +38,7 @@ impl Stack {
         }
     }
 
+    #[allow(clippy::cast_sign_loss)]
     #[inline(always)]
     pub fn len(&self) -> usize {
         unsafe { self.top.offset_from(self.begin) as usize / ELEMENT_SIZE }
@@ -274,8 +275,8 @@ impl Drop for Stack {
 
 impl serde::Serialize for Stack {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer,
+    where
+        S: serde::Serializer,
     {
         unsafe {
             let data = std::slice::from_raw_parts(self.begin, STACK_SIZE);
@@ -288,8 +289,8 @@ impl serde::Serialize for Stack {
 
 impl<'de> serde::Deserialize<'de> for Stack {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de>,
+    where
+        D: serde::Deserializer<'de>,
     {
         struct BytesVisitor;
 
@@ -301,8 +302,8 @@ impl<'de> serde::Deserialize<'de> for Stack {
             }
 
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-                where
-                    E: serde::de::Error,
+            where
+                E: serde::de::Error,
             {
                 if v.len() % 32 != 0 {
                     return Err(E::invalid_length(v.len(), &self));

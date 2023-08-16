@@ -1,3 +1,9 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
 use serde::{Deserialize, Serialize};
@@ -12,7 +18,7 @@ use crate::{
     types::Address,
 };
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReturnContext {
     pub section: usize,
     pub pc: usize,
@@ -834,27 +840,30 @@ impl<B: Database> Machine<B> {
         ))
     }
 
-    pub fn opcode_rjumpi(&mut self, _backend: &mut B) -> Result<Action> {
+    pub fn opcode_rjumpi(&mut self, backend: &mut B) -> Result<Action> {
         let condition = self.stack.pop_u256()?;
         if condition == U256::ZERO {
             // Not branching, just skip over immediate argument.
             Ok(Action::Jump(self.pc + 3))
         } else {
-            self.opcode_rjump(_backend)
+            self.opcode_rjump(backend)
         }
     }
 
     pub fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
-        let idx = self.stack.pop_u256()?.clone();
+        let idx = self.stack.pop_u256()?;
         let code = self.get_code();
         let count = code.get_or_default(self.pc + 1) as usize;
+
+        #[allow(clippy::cast_lossless)]
         if idx > U256::new(u64::MAX as u128) || idx > U256::new(count as u128) {
             return Ok(Action::Jump(self.pc + 2 + count * 2));
         }
         let offset = code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
-        return Ok(Action::Jump(
+
+        Ok(Action::Jump(
             ((self.pc + 2 + count * 2) as isize + offset as isize) as usize,
-        ));
+        ))
     }
 
     /// Place zero on stack

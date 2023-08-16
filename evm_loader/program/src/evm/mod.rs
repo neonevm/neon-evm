@@ -389,10 +389,12 @@ impl<B: Database> Machine<B> {
         Ok((status, step))
     }
 
+    #[must_use]
     pub fn get_code(&self) -> &Buffer {
         self.code_at(self.code_section)
     }
 
+    #[must_use]
     pub fn code_at(&self, code_section: usize) -> &Buffer {
         match &self.container {
             Some(container) => &container.code[code_section],

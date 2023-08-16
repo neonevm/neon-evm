@@ -1,13 +1,16 @@
 #![allow(clippy::type_complexity)]
 
 use crate::error::{Error, Result};
-use crate::evm::opcode_table::OpCode::*;
 use crate::evm::stack::STACK_SIZE;
-use std::convert::*;
+use std::convert::TryFrom;
 
 use super::eof::Container;
 use super::{database::Database, opcode::Action, Machine};
 
+#[allow(clippy::enum_glob_use)]
+use OpCode::*;
+
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum OpCode {
@@ -187,6 +190,7 @@ pub struct OpcodeInfo {
 impl TryFrom<u8> for OpCode {
     type Error = Error;
 
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             op if op == STOP as u8 => Ok(STOP),
@@ -347,13 +351,11 @@ impl TryFrom<u8> for OpCode {
 
 impl OpCode {
     pub fn has_opcode(op: u8) -> bool {
-        let opcode: Result<OpCode> = op.try_into();
-        opcode.is_ok()
+        OpCode::try_from(op).is_ok()
     }
 
     pub fn is_terminal_opcode(op: u8) -> bool {
-        let opcode: Result<OpCode> = op.try_into();
-        match opcode {
+        match OpCode::try_from(op) {
             Ok(opcode) => Self::opcode_info(opcode).terminal,
             _ => false,
         }
@@ -372,19 +374,19 @@ impl OpCode {
     }
 
     const fn min_swap_stack(n: usize) -> usize {
-        return Self::min_stack(n, n);
+        Self::min_stack(n, n)
     }
 
     const fn max_swap_stack(n: usize) -> usize {
-        return Self::max_stack(n, n);
+        Self::max_stack(n, n)
     }
 
     const fn min_dup_stack(n: usize) -> usize {
-        return Self::min_stack(n, n + 1);
+        Self::min_stack(n, n + 1)
     }
 
     const fn max_dup_stack(n: usize) -> usize {
-        return Self::max_stack(n, n + 1);
+        Self::max_stack(n, n + 1)
     }
 
     const fn create_dup_opcode_info(n: usize) -> OpcodeInfo {
@@ -411,6 +413,7 @@ impl OpCode {
         }
     }
 
+    #[allow(clippy::match_same_arms, clippy::too_many_lines)]
     pub const fn opcode_info(op: OpCode) -> OpcodeInfo {
         match op {
             STOP => OpcodeInfo {
