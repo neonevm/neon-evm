@@ -9,12 +9,23 @@ use crate::error::{Error, Result};
 use crate::evm::analysis::Bitvec;
 use crate::evm::eof::FunctionMetadata;
 use crate::evm::opcode_table::OpCode;
-use crate::evm::opcode_table::OpCode::{CALLF, PUSH0, PUSH1, PUSH32, RETF, RJUMP, RJUMPI, RJUMPV};
+use crate::evm::opcode_table::OpCode::{
+    CALLCODE, CALLF, JUMP, JUMPI, PC, PUSH0, PUSH1, PUSH32, RETF, RJUMP, RJUMPI, RJUMPV,
+    SELFDESTRUCT,
+};
 use crate::evm::stack::STACK_SIZE;
 use crate::evm::Buffer;
 use std::collections::HashMap;
 
 impl Container {
+    pub const DEPRECATED_OPCODES: [u8; 5] = [
+        CALLCODE as u8,
+        SELFDESTRUCT as u8,
+        JUMP as u8,
+        JUMPI as u8,
+        PC as u8,
+    ];
+
     pub fn validate_container(&self) -> Result<()> {
         for (section, code) in self.code.iter().enumerate() {
             Self::validate_code(code, section, &self.types)?;

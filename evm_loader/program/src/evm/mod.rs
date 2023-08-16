@@ -349,8 +349,14 @@ impl<B: Database> Machine<B> {
                 memory: self.memory.to_vec()
             });
 
+            let opcode_table = if self.container.is_some() {
+                Self::EOF_OPCODES
+            } else {
+                Self::OPCODES
+            };
+
             // SAFETY: OPCODES.len() == 256, opcode <= 255
-            let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
+            let opcode_fn = unsafe { opcode_table.get_unchecked(opcode as usize) };
 
             let opcode_result = match opcode_fn(self, backend) {
                 Ok(result) => result,

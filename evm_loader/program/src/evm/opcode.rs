@@ -9,6 +9,7 @@ use ethnum::{I256, U256};
 use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
+use super::eof::has_eof_magic;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
 use crate::evm::opcode::Action::Jump;
 use crate::{
@@ -1074,10 +1075,18 @@ impl<B: Database> Machine<B> {
             code: init_code.to_vec()
         });
 
+        let is_caller_eof = has_eof_magic(&backend.code(&context.caller)?);
+
+        if !is_caller_eof && has_eof_magic(&init_code) {
+            return Err(Error::EOFLegacyCode);
+        }
+
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
+
         if let Some(container) = &self.container {
             container.validate_container()?;
         }
+
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
@@ -1369,6 +1378,15 @@ impl<B: Database> Machine<B> {
     pub fn opcode_invalid(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         Err(Error::InvalidOpcode(self.context.contract, code[self.pc]))
+    }
+
+    /// Deprecated instruction
+    pub fn opcode_deprecated(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
+        Err(Error::DeprecatedOpcode(
+            self.context.contract,
+            code[self.pc],
+        ))
     }
 
     /// Halt execution, destroys the contract and send all funds to address
