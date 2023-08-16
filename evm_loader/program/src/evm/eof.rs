@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation)]
+
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -32,7 +34,7 @@ pub fn has_eof_magic(bytes: &Buffer) -> bool {
     EOF_MAGIC.len() <= bytes.len() && bytes.starts_with(&EOF_MAGIC)
 }
 
-/// Container is an EOF container object.
+/// `Container` is an EOF container object.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Container {
     pub types: Vec<FunctionMetadata>,
@@ -40,8 +42,8 @@ pub struct Container {
     pub data: Buffer,
 }
 
-/// FunctionMetadata is an EOF function signature.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+/// `FunctionMetadata` is an EOF function signature.
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FunctionMetadata {
     pub input: u8,
     pub output: u8,
@@ -86,15 +88,15 @@ pub struct Section {
 }
 
 impl Section {
-    /// parse_section decodes a (kind, size) [pair][Section] from an EOF header.
+    /// `parse_section` decodes a (kind, size) [pair][Section] from an EOF header.
     fn parse(bytes: &Buffer, idx: usize) -> Result<Self> {
         if idx + SECTION_LEN >= bytes.len() {
             return Err(Error::UnexpectedEndOfFile);
         }
 
         Ok(Section {
-            kind: SectionKind::try_from(u8::from(bytes[idx]))?,
-            size:  bytes.get_u16_or_default(idx+1),
+            kind: SectionKind::try_from(bytes[idx])?,
+            size: bytes.get_u16_or_default(idx + 1),
         })
     }
 }
@@ -106,19 +108,19 @@ pub struct SectionList {
 }
 
 impl SectionList {
-    /// parse_section_list decodes a (kind, len, []codeSize) [section list][SectionList] from an EOF header.
+    /// `parse_section_list` decodes a (kind, len, []codeSize) [section list][SectionList] from an EOF header.
     fn parse(bytes: &Buffer, idx: usize) -> Result<Self> {
         if idx >= bytes.len() {
             return Err(Error::UnexpectedEndOfFile);
         }
 
         Ok(SectionList {
-            kind: SectionKind::try_from(u8::from(bytes[idx]))?,
+            kind: SectionKind::try_from(bytes[idx])?,
             list: Self::parse_list(bytes, idx + 1)?,
         })
     }
 
-    // parse_list decodes a list of u16..
+    // `parse_list` decodes a list of u16..
     fn parse_list(bytes: &Buffer, idx: usize) -> Result<Vec<u16>> {
         if bytes.len() < idx + 2 {
             return Err(Error::UnexpectedEndOfFile);
@@ -131,7 +133,7 @@ impl SectionList {
         }
 
         Ok((0..(count as usize))
-            .map(|i| bytes.get_u16_or_default( idx + 2 + 2 * i))
+            .map(|i| bytes.get_u16_or_default(idx + 2 + 2 * i))
             .collect::<Vec<_>>())
     }
 
@@ -141,7 +143,7 @@ impl SectionList {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SectionKind {
     Type = 1,
     Code,
@@ -175,7 +177,7 @@ impl TryFrom<u8> for SectionKind {
 }
 
 impl Container {
-    /// marshal_binary encodes an EOF [Container] into binary format.
+    /// `marshal_binary` encodes an EOF [Container] into binary format.
     pub fn _marshal_binary(&self) -> Buffer {
         let mut bytes = Vec::from(EOF_MAGIC);
 
@@ -211,13 +213,13 @@ impl Container {
 
         bytes.extend(type_section_content);
 
-        bytes.extend(self.code.clone().iter().map(|buf| buf.to_vec()).flatten());
+        bytes.extend(self.code.clone().iter().flat_map(|buf| buf.to_vec()));
         bytes.extend(self.data.to_vec());
 
         Buffer::from_slice(&bytes)
     }
 
-    /// unmarshal_binary decodes an EOF [Container].
+    /// `unmarshal_binary` decodes an EOF [Container].
     pub fn unmarshal_binary(bytes: &Buffer) -> Result<Self> {
         if !has_eof_magic(bytes) {
             return Err(Error::InvalidMagic);
@@ -229,7 +231,7 @@ impl Container {
 
         assert_eof_version_1(bytes)?;
 
-        let type_section = Section::parse(&bytes, OFFSET_TYPES_KIND)?;
+        let type_section = Section::parse(bytes, OFFSET_TYPES_KIND)?;
 
         type_section.kind.assert(SectionKind::Type)?;
 
@@ -243,7 +245,7 @@ impl Container {
             return Err(Error::InvalidTypeSizeExceed(type_section.size));
         }
 
-        let code_section_list = SectionList::parse(&bytes, OFFSET_CODE_KIND)?;
+        let code_section_list = SectionList::parse(bytes, OFFSET_CODE_KIND)?;
 
         code_section_list.kind.assert(SectionKind::Code)?;
 
@@ -255,7 +257,7 @@ impl Container {
         }
 
         let offset_data_kind = OFFSET_CODE_KIND + 2 + 2 * code_section_list.list.len() + 1;
-        let data_section = Section::parse(&bytes, offset_data_kind)?;
+        let data_section = Section::parse(bytes, offset_data_kind)?;
 
         data_section.kind.assert(SectionKind::Data)?;
 
@@ -318,10 +320,10 @@ impl Container {
 
         let code = code
             .iter()
-            .map(|v| Buffer::from_slice(&v))
+            .map(|v| Buffer::from_slice(v))
             .collect::<Vec<_>>();
 
-        Ok(Container { code, data, types })
+        Ok(Container { types, code, data })
     }
 }
 

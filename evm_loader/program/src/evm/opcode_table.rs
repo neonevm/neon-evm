@@ -1,12 +1,15 @@
 #![allow(clippy::type_complexity)]
 
 use crate::error::{Error, Result};
-use crate::evm::opcode_table::OpCode::*;
-use std::convert::*;
 use crate::evm::stack::STACK_SIZE;
+use std::convert::{TryFrom, TryInto};
 
 use super::{database::Database, opcode::Action, Machine};
 
+#[allow(clippy::enum_glob_use)]
+use OpCode::*;
+
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum OpCode {
@@ -186,6 +189,7 @@ pub struct OpcodeInfo {
 impl TryFrom<u8> for OpCode {
     type Error = Error;
 
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             op if op == STOP as u8 => Ok(STOP),
@@ -339,7 +343,7 @@ impl TryFrom<u8> for OpCode {
             op if op == SELFDESTRUCT as u8 => Ok(SELFDESTRUCT),
             op if op == TLOAD as u8 => Ok(TLOAD),
             op if op == TSTORE as u8 => Ok(TSTORE),
-            op => Err(Error::UnsupportedOpcode(op))
+            op => Err(Error::UnsupportedOpcode(op)),
         }
     }
 }
@@ -350,11 +354,11 @@ impl OpCode {
         opcode.is_ok()
     }
 
-    pub  fn is_terminal_opcode(op: u8) -> bool {
+    pub fn is_terminal_opcode(op: u8) -> bool {
         let opcode: Result<OpCode> = op.try_into();
         match opcode {
             Ok(opcode) => Self::opcode_info(opcode).terminal,
-            _ => false
+            _ => false,
         }
     }
 
@@ -371,19 +375,19 @@ impl OpCode {
     }
 
     const fn min_swap_stack(n: usize) -> usize {
-        return Self::min_stack(n, n);
+        Self::min_stack(n, n)
     }
 
     const fn max_swap_stack(n: usize) -> usize {
-        return Self::max_stack(n, n);
+        Self::max_stack(n, n)
     }
 
     const fn min_dup_stack(n: usize) -> usize {
-        return Self::min_stack(n, n + 1);
+        Self::min_stack(n, n + 1)
     }
 
     const fn max_dup_stack(n: usize) -> usize {
-        return Self::max_stack(n, n + 1);
+        Self::max_stack(n, n + 1)
     }
 
     const fn create_dup_opcode_info(n: usize) -> OpcodeInfo {
@@ -410,6 +414,7 @@ impl OpCode {
         }
     }
 
+    #[allow(clippy::match_same_arms, clippy::too_many_lines)]
     pub const fn opcode_info(op: OpCode) -> OpcodeInfo {
         match op {
             STOP => OpcodeInfo {
@@ -687,9 +692,10 @@ impl OpCode {
                 max_stack: Self::max_stack(0, 0),
                 terminal: false,
             },
-            PUSH1 | PUSH2 | PUSH3 | PUSH4 | PUSH5 | PUSH6 | PUSH7 | PUSH8 | PUSH9 | PUSH10 | 
-            PUSH11 | PUSH12 | PUSH13 | PUSH14 | PUSH15  | PUSH16  | PUSH17  | PUSH18 | PUSH19 | PUSH20 | 
-            PUSH21 | PUSH22 | PUSH23 | PUSH24 | PUSH25 | PUSH26 | PUSH27 | PUSH28 | PUSH29 | PUSH30 | PUSH31 | PUSH32 => OpcodeInfo {
+            PUSH1 | PUSH2 | PUSH3 | PUSH4 | PUSH5 | PUSH6 | PUSH7 | PUSH8 | PUSH9 | PUSH10
+            | PUSH11 | PUSH12 | PUSH13 | PUSH14 | PUSH15 | PUSH16 | PUSH17 | PUSH18 | PUSH19
+            | PUSH20 | PUSH21 | PUSH22 | PUSH23 | PUSH24 | PUSH25 | PUSH26 | PUSH27 | PUSH28
+            | PUSH29 | PUSH30 | PUSH31 | PUSH32 => OpcodeInfo {
                 min_stack: Self::min_stack(0, 1),
                 max_stack: Self::max_stack(0, 1),
                 terminal: false,
@@ -865,7 +871,7 @@ impl OpCode {
                 min_stack: Self::min_stack(2, 0),
                 max_stack: Self::max_stack(2, 0),
                 terminal: false,
-            }
+            },
         }
     }
 }

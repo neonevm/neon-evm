@@ -1,19 +1,23 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
 use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
 use super::{database::Database, tracing_event, Context, Machine, Reason};
+use crate::evm::opcode::Action::Jump;
 use crate::{
     error::{Error, Result},
-    evm::{
-        trace_end_step, Buffer,
-    },
+    evm::{trace_end_step, Buffer},
     types::Address,
 };
-use crate::evm::opcode::Action::Jump;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReturnContext {
     pub section: usize,
     pub pc: usize,
@@ -35,10 +39,7 @@ impl<B: Database> Machine<B> {
     /// Unknown instruction
     pub fn opcode_unknown(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
-        Err(Error::UnknownOpcode(
-            self.context.contract,
-            code[self.pc],
-        ))
+        Err(Error::UnknownOpcode(self.context.contract, code[self.pc]))
     }
 
     /// (u)int256 addition modulo 2**256
@@ -833,28 +834,35 @@ impl<B: Database> Machine<B> {
     pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let offset = code.get_i16_or_default(self.pc + 1);
-        Ok(Action::Jump(((self.pc + 3) as isize + offset as isize) as usize))
+        Ok(Action::Jump(
+            ((self.pc + 3) as isize + offset as isize) as usize,
+        ))
     }
 
-    pub fn opcode_rjumpi(&mut self, _backend: &mut B) -> Result<Action> {
+    pub fn opcode_rjumpi(&mut self, backend: &mut B) -> Result<Action> {
         let condition = self.stack.pop_u256()?;
         if condition == U256::ZERO {
             // Not branching, just skip over immediate argument.
             Ok(Action::Jump(self.pc + 3))
         } else {
-            self.opcode_rjump(_backend)
+            self.opcode_rjump(backend)
         }
     }
 
     pub fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
-        let idx = self.stack.pop_u256()?.clone();
+        let idx = self.stack.pop_u256()?;
         let code = self.get_code();
         let count = code.get_or_default(self.pc + 1) as usize;
+
+        #[allow(clippy::cast_lossless)]
         if idx > U256::new(u64::MAX as u128) || idx > U256::new(count as u128) {
             return Ok(Action::Jump(self.pc + 2 + count * 2));
         }
         let offset = code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
-        return Ok(Action::Jump(((self.pc + 2 + count * 2) as isize + offset as isize) as usize));
+
+        Ok(Action::Jump(
+            ((self.pc + 2 + count * 2) as isize + offset as isize) as usize,
+        ))
     }
 
     /// Place zero on stack
@@ -965,7 +973,8 @@ impl<B: Database> Machine<B> {
     pub fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let idx = code.get_u16_or_default(self.pc + 1);
-        let typ = &self.container
+        let typ = &self
+            .container
             .as_ref()
             .ok_or(Error::ContainerNotFound)?
             .types[idx as usize];
@@ -1359,10 +1368,7 @@ impl<B: Database> Machine<B> {
     /// Invalid instruction
     pub fn opcode_invalid(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
-        Err(Error::InvalidOpcode(
-            self.context.contract,
-            code[self.pc],
-        ))
+        Err(Error::InvalidOpcode(self.context.contract, code[self.pc]))
     }
 
     /// Halt execution, destroys the contract and send all funds to address
