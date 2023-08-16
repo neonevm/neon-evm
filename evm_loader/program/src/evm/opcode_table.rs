@@ -2,9 +2,10 @@
 
 use crate::error::{Error, Result};
 use crate::evm::opcode_table::OpCode::*;
-use std::convert::*;
 use crate::evm::stack::STACK_SIZE;
+use std::convert::*;
 
+use super::eof::Container;
 use super::{database::Database, opcode::Action, Machine};
 
 #[repr(u8)]
@@ -339,7 +340,7 @@ impl TryFrom<u8> for OpCode {
             op if op == SELFDESTRUCT as u8 => Ok(SELFDESTRUCT),
             op if op == TLOAD as u8 => Ok(TLOAD),
             op if op == TSTORE as u8 => Ok(TSTORE),
-            op => Err(Error::UnsupportedOpcode(op))
+            op => Err(Error::UnsupportedOpcode(op)),
         }
     }
 }
@@ -350,11 +351,11 @@ impl OpCode {
         opcode.is_ok()
     }
 
-    pub  fn is_terminal_opcode(op: u8) -> bool {
+    pub fn is_terminal_opcode(op: u8) -> bool {
         let opcode: Result<OpCode> = op.try_into();
         match opcode {
             Ok(opcode) => Self::opcode_info(opcode).terminal,
-            _ => false
+            _ => false,
         }
     }
 
@@ -687,9 +688,10 @@ impl OpCode {
                 max_stack: Self::max_stack(0, 0),
                 terminal: false,
             },
-            PUSH1 | PUSH2 | PUSH3 | PUSH4 | PUSH5 | PUSH6 | PUSH7 | PUSH8 | PUSH9 | PUSH10 | 
-            PUSH11 | PUSH12 | PUSH13 | PUSH14 | PUSH15  | PUSH16  | PUSH17  | PUSH18 | PUSH19 | PUSH20 | 
-            PUSH21 | PUSH22 | PUSH23 | PUSH24 | PUSH25 | PUSH26 | PUSH27 | PUSH28 | PUSH29 | PUSH30 | PUSH31 | PUSH32 => OpcodeInfo {
+            PUSH1 | PUSH2 | PUSH3 | PUSH4 | PUSH5 | PUSH6 | PUSH7 | PUSH8 | PUSH9 | PUSH10
+            | PUSH11 | PUSH12 | PUSH13 | PUSH14 | PUSH15 | PUSH16 | PUSH17 | PUSH18 | PUSH19
+            | PUSH20 | PUSH21 | PUSH22 | PUSH23 | PUSH24 | PUSH25 | PUSH26 | PUSH27 | PUSH28
+            | PUSH29 | PUSH30 | PUSH31 | PUSH32 => OpcodeInfo {
                 min_stack: Self::min_stack(0, 1),
                 max_stack: Self::max_stack(0, 1),
                 terminal: false,
@@ -865,7 +867,7 @@ impl OpCode {
                 min_stack: Self::min_stack(2, 0),
                 max_stack: Self::max_stack(2, 0),
                 terminal: false,
-            }
+            },
         }
     }
 }
@@ -944,9 +946,6 @@ impl<B: Database> Machine<B> {
         opcodes[MSIZE as usize] = Self::opcode_msize;
         opcodes[GAS as usize] = Self::opcode_gas;
         opcodes[JUMPDEST as usize] = Self::opcode_jumpdest;
-        opcodes[RJUMP as usize] = Self::opcode_rjump;
-        opcodes[RJUMPI as usize] = Self::opcode_rjumpi;
-        opcodes[RJUMPV as usize] = Self::opcode_rjumpv;
 
         opcodes[PUSH0 as usize] = Self::opcode_push_0;
         opcodes[PUSH1 as usize] = Self::opcode_push_1;
@@ -1022,9 +1021,6 @@ impl<B: Database> Machine<B> {
         opcodes[LOG3 as usize] = Self::opcode_log_0_4::<3>;
         opcodes[LOG4 as usize] = Self::opcode_log_0_4::<4>;
 
-        opcodes[CALLF as usize] = Self::opcode_callf;
-        opcodes[RETF as usize] = Self::opcode_retf;
-
         opcodes[CREATE as usize] = Self::opcode_create;
         opcodes[CALL as usize] = Self::opcode_call;
         opcodes[CALLCODE as usize] = Self::opcode_callcode;
@@ -1038,6 +1034,33 @@ impl<B: Database> Machine<B> {
         opcodes[INVALID as usize] = Self::opcode_invalid;
 
         opcodes[SELFDESTRUCT as usize] = Self::opcode_selfdestruct;
+
+        opcodes
+    };
+
+    pub const EOF_OPCODES: [fn(&mut Self, &mut B) -> Result<Action>; 256] = {
+        let mut opcodes: [fn(&mut Self, &mut B) -> Result<Action>; 256] =
+            [Self::opcode_unknown; 256];
+
+        let mut i: usize = 0;
+        while i < 256 {
+            opcodes[i] = Self::OPCODES[i];
+            i += 1;
+        }
+
+        // EOF opcodes
+        opcodes[RJUMP as usize] = Self::opcode_rjump;
+        opcodes[RJUMPI as usize] = Self::opcode_rjumpi;
+        opcodes[RJUMPV as usize] = Self::opcode_rjumpv;
+        opcodes[CALLF as usize] = Self::opcode_callf;
+        opcodes[RETF as usize] = Self::opcode_retf;
+
+        // Deprecated opcodes
+        let mut i = 0;
+        while i < Container::DEPRECATED_OPCODES.len() {
+            opcodes[Container::DEPRECATED_OPCODES[i] as usize] = Self::opcode_deprecated;
+            i += 1;
+        }
 
         opcodes
     };

@@ -3,15 +3,14 @@ use ethnum::{I256, U256};
 use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
+use super::eof::has_eof_magic;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
+use crate::evm::opcode::Action::Jump;
 use crate::{
     error::{Error, Result},
-    evm::{
-        trace_end_step, Buffer,
-    },
+    evm::{trace_end_step, Buffer},
     types::Address,
 };
-use crate::evm::opcode::Action::Jump;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReturnContext {
@@ -35,10 +34,7 @@ impl<B: Database> Machine<B> {
     /// Unknown instruction
     pub fn opcode_unknown(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
-        Err(Error::UnknownOpcode(
-            self.context.contract,
-            code[self.pc],
-        ))
+        Err(Error::UnknownOpcode(self.context.contract, code[self.pc]))
     }
 
     /// (u)int256 addition modulo 2**256
@@ -833,7 +829,9 @@ impl<B: Database> Machine<B> {
     pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let offset = code.get_i16_or_default(self.pc + 1);
-        Ok(Action::Jump(((self.pc + 3) as isize + offset as isize) as usize))
+        Ok(Action::Jump(
+            ((self.pc + 3) as isize + offset as isize) as usize,
+        ))
     }
 
     pub fn opcode_rjumpi(&mut self, _backend: &mut B) -> Result<Action> {
@@ -854,7 +852,9 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Jump(self.pc + 2 + count * 2));
         }
         let offset = code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
-        return Ok(Action::Jump(((self.pc + 2 + count * 2) as isize + offset as isize) as usize));
+        return Ok(Action::Jump(
+            ((self.pc + 2 + count * 2) as isize + offset as isize) as usize,
+        ));
     }
 
     /// Place zero on stack
@@ -965,7 +965,8 @@ impl<B: Database> Machine<B> {
     pub fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let idx = code.get_u16_or_default(self.pc + 1);
-        let typ = &self.container
+        let typ = &self
+            .container
             .as_ref()
             .ok_or(Error::ContainerNotFound)?
             .types[idx as usize];
@@ -1065,10 +1066,18 @@ impl<B: Database> Machine<B> {
             code: init_code.to_vec()
         });
 
+        let is_caller_eof = has_eof_magic(&backend.code(&context.caller)?);
+
+        if !is_caller_eof && has_eof_magic(&init_code) {
+            return Err(Error::EOFLegacyCode);
+        }
+
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
+
         if let Some(container) = &self.container {
             container.validate_container()?;
         }
+
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
@@ -1359,7 +1368,13 @@ impl<B: Database> Machine<B> {
     /// Invalid instruction
     pub fn opcode_invalid(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
-        Err(Error::InvalidOpcode(
+        Err(Error::InvalidOpcode(self.context.contract, code[self.pc]))
+    }
+
+    /// Deprecated instruction
+    pub fn opcode_deprecated(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
+        Err(Error::DeprecatedOpcode(
             self.context.contract,
             code[self.pc],
         ))

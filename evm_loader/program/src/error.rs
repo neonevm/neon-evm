@@ -110,6 +110,9 @@ pub enum Error {
     #[error("EVM encountered invalid opcode, contract = {0}, opcode = {1:X}")]
     InvalidOpcode(Address, u8),
 
+    #[error("EVM encountered deprecated opcode, contract = {0}, opcode = {1:X}")]
+    DeprecatedOpcode(Address, u8),
+
     #[error("EVM encountered unknown opcode, contract = {0}, opcode = {1:X}")]
     UnknownOpcode(Address, u8),
 
@@ -226,6 +229,9 @@ pub enum Error {
 
     #[error("Invalid section 0 type, input and output should be zero: have {0}, {1}")]
     InvalidSection0Type(u8, u8),
+
+    #[error("invalid code: EOF contract must not deploy legacy code")]
+    EOFLegacyCode,
 
     #[error("Invalid container size: have {0}, want {1}")]
     InvalidContainerSize(usize, usize),

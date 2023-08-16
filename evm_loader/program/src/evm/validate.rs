@@ -9,6 +9,14 @@ use crate::evm::opcode_table::OpCode::*;
 use crate::evm::stack::STACK_SIZE;
 
 impl Container {
+    pub const DEPRECATED_OPCODES: [u8; 5] = [
+        CALLCODE as u8,
+        SELFDESTRUCT as u8,
+        JUMP as u8,
+        JUMPI as u8,
+        PC as u8,
+    ];
+
     pub fn validate_container(&self) -> Result<()> {
         for (section, code) in self.code.iter().enumerate() {
             Self::validate_code(code, section, &self.types)?;
@@ -26,13 +34,9 @@ impl Container {
             count += 1;
             opcode = code.get_or_default(i);
 
-            if !OpCode::has_opcode(opcode) {
-                return Err(Error::ValidationUndefinedInstruction(
-                    opcode,
-                    i,
-                ));
+            if !OpCode::has_opcode(opcode) && Self::DEPRECATED_OPCODES.contains(&opcode) {
+                return Err(Error::ValidationUndefinedInstruction(opcode, i));
             }
-
 
             if opcode > PUSH0 as u8 && opcode <= PUSH32 as u8 {
                 let size = opcode - PUSH0 as u8;
