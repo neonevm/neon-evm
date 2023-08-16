@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Result};
 use crate::evm::stack::STACK_SIZE;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 use super::eof::Container;
 use super::{database::Database, opcode::Action, Machine};
@@ -351,13 +351,11 @@ impl TryFrom<u8> for OpCode {
 
 impl OpCode {
     pub fn has_opcode(op: u8) -> bool {
-        let opcode: Result<OpCode> = op.try_into();
-        opcode.is_ok()
+        OpCode::try_from(op).is_ok()
     }
 
     pub fn is_terminal_opcode(op: u8) -> bool {
-        let opcode: Result<OpCode> = op.try_into();
-        match opcode {
+        match OpCode::try_from(op) {
             Ok(opcode) => Self::opcode_info(opcode).terminal,
             _ => false,
         }
