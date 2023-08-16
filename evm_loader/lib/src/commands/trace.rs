@@ -29,9 +29,9 @@ pub async fn trace_transaction(
     solana_accounts: &[Pubkey],
     trace_call_config: TraceCallConfig,
 ) -> Result<TracedCall, NeonError> {
-    let tracer = Arc::new(RwLock::new(Some(Tracer::new(
+    let tracer = Arc::new(RwLock::new(Tracer::new(
         trace_call_config.trace_config.enable_return_data,
-    ))));
+    )));
 
     let (emulation_result, _storage) = emulate_transaction(
         rpc_client,
@@ -48,11 +48,10 @@ pub async fn trace_transaction(
     )
     .await?;
 
-    let (vm_trace, full_trace_data) = tracer
-        .write()
-        .expect("lock acquire should be successful")
-        .take()
-        .expect("Option should not be empty")
+    let (vm_trace, full_trace_data) = Arc::try_unwrap(tracer)
+        .expect("There is must be only one reference")
+        .into_inner()
+        .expect("Poisoned RwLock")
         .into_traces();
 
     Ok(TracedCall {
@@ -117,18 +116,15 @@ async fn trace_trx<'a>(
     steps: u64,
     trace_config: &TraceConfig,
 ) -> Result<TracedCall, NeonError> {
-    let tracer = Arc::new(RwLock::new(Some(Tracer::new(
-        trace_config.enable_return_data,
-    ))));
+    let tracer = Arc::new(RwLock::new(Tracer::new(trace_config.enable_return_data)));
 
     let emulation_result =
         emulate_trx(tx_params, storage, chain_id, steps, Some(tracer.clone())).await?;
 
-    let (vm_trace, full_trace_data) = tracer
-        .write()
-        .expect("lock acquire should be successful")
-        .take()
-        .expect("Option should not be empty")
+    let (vm_trace, full_trace_data) = Arc::try_unwrap(tracer)
+        .expect("There is must be only one reference")
+        .into_inner()
+        .expect("Poisoned RwLock")
         .into_traces();
 
     Ok(TracedCall {

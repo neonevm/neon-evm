@@ -69,6 +69,7 @@ pub struct VMTrace {
 }
 
 // OpenEthereum tracer ethcore/trace/src/executive_tracer.rs
+#[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct TraceData {
     pub mem_written: Option<(usize, usize)>,
@@ -84,6 +85,7 @@ pub struct FullTraceData {
 }
 
 /// Simple VM tracer. Traces all operations.
+#[derive(Debug)]
 pub struct ExecutiveVMTracer {
     data: VMTrace,
     pub depth: usize,
