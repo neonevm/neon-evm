@@ -47,7 +47,7 @@ impl Container {
             count += 1;
             opcode = code.get_or_default(i);
 
-            if !OpCode::has_opcode(opcode) {
+            if !OpCode::has_opcode(opcode) && Self::DEPRECATED_OPCODES.contains(&opcode) {
                 return Err(Error::ValidationUndefinedInstruction(opcode, i));
             }
 
