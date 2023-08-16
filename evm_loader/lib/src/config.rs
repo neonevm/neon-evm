@@ -26,7 +26,7 @@ pub struct Config {
 // }
 
 /// # Errors
-pub fn create_from_api_comnfig(api_config: &APIOptions) -> Result<Config, NeonError> {
+pub fn create_from_api_config(api_config: &APIOptions) -> Result<Config, NeonError> {
     let solana_cli_config: SolanaConfig =
         if let Some(path) = api_config.solana_cli_config_path.clone() {
             solana_cli_config::Config::load(path.as_str()).unwrap_or_default()
