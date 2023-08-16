@@ -1372,10 +1372,11 @@ impl<B: Database> Machine<B> {
     }
 
     /// Deprecated instruction
-    pub fn opcode_deprecate(&mut self, _backend: &mut B) -> Result<Action> {
+    pub fn opcode_deprecated(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
         Err(Error::DeprecatedOpcode(
             self.context.contract,
-            self.execution_code[self.pc],
+            code[self.pc],
         ))
     }
 
