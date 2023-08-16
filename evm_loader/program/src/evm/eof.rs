@@ -374,7 +374,7 @@ mod tests {
         let expected_bytes = Vec::from(BYTES_WITH_EMPTY_DATA);
         let container = get_container_with_empty_data();
 
-        let bytes = container.marshal_binary().to_vec();
+        let bytes = container._marshal_binary().to_vec();
 
         assert_eq!(bytes.len(), expected_bytes.len());
         assert_eq!(bytes, expected_bytes);
@@ -385,7 +385,7 @@ mod tests {
         let expected_bytes = Vec::from(BYTES_WITH_DATA);
         let container = get_container_with_data();
 
-        let bytes = container.marshal_binary().to_vec();
+        let bytes = container._marshal_binary().to_vec();
 
         assert_eq!(bytes.len(), expected_bytes.len());
         assert_eq!(bytes, expected_bytes);
