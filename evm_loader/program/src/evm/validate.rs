@@ -156,11 +156,16 @@ impl Container {
             pub height: usize,
         }
         let mut heights: HashMap<usize, usize> = HashMap::new();
+
+        let current_section = metadata
+            .get(section)
+            .ok_or(Error::FunctionMetadataNotFound(section))?;
+
         let mut worklist: Vec<Item> = vec![Item {
             pos: 0,
-            height: metadata[section].input as usize,
+            height: current_section.input as usize,
         }];
-        let mut max_stack_height = metadata[section].input as usize;
+        let mut max_stack_height = current_section.input as usize;
         while !worklist.is_empty() {
             let worklist_item = worklist.pop().unwrap();
             let mut pos = worklist_item.pos;
@@ -192,22 +197,29 @@ impl Container {
                 match op_code {
                     CALLF => {
                         let arg = code.get_u16_or_default(pos + 1) as usize;
-                        if metadata[arg].input as usize > height {
-                            // TODO: check exists
+
+                        let metadata = metadata
+                            .get(arg)
+                            .ok_or(Error::FunctionMetadataNotFound(arg))?;
+
+                        let input = metadata.input as usize;
+                        let output = metadata.output as usize;
+
+                        if input > height {
                             return Err(Error::StackUnderflow);
                         }
-                        if metadata[arg].output as usize + height > STACK_SIZE {
-                            // TODO: check exists
+                        if output + height > STACK_SIZE {
                             return Err(Error::StackOverflow);
                         }
-                        height -= metadata[arg].input as usize;
-                        height += metadata[arg].output as usize;
+
+                        height -= input;
+                        height += output;
                         pos += 3;
                     }
                     RETF => {
-                        if metadata[section].output as usize != height {
+                        if current_section.output as usize != height {
                             return Err(Error::ValidationInvalidOutputs(
-                                metadata[section].output,
+                                current_section.output,
                                 height,
                                 pos,
                             ));
@@ -252,11 +264,11 @@ impl Container {
                 max_stack_height = max_stack_height.max(height);
             }
         }
-        if max_stack_height != metadata[section].max_stack_height as usize {
+        if max_stack_height != current_section.max_stack_height as usize {
             return Err(Error::ValidationInvalidMaxStackHeight(
                 section,
                 max_stack_height,
-                metadata[section].max_stack_height,
+                current_section.max_stack_height,
             ));
         }
         Ok(heights.len())
@@ -439,6 +451,15 @@ mod tests {
         for (code, meta) in codes {
             assert!(Container::validate_code(&code, 0, &meta).is_ok());
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "FunctionMetadataNotFound(0)")]
+    fn validation_test_with_function_metadata_not_found() {
+        let code = Buffer::from_slice(&[RETF as u8]);
+        let metas = vec![];
+
+        Container::validate_code(&code, 0, &metas).unwrap();
     }
 
     #[test]

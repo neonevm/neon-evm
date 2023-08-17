@@ -185,6 +185,9 @@ pub enum Error {
     #[error("EVM container not found")]
     ContainerNotFound,
 
+    #[error("EVM function metadata not found at index {0}")]
+    FunctionMetadataNotFound(usize),
+
     #[error("Opcode not supported, opcode {0:X}")]
     UnsupportedOpcode(u8),
 
