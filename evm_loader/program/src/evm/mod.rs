@@ -310,7 +310,7 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
-        let code = match &self.container {
+        let mut code = match &self.container {
             Some(container) => &container.code[self.code_section],
             None => &self.execution_code,
         }
@@ -377,6 +377,11 @@ impl<B: Database> Machine<B> {
                 Action::Stop => break ExitStatus::Stop,
                 Action::Return(value) => break ExitStatus::Return(value),
                 Action::Revert(value) => break ExitStatus::Revert(value),
+                Action::CodeSection(code_section, pc) => {
+                    self.code_section = code_section;
+                    code = self.get_code().clone();
+                    self.pc = pc;
+                }
                 Action::Suicide => break ExitStatus::Suicide,
                 Action::Noop => {}
             };

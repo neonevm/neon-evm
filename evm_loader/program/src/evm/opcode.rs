@@ -11,7 +11,6 @@ use solana_program::log::sol_log_data;
 
 use super::eof::has_eof_magic;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
-use crate::evm::opcode::Action::Jump;
 use crate::{
     error::{Error, Result},
     evm::{trace_end_step, Buffer},
@@ -33,6 +32,7 @@ pub enum Action {
     Stop,
     Return(Vec<u8>),
     Revert(Vec<u8>),
+    CodeSection(usize, usize),
     Suicide,
     Noop,
 }
@@ -992,21 +992,18 @@ impl<B: Database> Machine<B> {
         };
 
         self.return_stack.push(ret_ctx);
-        self.code_section = idx as usize;
-
-        Ok(Action::Jump(0)) //TODO check 0 or -1
+        Ok(Action::CodeSection(idx as usize, 0))
     }
 
     pub fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
         let ret_ctx = self.return_stack.pop().ok_or(Error::EmptyStack)?;
 
-        self.code_section = ret_ctx.section;
         // If returning from top frame, exit cleanly.
         if self.return_stack.is_empty() {
             return Ok(Action::Stop);
         }
 
-        Ok(Jump(ret_ctx.pc - 1))
+        Ok(Action::CodeSection(ret_ctx.section, ret_ctx.pc))
     }
 
     /// Create a new account with associated code.
