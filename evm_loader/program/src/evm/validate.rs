@@ -13,11 +13,13 @@ use crate::evm::opcode_table::OpCode::{
     CALLCODE, CALLF, JUMP, JUMPI, PC, PUSH0, PUSH1, PUSH32, RETF, RJUMP, RJUMPI, RJUMPV,
     SELFDESTRUCT,
 };
-use crate::evm::stack::STACK_SIZE;
 use crate::evm::Buffer;
 use std::collections::HashMap;
 
 impl Container {
+    /// [Specification](https://eips.ethereum.org/EIPS/eip-4750#:~:text=The%20return%20stack%20is%20limited%20to%20a%20maximum%201024%20items.)
+    pub const STACK_LIMIT: usize = 1024;
+
     pub const DEPRECATED_OPCODES: [u8; 5] = [
         CALLCODE as u8,
         SELFDESTRUCT as u8,
@@ -192,7 +194,7 @@ impl Container {
                     return Err(Error::StackOverflow);
                 }
 
-                height = height + STACK_SIZE - opcode_info.max_stack;
+                height = height + Self::STACK_LIMIT - opcode_info.max_stack;
 
                 match op_code {
                     CALLF => {
@@ -208,7 +210,7 @@ impl Container {
                         if input > height {
                             return Err(Error::StackUnderflow);
                         }
-                        if output + height > STACK_SIZE {
+                        if output + height > Self::STACK_LIMIT {
                             return Err(Error::StackOverflow);
                         }
 

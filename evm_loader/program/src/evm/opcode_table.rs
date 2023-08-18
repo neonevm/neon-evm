@@ -1,7 +1,6 @@
 #![allow(clippy::type_complexity)]
 
 use crate::error::{Error, Result};
-use crate::evm::stack::STACK_SIZE;
 use std::convert::TryFrom;
 
 use super::eof::Container;
@@ -366,7 +365,7 @@ impl OpCode {
     }
 
     const fn max_stack(pop: usize, push: usize) -> usize {
-        STACK_SIZE + pop - push
+        Container::STACK_LIMIT + pop - push
     }
 
     const fn min_stack(pops: usize, _push: usize) -> usize {
