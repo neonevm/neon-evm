@@ -17,6 +17,7 @@ use crate::{
     evm::{trace_end_step, Buffer},
     types::Address,
 };
+use crate::evm::eof::Container;
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReturnContext {
@@ -1303,6 +1304,10 @@ impl<B: Database> Machine<B> {
     ) -> Result<Action> {
         if self.reason == Reason::Create {
             let code = std::mem::take(&mut return_data);
+            if has_eof_magic(&code) {
+                let container = Container::unmarshal_binary(&code)?;
+                container.validate_container()?;
+            }
             backend.set_code(self.context.contract, code)?;
         }
 
