@@ -42,19 +42,19 @@ impl Container {
         metadata: &Vec<FunctionMetadata>,
     ) -> Result<()> {
         let mut i: usize = 0;
-        /// Tracks the number of actual instructions in the code (e.g.
-        /// non-immediate values). This is used at the end to determine
-        /// if each instruction is reachable.
+        // Tracks the number of actual instructions in the code (e.g.
+        // non-immediate values). This is used at the end to determine
+        // if each instruction is reachable.
         let mut instruction_count: usize = 0;
         let mut analysis: Option<Bitvec> = None;
         let mut opcode: u8 = 0;
 
-        /// This loop visits every single instruction and verifies:
-        /// * if the instruction is valid for the given jump table.
-        /// * if the instruction has an immediate value, it is not truncated.
-        /// * if performing a relative jump, all jump destinations are valid.
-        /// * if changing code sections, the new code section index is valid and
-        ///   will not cause a stack overflow.
+        // This loop visits every single instruction and verifies:
+        // * if the instruction is valid for the given jump table.
+        // * if the instruction has an immediate value, it is not truncated.
+        // * if performing a relative jump, all jump destinations are valid.
+        // * if changing code sections, the new code section index is valid and
+        //   will not cause a stack overflow.
         while i < code.len() {
             instruction_count += 1;
             opcode = code.get_or_default(i);
@@ -63,7 +63,7 @@ impl Container {
                 return Err(Error::ValidationUndefinedInstruction(opcode, i));
             }
 
-            if opcode > PUSH0 as u8 && opcode <= PUSH32 as u8 {
+            if opcode > PUSH0 && opcode <= PUSH32 {
                 let size = opcode - PUSH0 as u8;
                 if code.len() <= i + size as usize {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
@@ -71,7 +71,7 @@ impl Container {
                 i += size as usize;
             }
 
-            if opcode == RJUMP as u8 || opcode == RJUMPI as u8 {
+            if opcode == RJUMP || opcode == RJUMPI {
                 if code.len() <= i + 2 {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
                 }
@@ -79,7 +79,7 @@ impl Container {
                 i += 2;
             }
 
-            if opcode == RJUMPV as u8 {
+            if opcode == RJUMPV {
                 if code.len() <= i + 1 {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
                 }
@@ -102,7 +102,7 @@ impl Container {
                 i += 1 + 2 * instruction_count;
             }
 
-            if opcode == CALLF as u8 {
+            if opcode == CALLF {
                 if i + 2 >= code.len() {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
                 }
@@ -121,8 +121,8 @@ impl Container {
             i += 1;
         }
 
-        /// Code sections may not "fall through" and require proper termination.
-        /// Therefore, the last instruction must be considered terminal.
+        // Code sections may not "fall through" and require proper termination.
+        // Therefore, the last instruction must be considered terminal.
         if !OpCode::is_terminal_opcode(opcode) {
             return Err(Error::ValidationInvalidCodeTermination(opcode, i));
         }
@@ -274,7 +274,7 @@ impl Container {
                         pos += 2 + 2 * count as usize;
                     }
                     _ => {
-                        if op >= PUSH1.u8() && op <= PUSH32.u8() {
+                        if op >= PUSH1 && op <= PUSH32 {
                             pos += 1 + (op - PUSH0.u8()) as usize;
                         } else if opcode_info.terminal {
                             break 'outer;

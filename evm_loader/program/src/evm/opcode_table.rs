@@ -1,17 +1,18 @@
 #![allow(clippy::type_complexity)]
 
-use crate::error::{Error, Result};
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 
 use super::eof::Container;
 use super::{database::Database, opcode::Action, Machine};
+use crate::error::{Error, Result};
 
 #[allow(clippy::enum_glob_use)]
 use OpCode::*;
 
 #[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OpCode {
     STOP = 0x00,
     ADD = 0x01,
@@ -177,6 +178,30 @@ pub enum OpCode {
 
     TLOAD = 0xB3,
     TSTORE = 0xB4,
+}
+
+impl PartialEq<OpCode> for u8 {
+    fn eq(&self, other: &OpCode) -> bool {
+        self.eq(&other.u8())
+    }
+}
+
+impl PartialOrd<OpCode> for u8 {
+    fn partial_cmp(&self, other: &OpCode) -> Option<Ordering> {
+        Some(self.cmp(&other.u8()))
+    }
+}
+
+impl PartialEq<u8> for OpCode {
+    fn eq(&self, other: &u8) -> bool {
+        self.u8().eq(other)
+    }
+}
+
+impl PartialOrd<u8> for OpCode {
+    fn partial_cmp(&self, other: &u8) -> Option<Ordering> {
+        Some(self.u8().cmp(&other))
+    }
 }
 
 #[derive(Debug)]
