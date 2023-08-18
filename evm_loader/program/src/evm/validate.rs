@@ -156,11 +156,16 @@ impl Container {
             pub height: usize,
         }
         let mut heights: HashMap<usize, usize> = HashMap::new();
+
+        let current_section = metadata
+            .get(section)
+            .ok_or(Error::FunctionMetadataNotFound(section))?;
+
         let mut worklist: Vec<Item> = vec![Item {
             pos: 0,
-            height: metadata[section].input as usize,
+            height: current_section.input as usize,
         }];
-        let mut max_stack_height = metadata[section].input as usize;
+        let mut max_stack_height = current_section.input as usize;
         while !worklist.is_empty() {
             let worklist_item = worklist.pop().unwrap();
             let mut pos = worklist_item.pos;
@@ -192,22 +197,29 @@ impl Container {
                 match op_code {
                     CALLF => {
                         let arg = code.get_u16_or_default(pos + 1) as usize;
-                        if metadata[arg].input as usize > height {
-                            // TODO: check exists
+
+                        let metadata = metadata
+                            .get(arg)
+                            .ok_or(Error::FunctionMetadataNotFound(arg))?;
+
+                        let input = metadata.input as usize;
+                        let output = metadata.output as usize;
+
+                        if input > height {
                             return Err(Error::StackUnderflow);
                         }
-                        if metadata[arg].output as usize + height > STACK_SIZE {
-                            // TODO: check exists
+                        if output + height > STACK_SIZE {
                             return Err(Error::StackOverflow);
                         }
-                        height -= metadata[arg].input as usize;
-                        height += metadata[arg].output as usize;
+
+                        height -= input;
+                        height += output;
                         pos += 3;
                     }
                     RETF => {
-                        if metadata[section].output as usize != height {
+                        if current_section.output as usize != height {
                             return Err(Error::ValidationInvalidOutputs(
-                                metadata[section].output,
+                                current_section.output,
                                 height,
                                 pos,
                             ));
@@ -252,11 +264,11 @@ impl Container {
                 max_stack_height = max_stack_height.max(height);
             }
         }
-        if max_stack_height != metadata[section].max_stack_height as usize {
+        if max_stack_height != current_section.max_stack_height as usize {
             return Err(Error::ValidationInvalidMaxStackHeight(
                 section,
                 max_stack_height,
-                metadata[section].max_stack_height,
+                current_section.max_stack_height,
             ));
         }
         Ok(heights.len())
@@ -272,107 +284,248 @@ mod tests {
     use super::OpCode::*;
 
     #[test]
-    fn validation_test_1() {
-        let code = Buffer::from_slice(&[CALLER as u8, POP as u8, STOP as u8]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 1,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
+    fn validation_test() {
+        let codes = vec![
+            (
+                Buffer::from_slice(&[CALLER as u8, POP as u8, STOP as u8]),
+                vec![FunctionMetadata {
+                    input: 0,
+                    output: 0,
+                    max_stack_height: 1,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[CALLF as u8, 0x00, 0x00, STOP as u8]),
+                vec![FunctionMetadata {
+                    input: 0,
+                    output: 0,
+                    max_stack_height: 0,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[ADDRESS as u8, CALLF as u8, 0x00, 0x00, STOP as u8]),
+                vec![FunctionMetadata {
+                    input: 0,
+                    output: 0,
+                    max_stack_height: 1,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[
+                    RJUMP as u8,
+                    0x00,
+                    0x03,
+                    JUMPDEST as u8,
+                    JUMPDEST as u8,
+                    RETURN as u8,
+                    PUSH1 as u8,
+                    20,
+                    PUSH1 as u8,
+                    39,
+                    PUSH1 as u8,
+                    0x00,
+                    CODECOPY as u8,
+                    PUSH1 as u8,
+                    20,
+                    PUSH1 as u8,
+                    0x00,
+                    RJUMP as u8,
+                    0xff,
+                    0xef,
+                ]),
+                vec![FunctionMetadata {
+                    input: 0,
+                    output: 0,
+                    max_stack_height: 3,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[
+                    PUSH1 as u8,
+                    1,
+                    RJUMPI as u8,
+                    0x00,
+                    0x03,
+                    JUMPDEST as u8,
+                    JUMPDEST as u8,
+                    STOP as u8,
+                    PUSH1 as u8,
+                    20,
+                    PUSH1 as u8,
+                    39,
+                    PUSH1 as u8,
+                    0x00,
+                    CODECOPY as u8,
+                    PUSH1 as u8,
+                    20,
+                    PUSH1 as u8,
+                    0x00,
+                    RETURN as u8,
+                ]),
+                vec![FunctionMetadata {
+                    input: 0,
+                    output: 0,
+                    max_stack_height: 3,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[
+                    PUSH1 as u8,
+                    1,
+                    RJUMPV as u8,
+                    0x02,
+                    0x00,
+                    0x03,
+                    0xff,
+                    0xf8,
+                    JUMPDEST as u8,
+                    JUMPDEST as u8,
+                    STOP as u8,
+                    PUSH1 as u8,
+                    20,
+                    PUSH1 as u8,
+                    39,
+                    PUSH1 as u8,
+                    0x00,
+                    CODECOPY as u8,
+                    PUSH1 as u8,
+                    20,
+                    PUSH1 as u8,
+                    0x00,
+                    RETURN as u8,
+                ]),
+                vec![FunctionMetadata {
+                    input: 0,
+                    output: 0,
+                    max_stack_height: 3,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[RETF as u8]),
+                vec![FunctionMetadata {
+                    input: 3,
+                    output: 3,
+                    max_stack_height: 3,
+                }],
+            ),
+            (
+                Buffer::from_slice(&[CALLF as u8, 0x00, 0x01, POP as u8, STOP as u8]),
+                vec![
+                    FunctionMetadata {
+                        input: 0,
+                        output: 0,
+                        max_stack_height: 1,
+                    },
+                    FunctionMetadata {
+                        input: 0,
+                        output: 1,
+                        max_stack_height: 0,
+                    },
+                ],
+            ),
+            (
+                Buffer::from_slice(&[
+                    ORIGIN as u8,
+                    ORIGIN as u8,
+                    CALLF as u8,
+                    0x00,
+                    0x01,
+                    POP as u8,
+                    RETF as u8,
+                ]),
+                vec![
+                    FunctionMetadata {
+                        input: 0,
+                        output: 0,
+                        max_stack_height: 2,
+                    },
+                    FunctionMetadata {
+                        input: 2,
+                        output: 1,
+                        max_stack_height: 2,
+                    },
+                ],
+            ),
+        ];
+
+        for (code, meta) in codes {
+            assert!(Container::validate_code(&code, 0, &meta).is_ok());
+        }
     }
 
     #[test]
-    fn validation_test_2() {
-        let code = Buffer::from_slice(&[CALLF as u8, 0x00, 0x00, STOP as u8]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 0,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
+    #[should_panic(expected = "FunctionMetadataNotFound(0)")]
+    fn validation_test_with_function_metadata_not_found() {
+        let code = Buffer::from_slice(&[RETF as u8]);
+        let metas = vec![];
+
+        Container::validate_code(&code, 0, &metas).unwrap();
     }
 
     #[test]
-    fn validation_test_3() {
-        let code = Buffer::from_slice(&[ADDRESS as u8, CALLF as u8, 0x00, 0x00, STOP as u8]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 1,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validation_test_4() {
+    #[should_panic(expected = "ValidationInvalidCodeTermination(80, 2)")]
+    fn validation_test_with_invalid_code_termination() {
         let code = Buffer::from_slice(&[CALLER.u8(), POP.u8()]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
             max_stack_height: 1,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationInvalidCodeTermination(POP.u8(), 2).to_string()
-        )
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_5() {
+    #[should_panic(expected = "ValidationUnreachableCode")]
+    fn validation_test_with_unreachable_code_1() {
         let code = Buffer::from_slice(&[RJUMP as u8, 0x00, 0x01, CALLER as u8, STOP as u8]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
             max_stack_height: 0,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationUnreachableCode.to_string()
-        )
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_6() {
+    #[should_panic(expected = "ValidationUnreachableCode")]
+    fn validation_test_with_unreachable_code_2() {
+        let code = Buffer::from_slice(&[STOP as u8, STOP as u8, INVALID as u8]);
+        let meta = FunctionMetadata {
+            input: 0,
+            output: 0,
+            max_stack_height: 0,
+        };
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "StackUnderflow")]
+    fn validation_test_stack_underflow() {
         let code = Buffer::from_slice(&[PUSH1 as u8, 0x42, ADD as u8, STOP as u8]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
             max_stack_height: 1,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::StackUnderflow.to_string()
-        )
+
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_7() {
+    #[should_panic(expected = "ValidationInvalidMaxStackHeight(0, 1, 2)")]
+    fn validation_test_with_invalid_max_stack_height() {
         let code = Buffer::from_slice(&[PUSH1 as u8, 0x42, POP as u8, STOP as u8]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
             max_stack_height: 2,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationInvalidMaxStackHeight(0, 1, 2).to_string()
-        )
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_8() {
+    #[should_panic(expected = "ValidationInvalidJumpDest(1, 5, 2)")]
+    fn validation_test_with_invalid_jump_dest_1() {
         let code = Buffer::from_slice(&[
             PUSH0 as u8,
             RJUMPI as u8,
@@ -388,16 +541,12 @@ mod tests {
             output: 0,
             max_stack_height: 1,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationInvalidJumpDest(1, 5, 2).to_string()
-        )
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_9() {
+    #[should_panic(expected = "ValidationInvalidJumpDest(1, 8, 3)")]
+    fn validation_test_with_invalid_jump_dest_2() {
         let code = Buffer::from_slice(&[
             PUSH0 as u8,
             RJUMPV as u8,
@@ -416,215 +565,30 @@ mod tests {
             output: 0,
             max_stack_height: 1,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationInvalidJumpDest(1, 8, 3).to_string()
-        )
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_10() {
+    #[should_panic(expected = "ValidationInvalidBranchCount(1)")]
+    fn validation_test_with_invalid_branch_count() {
         let code = Buffer::from_slice(&[PUSH0 as u8, RJUMPV as u8, 0x00, STOP as u8]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
             max_stack_height: 1,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationInvalidBranchCount(1).to_string()
-        )
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 
     #[test]
-    fn validation_test_11() {
-        let code = Buffer::from_slice(&[
-            RJUMP as u8,
-            0x00,
-            0x03,
-            JUMPDEST as u8,
-            JUMPDEST as u8,
-            RETURN as u8,
-            PUSH1 as u8,
-            20,
-            PUSH1 as u8,
-            39,
-            PUSH1 as u8,
-            0x00,
-            CODECOPY as u8,
-            PUSH1 as u8,
-            20,
-            PUSH1 as u8,
-            0x00,
-            RJUMP as u8,
-            0xff,
-            0xef,
-        ]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 3,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validation_test_12() {
-        let code = Buffer::from_slice(&[
-            PUSH1 as u8,
-            1,
-            RJUMPI as u8,
-            0x00,
-            0x03,
-            JUMPDEST as u8,
-            JUMPDEST as u8,
-            STOP as u8,
-            PUSH1 as u8,
-            20,
-            PUSH1 as u8,
-            39,
-            PUSH1 as u8,
-            0x00,
-            CODECOPY as u8,
-            PUSH1 as u8,
-            20,
-            PUSH1 as u8,
-            0x00,
-            RETURN as u8,
-        ]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 3,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validation_test_13() {
-        let code = Buffer::from_slice(&[
-            PUSH1 as u8,
-            1,
-            RJUMPV as u8,
-            0x02,
-            0x00,
-            0x03,
-            0xff,
-            0xf8,
-            JUMPDEST as u8,
-            JUMPDEST as u8,
-            STOP as u8,
-            PUSH1 as u8,
-            20,
-            PUSH1 as u8,
-            39,
-            PUSH1 as u8,
-            0x00,
-            CODECOPY as u8,
-            PUSH1 as u8,
-            20,
-            PUSH1 as u8,
-            0x00,
-            RETURN as u8,
-        ]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 3,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validation_test_14() {
-        let code = Buffer::from_slice(&[STOP as u8, STOP as u8, INVALID as u8]);
-        let meta = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 0,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationUnreachableCode.to_string()
-        )
-    }
-
-    #[test]
-    fn validation_test_15() {
+    #[should_panic(expected = "ValidationInvalidOutputs(1, 0, 0)")]
+    fn validation_test_with_invalid_outputs() {
         let code = Buffer::from_slice(&[RETF as u8]);
         let meta = FunctionMetadata {
             input: 0,
             output: 1,
             max_stack_height: 0,
         };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap().to_string(),
-            Error::ValidationInvalidOutputs(1, 0, 0).to_string()
-        )
-    }
-
-    #[test]
-    fn validation_test_16() {
-        let code = Buffer::from_slice(&[RETF as u8]);
-        let meta = FunctionMetadata {
-            input: 3,
-            output: 3,
-            max_stack_height: 3,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validation_test_17() {
-        let code = Buffer::from_slice(&[CALLF as u8, 0x00, 0x01, POP as u8, STOP as u8]);
-        let meta1 = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 1,
-        };
-        let meta2 = FunctionMetadata {
-            input: 0,
-            output: 1,
-            max_stack_height: 0,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta1, meta2]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validation_test_18() {
-        let code = Buffer::from_slice(&[
-            ORIGIN as u8,
-            ORIGIN as u8,
-            CALLF as u8,
-            0x00,
-            0x01,
-            POP as u8,
-            RETF as u8,
-        ]);
-        let meta1 = FunctionMetadata {
-            input: 0,
-            output: 0,
-            max_stack_height: 2,
-        };
-        let meta2 = FunctionMetadata {
-            input: 2,
-            output: 1,
-            max_stack_height: 2,
-        };
-        let result = Container::validate_code(&code, 0, &vec![meta1, meta2]);
-        assert!(result.is_ok());
+        Container::validate_code(&code, 0, &vec![meta]).unwrap();
     }
 }
