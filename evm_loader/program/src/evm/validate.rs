@@ -42,11 +42,21 @@ impl Container {
         metadata: &Vec<FunctionMetadata>,
     ) -> Result<()> {
         let mut i: usize = 0;
-        let mut count: u8 = 0;
+        /// Tracks the number of actual instructions in the code (e.g.
+        /// non-immediate values). This is used at the end to determine
+        /// if each instruction is reachable.
+        let mut instruction_count: usize = 0;
         let mut analysis: Option<Bitvec> = None;
         let mut opcode: u8 = 0;
+
+        /// This loop visits every single instruction and verifies:
+        /// * if the instruction is valid for the given jump table.
+        /// * if the instruction has an immediate value, it is not truncated.
+        /// * if performing a relative jump, all jump destinations are valid.
+        /// * if changing code sections, the new code section index is valid and
+        ///   will not cause a stack overflow.
         while i < code.len() {
-            count += 1;
+            instruction_count += 1;
             opcode = code.get_or_default(i);
 
             if !OpCode::has_opcode(opcode) && Self::DEPRECATED_OPCODES.contains(&opcode) {
@@ -73,23 +83,23 @@ impl Container {
                 if code.len() <= i + 1 {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
                 }
-                count = code.get_or_default(i + 1);
-                if count == 0 {
+                instruction_count = code.get_or_default(i + 1) as usize;
+                if instruction_count == 0 {
                     return Err(Error::ValidationInvalidBranchCount(i));
                 }
-                if code.len() <= i + count as usize {
+                if code.len() <= i + instruction_count {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
                 }
-                for j in 0..count {
+                for j in 0..instruction_count {
                     analysis = Some(Self::check_dest(
                         code,
                         analysis,
-                        i + 2 + j as usize * 2,
-                        i + 2 * count as usize + 2,
+                        i + 2 + j * 2,
+                        i + 2 * instruction_count + 2,
                         code.len(),
                     )?);
                 }
-                i += 1 + 2 * count as usize;
+                i += 1 + 2 * instruction_count;
             }
 
             if opcode == CALLF as u8 {
@@ -111,17 +121,20 @@ impl Container {
             i += 1;
         }
 
+        /// Code sections may not "fall through" and require proper termination.
+        /// Therefore, the last instruction must be considered terminal.
         if !OpCode::is_terminal_opcode(opcode) {
             return Err(Error::ValidationInvalidCodeTermination(opcode, i));
         }
 
         let path = Self::validate_control_flow(code, section, metadata)?;
-        if path != count as usize {
+        if path != instruction_count {
             return Err(Error::ValidationUnreachableCode);
         }
         Ok(())
     }
 
+    /// checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.
     fn check_dest(
         code: &Buffer,
         analysis_option: Option<Bitvec>,
@@ -147,6 +160,8 @@ impl Container {
         Ok(analysis)
     }
 
+    /// validateControlFlow iterates through all possible branches the provided code
+    /// value and determines if it is valid per EOF v1.
     #[allow(clippy::too_many_lines)]
     fn validate_control_flow(
         code: &Buffer,
@@ -176,10 +191,14 @@ impl Container {
             'outer: while pos < code.len() {
                 let op = code.get_or_default(pos);
                 let want_option = heights.get(&pos);
+
+                // Check if pos has already be visited; if so, the stack heights should be the same.
                 if let Some(want) = want_option {
                     if *want != height {
                         return Err(Error::ValidationConflictingStack(height, *want));
                     }
+                    // Already visited this path and stack height
+                    // matches.
                     break;
                 }
 
@@ -187,6 +206,8 @@ impl Container {
 
                 let op_code: OpCode = op.try_into()?;
                 let opcode_info = OpCode::opcode_info(op_code);
+
+                // Validate height for current op and update as needed.
                 if opcode_info.min_stack > height {
                     return Err(Error::StackUnderflow);
                 }
