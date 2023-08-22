@@ -14,11 +14,11 @@ use crate::evm::opcode_table::OpCode::{
     SELFDESTRUCT,
 };
 use crate::evm::Buffer;
-use std::collections::{BTreeMap};
 
 impl Container {
     /// [Specification](https://eips.ethereum.org/EIPS/eip-4750#:~:text=The%20return%20stack%20is%20limited%20to%20a%20maximum%201024%20items.)
     pub const STACK_LIMIT: usize = 1024;
+    pub const LOC_UNVISITED: isize = -1;
 
     pub const DEPRECATED_OPCODES: [u8; 5] = [
         CALLCODE as u8,
@@ -172,7 +172,8 @@ impl Container {
             pub pos: usize,
             pub height: usize,
         }
-        let mut heights: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut stack_heights_per_opcode: Vec<isize> = vec![-1; code.len()];
+        let mut height_update = 0;
 
         let current_section = metadata
             .get(section)
@@ -191,22 +192,28 @@ impl Container {
             while pos < code.len() {
                 let op = code.get_unchecked_at(pos);
 
-                let want_option = heights.get(&pos);
+                let want_option = stack_heights_per_opcode[pos];
 
                 // Check if pos has already be visited; if so, the stack heights should be the same.
-                if let Some(want) = want_option {
-                    if *want != height {
-                        return Err(Error::ValidationConflictingStack(height, *want));
+                if want_option != Self::LOC_UNVISITED {
+                    if want_option as usize != height {
+                        return Err(Error::ValidationConflictingStack(
+                            height,
+                            want_option as usize,
+                        ));
                     }
-                    // Already visited this path and stack height
-                    // matches.
+                    // Already visited this path and stack height matches.
                     break;
                 }
 
-                heights.insert(pos, height);
+                stack_heights_per_opcode[pos] = height as isize;
+
+                height_update += 1;
 
                 let op_code: OpCode = op.try_into()?;
-                let opcode_info = OpCode::OPCODE_INFO.get(op as usize).unwrap().as_ref().unwrap();
+                // SAFETY: `op` is already checked for a valid opcode, which means we shouldn't get None or "out of bounds"
+                let opcode_info = unsafe { OpCode::OPCODE_INFO.get_unchecked(op as usize) };
+                let opcode_info = opcode_info.as_ref().unwrap();
 
                 // Validate height for current op and update as needed.
                 if opcode_info.min_stack > height {
@@ -288,6 +295,7 @@ impl Container {
                 max_stack_height = max_stack_height.max(height);
             }
         }
+
         if max_stack_height != current_section.max_stack_height as usize {
             return Err(Error::ValidationInvalidMaxStackHeight(
                 section,
@@ -295,7 +303,7 @@ impl Container {
                 current_section.max_stack_height,
             ));
         }
-        Ok(heights.len())
+        Ok(height_update)
     }
 }
 
@@ -306,6 +314,32 @@ mod tests {
     use crate::evm::Buffer;
 
     use super::OpCode::*;
+
+    #[test]
+    fn hello_world_validation() {
+        let bytecode = r#"
+        ef0001 010004 020001 0097 030263 00 00000008
+        608080604052345d00896000600581556001908154908282811c921680155d006a60208310145d004f601f82115d0022505060186b48656c6c6f20576f726c642160a01b01905561026390816100aa8239f382815282601f60208320930160051c8301928381105d000550505cffc18281550183905cffec602490634e487b7160e01b81526022600452fd91607f16915cff8e600080fd
+    
+        ef0001 01000c 020003 009a 00fc 0041 03006d 00 00000005 0001000c 0201000a
+    
+        608060405260043610155d0004600080fd6000803560e01c80631f1bd692145d005680634e70b1dc145d002e63fc6492bc145d0004505cffd4345d001b806003193601125d000fb00001604051809181b000020390f380fd80fd50345d0017806003193601125d000b60209054604051908152f380fd80fd50345d001b806003193601125d000fb00001604051809181b000020390f380fd80fd
+        6040516000600180549081811c908083169283155d00dd60209384841081145d00bf83875290816000145d0098506001145d0039505050601f82811992030116810181811067ffffffffffffffff8211175d0004604052b1634e487b7160e01b600052604160045260246000fd809293506000527fb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf691836000938385105d000d505050508201013880805cff879182819495935483858a01015201910192919084905cffd592939450505060ff191682840152151560051b8201013880805cff53602486634e487b7160e01b81526022600452fd91607f16915cff1b
+        602091828252805190818484015260008281105d00185050604092506000838284010152601f80199101160101b1808580928401015160408287010152015cffcf
+    
+        a364697066735822122096760ffdb7239f731b9acc9ffa81afe01fa6d1b6d1e80121c1aaeabae13cb3cd6c6578706572696d656e74616cf564736f6c63782c302e382e31382d646576656c6f702e323032332e382e31352b636f6d6d69742e34363964366434642e6d6f64006b
+        "#.replace(" ", "").replace("\n", "");
+
+        let bytecode = (0..bytecode.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&bytecode[i..i + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+
+        let buffer_bytecode = Buffer::from_slice(bytecode.as_slice());
+        let container = Container::unmarshal_binary(&buffer_bytecode).unwrap();
+
+        container.validate_container().unwrap();
+    }
 
     #[test]
     fn validation_test() {
