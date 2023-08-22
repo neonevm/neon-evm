@@ -183,13 +183,14 @@ impl Container {
             height: current_section.input as usize,
         }];
         let mut max_stack_height = current_section.input as usize;
-        while !worklist.is_empty() {
-            let worklist_item = worklist.pop().unwrap();
+
+        while let Some(worklist_item) = worklist.pop() {
             let mut pos = worklist_item.pos;
             let mut height = worklist_item.height;
 
             while pos < code.len() {
-                let op = code.get_or_default(pos);
+                let op = code.get_unchecked_at(pos);
+
                 let want_option = heights.get(&pos);
 
                 // Check if pos has already be visited; if so, the stack heights should be the same.

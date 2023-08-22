@@ -121,6 +121,12 @@ impl Buffer {
 
     #[inline]
     #[must_use]
+    pub fn get_unchecked_at(&self, index: usize) -> u8 {
+        unsafe { self.ptr.add(index).read() }
+    }
+
+    #[inline]
+    #[must_use]
     pub fn get_u16_or_default(&self, index: usize) -> u16 {
         if self.len() < 2 {
             return u16::default();
