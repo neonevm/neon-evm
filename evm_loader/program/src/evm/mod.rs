@@ -155,6 +155,13 @@ impl<B: Database> Machine<B> {
             reinit_buffer(&mut machine.execution_code, backend);
             reinit_buffer(&mut machine.return_data, backend);
 
+            if let Some(container) = &mut machine.container {
+                for mut code in &mut container.code {
+                    reinit_buffer(&mut code, backend);
+                }
+                reinit_buffer(&mut container.data, backend);
+            }
+
             if let Some(parent) = &mut machine.parent {
                 reinit_machine(parent, backend);
             }
@@ -314,7 +321,7 @@ impl<B: Database> Machine<B> {
             Some(container) => &container.code[self.code_section],
             None => &self.execution_code,
         }
-        .clone();
+            .clone();
         assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
         assert!(self.return_data.uninit_data().is_none());

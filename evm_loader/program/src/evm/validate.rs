@@ -14,7 +14,7 @@ use crate::evm::opcode_table::OpCode::{
     SELFDESTRUCT,
 };
 use crate::evm::Buffer;
-use std::collections::HashMap;
+use std::collections::{BTreeMap};
 
 impl Container {
     /// [Specification](https://eips.ethereum.org/EIPS/eip-4750#:~:text=The%20return%20stack%20is%20limited%20to%20a%20maximum%201024%20items.)
@@ -172,7 +172,7 @@ impl Container {
             pub pos: usize,
             pub height: usize,
         }
-        let mut heights: HashMap<usize, usize> = HashMap::new();
+        let mut heights: BTreeMap<usize, usize> = BTreeMap::new();
 
         let current_section = metadata
             .get(section)
@@ -206,7 +206,7 @@ impl Container {
                 heights.insert(pos, height);
 
                 let op_code: OpCode = op.try_into()?;
-                let opcode_info = OpCode::opcode_info(op_code);
+                let opcode_info = OpCode::OPCODE_INFO.get(op as usize).unwrap().as_ref().unwrap();
 
                 // Validate height for current op and update as needed.
                 if opcode_info.min_stack > height {
