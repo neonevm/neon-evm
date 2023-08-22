@@ -385,34 +385,42 @@ impl OpCode {
         }
     }
 
+    #[inline(always)]
     pub const fn u8(self) -> u8 {
         self as u8
     }
 
+    #[inline(always)]
     const fn max_stack(pop: usize, push: usize) -> usize {
         Container::STACK_LIMIT + pop - push
     }
 
+    #[inline(always)]
     const fn min_stack(pops: usize, _push: usize) -> usize {
         pops
     }
 
+    #[inline(always)]
     const fn min_swap_stack(n: usize) -> usize {
         Self::min_stack(n, n)
     }
 
+    #[inline(always)]
     const fn max_swap_stack(n: usize) -> usize {
         Self::max_stack(n, n)
     }
 
+    #[inline(always)]
     const fn min_dup_stack(n: usize) -> usize {
         Self::min_stack(n, n + 1)
     }
 
+    #[inline(always)]
     const fn max_dup_stack(n: usize) -> usize {
         Self::max_stack(n, n + 1)
     }
 
+    #[inline(always)]
     const fn create_dup_opcode_info(n: usize) -> OpcodeInfo {
         OpcodeInfo {
             min_stack: Self::min_dup_stack(n),
@@ -421,6 +429,7 @@ impl OpCode {
         }
     }
 
+    #[inline(always)]
     const fn create_swap_opcode_info(n: usize) -> OpcodeInfo {
         OpcodeInfo {
             min_stack: Self::min_swap_stack(n),
@@ -429,6 +438,7 @@ impl OpCode {
         }
     }
 
+    #[inline(always)]
     const fn create_log_opcode_info(n: usize) -> OpcodeInfo {
         OpcodeInfo {
             min_stack: Self::min_stack(n, 0),
