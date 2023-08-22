@@ -188,7 +188,7 @@ impl Container {
             let mut pos = worklist_item.pos;
             let mut height = worklist_item.height;
 
-            'outer: while pos < code.len() {
+            while pos < code.len() {
                 let op = code.get_or_default(pos);
                 let want_option = heights.get(&pos);
 
@@ -247,7 +247,7 @@ impl Container {
                                 pos,
                             ));
                         }
-                        break 'outer;
+                        break;
                     }
                     RJUMP => {
                         let arg = code.get_i16_or_default(pos + 1);
@@ -273,15 +273,15 @@ impl Container {
                         }
                         pos += 2 + 2 * count as usize;
                     }
+                    _ if op >= PUSH1 && op <= PUSH32 => {
+                        pos += 1 + (op - PUSH0.u8()) as usize;
+                    }
+                    _ if opcode_info.terminal => {
+                        break;
+                    }
                     _ => {
-                        if op >= PUSH1 && op <= PUSH32 {
-                            pos += 1 + (op - PUSH0.u8()) as usize;
-                        } else if opcode_info.terminal {
-                            break 'outer;
-                        } else {
-                            // Simple op, no operand.
-                            pos += 1;
-                        }
+                        // Simple op, no operand.
+                        pos += 1;
                     }
                 }
                 max_stack_height = max_stack_height.max(height);
