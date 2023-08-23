@@ -7,21 +7,23 @@ use crate::evm::opcode_table::opcode::*;
 
 pub struct Bitvec(Vec<u8>);
 
-const SET2BITS_MASK: u16 = 0b11;
-const SET3BITS_MASK: u16 = 0b111;
-const SET4BITS_MASK: u16 = 0b1111;
-const SET5BITS_MASK: u16 = 0b1_1111;
-const SET6BITS_MASK: u16 = 0b11_1111;
-const SET7BITS_MASK: u16 = 0b111_1111;
+// const SET2BITS_MASK: u16 = 0b11;
+// const SET3BITS_MASK: u16 = 0b111;
+// const SET4BITS_MASK: u16 = 0b1111;
+// const SET5BITS_MASK: u16 = 0b1_1111;
+// const SET6BITS_MASK: u16 = 0b11_1111;
+// const SET7BITS_MASK: u16 = 0b111_1111;
+
+const BITS_MASK: [u16; 8] = [0, 1, 0b11, 0b111, 0b1111, 0b1_1111, 0b11_1111, 0b111_1111];
 
 impl Bitvec {
     pub fn new(capacity: usize) -> Self {
         Bitvec(vec![0; capacity])
     }
 
-    pub fn set1(&mut self, pos: usize) {
-        self.0[pos / 8] |= 1 << (pos % 8);
-    }
+    // pub fn set1(&mut self, pos: usize) {
+    //     self.0[pos / 8] |= 1 << (pos % 8);
+    // }
 
     pub fn set_n(&mut self, flag: u16, pos: usize) {
         let a = flag << (pos % 8);
@@ -118,37 +120,42 @@ impl Bitvec {
                 }
             }
 
-            match numbits {
-                1 => {
-                    self.set1(pc);
-                    pc += 1;
-                }
-                2 => {
-                    self.set_n(SET2BITS_MASK, pc);
-                    pc += 2;
-                }
-                3 => {
-                    self.set_n(SET3BITS_MASK, pc);
-                    pc += 3;
-                }
-                4 => {
-                    self.set_n(SET4BITS_MASK, pc);
-                    pc += 4;
-                }
-                5 => {
-                    self.set_n(SET5BITS_MASK, pc);
-                    pc += 5;
-                }
-                6 => {
-                    self.set_n(SET6BITS_MASK, pc);
-                    pc += 6;
-                }
-                7 => {
-                    self.set_n(SET7BITS_MASK, pc);
-                    pc += 7;
-                }
-                _ => (),
-            };
+            // match numbits {
+            //     1 => {
+            //         self.set1(pc);
+            //         pc += 1;
+            //     }
+            //     2 => {
+            //         self.set_n(SET2BITS_MASK, pc);
+            //         pc += 2;
+            //     }
+            //     3 => {
+            //         self.set_n(SET3BITS_MASK, pc);
+            //         pc += 3;
+            //     }
+            //     4 => {
+            //         self.set_n(SET4BITS_MASK, pc);
+            //         pc += 4;
+            //     }
+            //     5 => {
+            //         self.set_n(SET5BITS_MASK, pc);
+            //         pc += 5;
+            //     }
+            //     6 => {
+            //         self.set_n(SET6BITS_MASK, pc);
+            //         pc += 6;
+            //     }
+            //     7 => {
+            //         self.set_n(SET7BITS_MASK, pc);
+            //         pc += 7;
+            //     }
+            //     _ => (),
+            // };
+
+            if (1..=7).contains(&numbits) {
+                self.set_n(BITS_MASK[numbits as usize], pc);
+                pc += numbits as usize;
+            }
         }
     }
 }
