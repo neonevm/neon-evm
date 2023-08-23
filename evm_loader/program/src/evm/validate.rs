@@ -5,14 +5,14 @@
 )]
 
 use super::eof::Container;
+use super::opcode_table::OpcodeInfo;
 use crate::error::{Error, Result};
 use crate::evm::analysis::Bitvec;
 use crate::evm::eof::FunctionMetadata;
-use crate::evm::opcode_table::OpCode;
-use crate::evm::opcode_table::OpCode::{
-    CALLCODE, CALLF, JUMP, JUMPI, PC, PUSH0, PUSH1, PUSH32, RETF, RJUMP, RJUMPI, RJUMPV,
-    SELFDESTRUCT,
-};
+
+#[allow(clippy::wildcard_imports)]
+use crate::evm::opcode_table::opcode::*;
+
 use crate::evm::Buffer;
 
 impl Container {
@@ -59,7 +59,7 @@ impl Container {
             instruction_count += 1;
             opcode = code.get_or_default(i);
 
-            if !OpCode::has_opcode(opcode) && Self::DEPRECATED_OPCODES.contains(&opcode) {
+            if !OpcodeInfo::is_opcode_valid(opcode) && Self::DEPRECATED_OPCODES.contains(&opcode) {
                 return Err(Error::ValidationUndefinedInstruction(opcode, i));
             }
 
@@ -123,7 +123,7 @@ impl Container {
 
         // Code sections may not "fall through" and require proper termination.
         // Therefore, the last instruction must be considered terminal.
-        if !OpCode::is_terminal_opcode(opcode) {
+        if !OpcodeInfo::is_terminal_opcode(opcode) {
             return Err(Error::ValidationInvalidCodeTermination(opcode, i));
         }
 
@@ -160,7 +160,7 @@ impl Container {
         Ok(analysis)
     }
 
-    /// validateControlFlow iterates through all possible branches the provided code
+    /// `validate_control_flow` iterates through all possible branches the provided code
     /// value and determines if it is valid per EOF v1.
     #[allow(clippy::too_many_lines)]
     fn validate_control_flow(
@@ -210,9 +210,10 @@ impl Container {
 
                 height_update += 1;
 
-                let op_code: OpCode = op.try_into()?;
+                OpcodeInfo::assert_opcode_valid(op)?;
+
                 // SAFETY: `op` is already checked for a valid opcode, which means we shouldn't get None or "out of bounds"
-                let opcode_info = unsafe { OpCode::OPCODE_INFO.get_unchecked(op as usize) };
+                let opcode_info = unsafe { OpcodeInfo::OPCODE_INFO.get_unchecked(op as usize) };
                 let opcode_info = opcode_info.as_ref().unwrap();
 
                 // Validate height for current op and update as needed.
@@ -225,7 +226,7 @@ impl Container {
 
                 height = height + Self::STACK_LIMIT - opcode_info.max_stack;
 
-                match op_code {
+                match op {
                     CALLF => {
                         let arg = code.get_u16_or_default(pos + 1) as usize;
 
@@ -281,8 +282,8 @@ impl Container {
                         }
                         pos += 2 + 2 * count as usize;
                     }
-                    _ if op >= PUSH1 && op <= PUSH32 => {
-                        pos += 1 + (op - PUSH0.u8()) as usize;
+                    PUSH1..=PUSH32 => {
+                        pos += 1 + (op - PUSH0) as usize;
                     }
                     _ if opcode_info.terminal => {
                         break;
@@ -312,8 +313,6 @@ impl Container {
 mod tests {
     use super::*;
     use crate::evm::Buffer;
-
-    use super::OpCode::*;
 
     #[test]
     fn hello_world_validation() {
@@ -523,7 +522,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ValidationInvalidCodeTermination(80, 2)")]
     fn validation_test_with_invalid_code_termination() {
-        let code = Buffer::from_slice(&[CALLER.u8(), POP.u8()]);
+        let code = Buffer::from_slice(&[CALLER, POP]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,

@@ -2,7 +2,8 @@
 
 use crate::evm::Buffer;
 
-use super::opcode_table::OpCode;
+#[allow(clippy::wildcard_imports)]
+use crate::evm::opcode_table::opcode::*;
 
 pub struct Bitvec(Vec<u8>);
 
@@ -72,33 +73,36 @@ impl Bitvec {
             let mut numbits: u8;
             pc += 1;
 
-            if op >= OpCode::PUSH1.u8() && op <= OpCode::PUSH32.u8() {
-                numbits = op - OpCode::PUSH1.u8() + 1;
-            } else if op == OpCode::RJUMP.u8()
-                || op == OpCode::RJUMPI.u8()
-                || op == OpCode::CALLF.u8()
-            {
-                numbits = 2;
-            } else if op == OpCode::RJUMPV.u8() {
-                // RJUMPV is unique as it has a variable sized operand.
-                // The total size is determined by the count byte which
-                // immediate proceeds RJUMPV. Truncation will be caught
-                // in other validation steps -- for now, just return a
-                // valid bitmap for as much of the code as is
-                // available.
-                let end = code.len();
-                if pc >= end {
-                    // Count missing, no more bits to mark.
-                    return;
+            match op {
+                PUSH1..=PUSH32 => {
+                    numbits = op - PUSH1 + 1;
                 }
-                numbits = code.get_or_default(pc) * 2 + 1;
-                if pc + numbits as usize > end {
-                    // Jump table is truncated, mark as many bits
-                    // as possible.
-                    numbits = (end - pc) as u8; // TODO: check overflow
+
+                RJUMP | RJUMPI | CALLF => {
+                    numbits = 2;
                 }
-            } else {
-                continue;
+
+                RJUMPV => {
+                    // RJUMPV is unique as it has a variable sized operand.
+                    // The total size is determined by the count byte which
+                    // immediate proceeds RJUMPV. Truncation will be caught
+                    // in other validation steps -- for now, just return a
+                    // valid bitmap for as much of the code as is
+                    // available.
+                    let end = code.len();
+                    if pc >= end {
+                        // Count missing, no more bits to mark.
+                        return;
+                    }
+                    numbits = code.get_or_default(pc) * 2 + 1;
+                    if pc + numbits as usize > end {
+                        // Jump table is truncated, mark as many bits
+                        // as possible.
+                        numbits = (end - pc) as u8; // TODO: check overflow
+                    }
+                }
+
+                _ => continue,
             }
 
             if numbits >= 8 {
@@ -153,26 +157,26 @@ impl Bitvec {
 #[cfg(test)]
 mod tests {
     use crate::evm::analysis::Bitvec;
-    use crate::evm::opcode_table::OpCode::*;
+    use crate::evm::opcode_table::opcode::*;
     use crate::evm::Buffer;
 
     #[test]
     fn eof_code_bitmap_test1() {
-        let code = Buffer::from_slice(&[RJUMP.u8(), 0x01, 0x01, 0x01]);
+        let code = Buffer::from_slice(&[RJUMP, 0x01, 0x01, 0x01]);
         let bitvec = Bitvec::eof_code_bitmap(&code);
         assert_eq!(bitvec.to_vec()[0], 0b0000_0110);
     }
 
     #[test]
     fn eof_code_bitmap_test2() {
-        let code = Buffer::from_slice(&[RJUMPI.u8(), RJUMP.u8(), RJUMP.u8(), RJUMPI.u8()]);
+        let code = Buffer::from_slice(&[RJUMPI, RJUMP, RJUMP, RJUMPI]);
         let bitvec = Bitvec::eof_code_bitmap(&code);
         assert_eq!(bitvec.to_vec()[0], 0b0011_0110);
     }
 
     #[test]
     fn eof_code_bitmap_test3() {
-        let code = Buffer::from_slice(&[RJUMPV.u8(), 0x02, RJUMP.u8(), 0x00, RJUMPI.u8(), 0x00]);
+        let code = Buffer::from_slice(&[RJUMPV, 0x02, RJUMP, 0x00, RJUMPI, 0x00]);
         let bitvec = Bitvec::eof_code_bitmap(&code);
         assert_eq!(bitvec.to_vec()[0], 0b0011_1110);
     }

@@ -321,7 +321,7 @@ impl<B: Database> Machine<B> {
             Some(container) => &container.code[self.code_section],
             None => &self.execution_code,
         }
-            .clone();
+        .clone();
         assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
         assert!(self.return_data.uninit_data().is_none());
