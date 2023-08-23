@@ -172,7 +172,7 @@ impl Container {
             pub pos: usize,
             pub height: usize,
         }
-        let mut stack_heights_per_opcode: Vec<isize> = vec![-1; code.len()];
+        let mut stack_heights_per_opcode: Vec<isize> = vec![Self::LOC_UNVISITED; code.len()];
         let mut height_update = 0;
 
         let current_section = metadata
