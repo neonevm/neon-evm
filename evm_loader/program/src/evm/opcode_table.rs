@@ -204,7 +204,7 @@ impl PartialOrd<u8> for OpCode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OpcodeInfo {
     pub min_stack: usize,
     pub max_stack: usize,
@@ -375,14 +375,13 @@ impl TryFrom<u8> for OpCode {
 
 impl OpCode {
     pub fn has_opcode(op: u8) -> bool {
-        OpCode::try_from(op).is_ok()
+        Self::OPCODE_INFO[op as usize].is_some()
     }
 
     pub fn is_terminal_opcode(op: u8) -> bool {
-        match OpCode::try_from(op) {
-            Ok(opcode) => Self::opcode_info(opcode).terminal,
-            _ => false,
-        }
+        Self::OPCODE_INFO[op as usize]
+            .map(|info| info.terminal)
+            .unwrap_or(false)
     }
 
     #[inline(always)]
@@ -402,22 +401,22 @@ impl OpCode {
 
     #[inline(always)]
     const fn min_swap_stack(n: usize) -> usize {
-        Self::min_stack(n, n)
+        OpCode::min_stack(n, n)
     }
 
     #[inline(always)]
     const fn max_swap_stack(n: usize) -> usize {
-        Self::max_stack(n, n)
+        OpCode::max_stack(n, n)
     }
 
     #[inline(always)]
     const fn min_dup_stack(n: usize) -> usize {
-        Self::min_stack(n, n + 1)
+        OpCode::min_stack(n, n + 1)
     }
 
     #[inline(always)]
     const fn max_dup_stack(n: usize) -> usize {
-        Self::max_stack(n, n + 1)
+        OpCode::max_stack(n, n + 1)
     }
 
     #[inline(always)]
@@ -441,731 +440,506 @@ impl OpCode {
     #[inline(always)]
     const fn create_log_opcode_info(n: usize) -> OpcodeInfo {
         OpcodeInfo {
-            min_stack: Self::min_stack(n, 0),
-            max_stack: Self::max_stack(n, 0),
+            min_stack: OpCode::min_stack(n, 0),
+            max_stack: OpCode::max_stack(n, 0),
             terminal: false,
         }
     }
 
-    pub const OPCODE_INFO: [Option<OpcodeInfo>; 256] = [
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1024, terminal: true }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        None,
-        None,
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1025, terminal: false }),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1027, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1027, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 4, max_stack: 1028, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1027, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1024, terminal: true }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1025, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 4, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 5, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 6, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 7, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 8, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 9, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 10, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 11, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 12, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 13, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 14, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 15, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 16, max_stack: 1023, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 4, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 5, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 6, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 7, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 8, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 9, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 10, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 11, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 12, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 13, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 14, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 15, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 16, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 17, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1027, terminal: false }),
-        Some(OpcodeInfo { min_stack: 4, max_stack: 1028, terminal: false }),
-        Some(OpcodeInfo { min_stack: 5, max_stack: 1029, terminal: false }),
-        Some(OpcodeInfo { min_stack: 6, max_stack: 1030, terminal: false }),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1024, terminal: true }),
-        None,
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1024, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: false }),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 3, max_stack: 1026, terminal: false }),
-        Some(OpcodeInfo { min_stack: 7, max_stack: 1030, terminal: false }),
-        Some(OpcodeInfo { min_stack: 7, max_stack: 1030, terminal: false }),
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: true }),
-        Some(OpcodeInfo { min_stack: 6, max_stack: 1029, terminal: false }),
-        Some(OpcodeInfo { min_stack: 4, max_stack: 1027, terminal: false }),
-        None,
-        None,
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 6, max_stack: 1029, terminal: false }),
-        None,
-        None,
-        Some(OpcodeInfo { min_stack: 2, max_stack: 1026, terminal: true }),
-        Some(OpcodeInfo { min_stack: 0, max_stack: 1024, terminal: true }),
-        Some(OpcodeInfo { min_stack: 1, max_stack: 1025, terminal: false }),
-    ];
+    pub const OPCODE_INFO: [Option<OpcodeInfo>; 256] = {
+        let mut opcodes: [Option<OpcodeInfo>; 256] = [None; 256];
 
-    #[allow(clippy::match_same_arms, clippy::too_many_lines)]
-    pub const fn opcode_info(op: OpCode) -> OpcodeInfo {
-        match op {
-            STOP => OpcodeInfo {
-                min_stack: Self::min_stack(0, 0),
-                max_stack: Self::max_stack(0, 0),
-                terminal: true,
-            },
-            ADD => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            MUL => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SUB => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            DIV => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SDIV => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            MOD => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SMOD => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            ADDMOD => OpcodeInfo {
-                min_stack: Self::min_stack(3, 1),
-                max_stack: Self::max_stack(3, 1),
-                terminal: false,
-            },
-            MULMOD => OpcodeInfo {
-                min_stack: Self::min_stack(3, 1),
-                max_stack: Self::max_stack(3, 1),
-                terminal: false,
-            },
-            EXP => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SIGNEXTEND => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            LT => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            GT => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SLT => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SGT => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            EQ => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            ISZERO => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            AND => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            XOR => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            OR => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            NOT => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            BYTE => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            KECCAK256 => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            ADDRESS => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            BALANCE => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            ORIGIN => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            CALLER => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            CALLVALUE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            CALLDATALOAD => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            CALLDATASIZE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            CALLDATACOPY => OpcodeInfo {
-                min_stack: Self::min_stack(3, 0),
-                max_stack: Self::max_stack(3, 0),
-                terminal: false,
-            },
-            CODESIZE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            CODECOPY => OpcodeInfo {
-                min_stack: Self::min_stack(3, 0),
-                max_stack: Self::max_stack(3, 0),
-                terminal: false,
-            },
-            GASPRICE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            EXTCODESIZE => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            EXTCODECOPY => OpcodeInfo {
-                min_stack: Self::min_stack(4, 0),
-                max_stack: Self::max_stack(4, 0),
-                terminal: false,
-            },
-            BLOCKHASH => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            COINBASE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            TIMESTAMP => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            NUMBER => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            DIFFICULTY => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            GASLIMIT => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            POP => OpcodeInfo {
-                min_stack: Self::min_stack(1, 0),
-                max_stack: Self::max_stack(1, 0),
-                terminal: false,
-            },
-            MLOAD => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            MSTORE => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: false,
-            },
-            MSTORE8 => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: false,
-            },
-            SLOAD => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            SSTORE => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: false,
-            },
-            JUMP => OpcodeInfo {
-                min_stack: Self::min_stack(1, 0),
-                max_stack: Self::max_stack(1, 0),
-                terminal: false,
-            },
-            JUMPI => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: false,
-            },
-            PC => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            MSIZE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            GAS => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            JUMPDEST => OpcodeInfo {
-                min_stack: Self::min_stack(0, 0),
-                max_stack: Self::max_stack(0, 0),
-                terminal: false,
-            },
-            PUSH1 | PUSH2 | PUSH3 | PUSH4 | PUSH5 | PUSH6 | PUSH7 | PUSH8 | PUSH9 | PUSH10
-            | PUSH11 | PUSH12 | PUSH13 | PUSH14 | PUSH15 | PUSH16 | PUSH17 | PUSH18 | PUSH19
-            | PUSH20 | PUSH21 | PUSH22 | PUSH23 | PUSH24 | PUSH25 | PUSH26 | PUSH27 | PUSH28
-            | PUSH29 | PUSH30 | PUSH31 | PUSH32 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            DUP1 => Self::create_dup_opcode_info(1),
-            DUP2 => Self::create_dup_opcode_info(2),
-            DUP3 => Self::create_dup_opcode_info(3),
-            DUP4 => Self::create_dup_opcode_info(4),
-            DUP5 => Self::create_dup_opcode_info(5),
-            DUP6 => Self::create_dup_opcode_info(6),
-            DUP7 => Self::create_dup_opcode_info(7),
-            DUP8 => Self::create_dup_opcode_info(8),
-            DUP9 => Self::create_dup_opcode_info(9),
-            DUP10 => Self::create_dup_opcode_info(10),
-            DUP11 => Self::create_dup_opcode_info(11),
-            DUP12 => Self::create_dup_opcode_info(12),
-            DUP13 => Self::create_dup_opcode_info(13),
-            DUP14 => Self::create_dup_opcode_info(14),
-            DUP15 => Self::create_dup_opcode_info(15),
-            DUP16 => Self::create_dup_opcode_info(16),
-            SWAP1 => Self::create_swap_opcode_info(2),
-            SWAP2 => Self::create_swap_opcode_info(3),
-            SWAP3 => Self::create_swap_opcode_info(4),
-            SWAP4 => Self::create_swap_opcode_info(5),
-            SWAP5 => Self::create_swap_opcode_info(6),
-            SWAP6 => Self::create_swap_opcode_info(7),
-            SWAP7 => Self::create_swap_opcode_info(8),
-            SWAP8 => Self::create_swap_opcode_info(9),
-            SWAP9 => Self::create_swap_opcode_info(10),
-            SWAP10 => Self::create_swap_opcode_info(11),
-            SWAP11 => Self::create_swap_opcode_info(12),
-            SWAP12 => Self::create_swap_opcode_info(13),
-            SWAP13 => Self::create_swap_opcode_info(14),
-            SWAP14 => Self::create_swap_opcode_info(15),
-            SWAP15 => Self::create_swap_opcode_info(16),
-            SWAP16 => Self::create_swap_opcode_info(17),
-            LOG0 => Self::create_log_opcode_info(2),
-            LOG1 => Self::create_log_opcode_info(3),
-            LOG2 => Self::create_log_opcode_info(4),
-            LOG3 => Self::create_log_opcode_info(5),
-            LOG4 => Self::create_log_opcode_info(6),
-            CREATE => OpcodeInfo {
-                min_stack: Self::min_stack(3, 1),
-                max_stack: Self::max_stack(3, 1),
-                terminal: false,
-            },
-            CALL => OpcodeInfo {
-                min_stack: Self::min_stack(7, 1),
-                max_stack: Self::max_stack(7, 1),
-                terminal: false,
-            },
-            CALLCODE => OpcodeInfo {
-                min_stack: Self::min_stack(7, 1),
-                max_stack: Self::max_stack(7, 1),
-                terminal: false,
-            },
-            RETURN => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: true,
-            },
-            SELFDESTRUCT => OpcodeInfo {
-                min_stack: Self::min_stack(1, 0),
-                max_stack: Self::max_stack(1, 0),
-                terminal: false,
-            },
-            INVALID => OpcodeInfo {
-                min_stack: Self::min_stack(0, 0),
-                max_stack: Self::max_stack(0, 0),
-                terminal: true,
-            },
-            SHL => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SHR => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            SAR => OpcodeInfo {
-                min_stack: Self::min_stack(2, 1),
-                max_stack: Self::max_stack(2, 1),
-                terminal: false,
-            },
-            RETURNDATASIZE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            RETURNDATACOPY => OpcodeInfo {
-                min_stack: Self::min_stack(3, 0),
-                max_stack: Self::max_stack(3, 0),
-                terminal: false,
-            },
-            EXTCODEHASH => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            CHAINID => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            SELFBALANCE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            BASEFEE => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            RJUMP => OpcodeInfo {
-                min_stack: Self::min_stack(0, 0),
-                max_stack: Self::max_stack(0, 0),
-                terminal: true,
-            },
-            RJUMPI => OpcodeInfo {
-                min_stack: Self::min_stack(1, 0),
-                max_stack: Self::max_stack(1, 0),
-                terminal: false,
-            },
-            RJUMPV => OpcodeInfo {
-                min_stack: Self::min_stack(1, 0),
-                max_stack: Self::max_stack(1, 0),
-                terminal: false,
-            },
-            PUSH0 => OpcodeInfo {
-                min_stack: Self::min_stack(0, 1),
-                max_stack: Self::max_stack(0, 1),
-                terminal: false,
-            },
-            CALLF => OpcodeInfo {
-                min_stack: Self::min_stack(0, 0),
-                max_stack: Self::max_stack(0, 0),
-                terminal: false,
-            },
-            RETF => OpcodeInfo {
-                min_stack: Self::min_stack(0, 0),
-                max_stack: Self::max_stack(0, 0),
-                terminal: true,
-            },
-            DELEGATECALL => OpcodeInfo {
-                min_stack: Self::min_stack(6, 1),
-                max_stack: Self::max_stack(6, 1),
-                terminal: false,
-            },
-            CREATE2 => OpcodeInfo {
-                min_stack: Self::min_stack(4, 1),
-                max_stack: Self::max_stack(4, 1),
-                terminal: false,
-            },
-            STATICCALL => OpcodeInfo {
-                min_stack: Self::min_stack(6, 1),
-                max_stack: Self::max_stack(6, 1),
-                terminal: false,
-            },
-            REVERT => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: true,
-            },
-            TLOAD => OpcodeInfo {
-                min_stack: Self::min_stack(1, 1),
-                max_stack: Self::max_stack(1, 1),
-                terminal: false,
-            },
-            TSTORE => OpcodeInfo {
-                min_stack: Self::min_stack(2, 0),
-                max_stack: Self::max_stack(2, 0),
-                terminal: false,
-            },
-        }
-    }
+        opcodes[STOP as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 0),
+            max_stack: OpCode::max_stack(0, 0),
+            terminal: true,
+        });
+        opcodes[ADD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[MUL as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SUB as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[DIV as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SDIV as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[MOD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SMOD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[ADDMOD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(3, 1),
+            max_stack: OpCode::max_stack(3, 1),
+            terminal: false,
+        });
+        opcodes[MULMOD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(3, 1),
+            max_stack: OpCode::max_stack(3, 1),
+            terminal: false,
+        });
+        opcodes[EXP as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SIGNEXTEND as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+
+        opcodes[LT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[GT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SLT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SGT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[EQ as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[ISZERO as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[AND as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[OR as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[XOR as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[NOT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[BYTE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+
+        opcodes[SHL as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SHR as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+        opcodes[SAR as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+
+        opcodes[KECCAK256 as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 1),
+            max_stack: OpCode::max_stack(2, 1),
+            terminal: false,
+        });
+
+        opcodes[ADDRESS as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[BALANCE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[ORIGIN as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[CALLER as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[CALLVALUE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[CALLDATALOAD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[CALLDATASIZE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[CALLDATACOPY as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(3, 0),
+            max_stack: OpCode::max_stack(3, 0),
+            terminal: false,
+        });
+        opcodes[CODESIZE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[CODECOPY as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(3, 0),
+            max_stack: OpCode::max_stack(3, 0),
+            terminal: false,
+        });
+        opcodes[GASPRICE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[EXTCODESIZE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[EXTCODECOPY as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(4, 0),
+            max_stack: OpCode::max_stack(4, 0),
+            terminal: false,
+        });
+        opcodes[RETURNDATASIZE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[RETURNDATACOPY as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(3, 0),
+            max_stack: OpCode::max_stack(3, 0),
+            terminal: false,
+        });
+        opcodes[EXTCODEHASH as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+
+        opcodes[BLOCKHASH as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[COINBASE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[TIMESTAMP as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[NUMBER as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[DIFFICULTY as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[GASLIMIT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[CHAINID as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[SELFBALANCE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[BASEFEE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+
+        opcodes[POP as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 0),
+            max_stack: OpCode::max_stack(1, 0),
+            terminal: false,
+        });
+        opcodes[MLOAD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[MSTORE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 0),
+            max_stack: OpCode::max_stack(2, 0),
+            terminal: false,
+        });
+        opcodes[MSTORE8 as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 0),
+            max_stack: OpCode::max_stack(2, 0),
+            terminal: false,
+        });
+        opcodes[SLOAD as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 1),
+            max_stack: OpCode::max_stack(1, 1),
+            terminal: false,
+        });
+        opcodes[SSTORE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 0),
+            max_stack: OpCode::max_stack(2, 0),
+            terminal: false,
+        });
+        opcodes[JUMP as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 0),
+            max_stack: OpCode::max_stack(1, 0),
+            terminal: false,
+        });
+        opcodes[JUMPI as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 0),
+            max_stack: OpCode::max_stack(2, 0),
+            terminal: false,
+        });
+        opcodes[PC as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[MSIZE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[GAS as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        });
+        opcodes[JUMPDEST as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 0),
+            max_stack: OpCode::max_stack(0, 0),
+            terminal: false,
+        });
+
+        let push_info = OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 1),
+            max_stack: OpCode::max_stack(0, 1),
+            terminal: false,
+        };
+
+        opcodes[PUSH0 as usize] = Some(push_info);
+        opcodes[PUSH1 as usize] = Some(push_info);
+        opcodes[PUSH2 as usize] = Some(push_info);
+        opcodes[PUSH3 as usize] = Some(push_info);
+        opcodes[PUSH4 as usize] = Some(push_info);
+        opcodes[PUSH5 as usize] = Some(push_info);
+        opcodes[PUSH6 as usize] = Some(push_info);
+        opcodes[PUSH7 as usize] = Some(push_info);
+        opcodes[PUSH8 as usize] = Some(push_info);
+        opcodes[PUSH9 as usize] = Some(push_info);
+        opcodes[PUSH10 as usize] = Some(push_info);
+        opcodes[PUSH11 as usize] = Some(push_info);
+        opcodes[PUSH12 as usize] = Some(push_info);
+        opcodes[PUSH13 as usize] = Some(push_info);
+        opcodes[PUSH14 as usize] = Some(push_info);
+        opcodes[PUSH15 as usize] = Some(push_info);
+        opcodes[PUSH16 as usize] = Some(push_info);
+        opcodes[PUSH17 as usize] = Some(push_info);
+        opcodes[PUSH18 as usize] = Some(push_info);
+        opcodes[PUSH19 as usize] = Some(push_info);
+        opcodes[PUSH20 as usize] = Some(push_info);
+        opcodes[PUSH21 as usize] = Some(push_info);
+        opcodes[PUSH22 as usize] = Some(push_info);
+        opcodes[PUSH23 as usize] = Some(push_info);
+        opcodes[PUSH24 as usize] = Some(push_info);
+        opcodes[PUSH25 as usize] = Some(push_info);
+        opcodes[PUSH26 as usize] = Some(push_info);
+        opcodes[PUSH27 as usize] = Some(push_info);
+        opcodes[PUSH28 as usize] = Some(push_info);
+        opcodes[PUSH29 as usize] = Some(push_info);
+        opcodes[PUSH30 as usize] = Some(push_info);
+        opcodes[PUSH31 as usize] = Some(push_info);
+        opcodes[PUSH32 as usize] = Some(push_info);
+
+        opcodes[DUP1 as usize] = Some(OpCode::create_dup_opcode_info(1));
+        opcodes[DUP2 as usize] = Some(OpCode::create_dup_opcode_info(2));
+        opcodes[DUP3 as usize] = Some(OpCode::create_dup_opcode_info(3));
+        opcodes[DUP4 as usize] = Some(OpCode::create_dup_opcode_info(4));
+        opcodes[DUP5 as usize] = Some(OpCode::create_dup_opcode_info(5));
+        opcodes[DUP6 as usize] = Some(OpCode::create_dup_opcode_info(6));
+        opcodes[DUP7 as usize] = Some(OpCode::create_dup_opcode_info(7));
+        opcodes[DUP8 as usize] = Some(OpCode::create_dup_opcode_info(8));
+        opcodes[DUP9 as usize] = Some(OpCode::create_dup_opcode_info(9));
+        opcodes[DUP10 as usize] = Some(OpCode::create_dup_opcode_info(10));
+        opcodes[DUP11 as usize] = Some(OpCode::create_dup_opcode_info(11));
+        opcodes[DUP12 as usize] = Some(OpCode::create_dup_opcode_info(12));
+        opcodes[DUP13 as usize] = Some(OpCode::create_dup_opcode_info(13));
+        opcodes[DUP14 as usize] = Some(OpCode::create_dup_opcode_info(14));
+        opcodes[DUP15 as usize] = Some(OpCode::create_dup_opcode_info(15));
+        opcodes[DUP16 as usize] = Some(OpCode::create_dup_opcode_info(16));
+
+        opcodes[SWAP1 as usize] = Some(OpCode::create_swap_opcode_info(2));
+        opcodes[SWAP2 as usize] = Some(OpCode::create_swap_opcode_info(3));
+        opcodes[SWAP3 as usize] = Some(OpCode::create_swap_opcode_info(4));
+        opcodes[SWAP4 as usize] = Some(OpCode::create_swap_opcode_info(5));
+        opcodes[SWAP5 as usize] = Some(OpCode::create_swap_opcode_info(6));
+        opcodes[SWAP6 as usize] = Some(OpCode::create_swap_opcode_info(7));
+        opcodes[SWAP7 as usize] = Some(OpCode::create_swap_opcode_info(8));
+        opcodes[SWAP8 as usize] = Some(OpCode::create_swap_opcode_info(9));
+        opcodes[SWAP9 as usize] = Some(OpCode::create_swap_opcode_info(10));
+        opcodes[SWAP10 as usize] = Some(OpCode::create_swap_opcode_info(11));
+        opcodes[SWAP11 as usize] = Some(OpCode::create_swap_opcode_info(12));
+        opcodes[SWAP12 as usize] = Some(OpCode::create_swap_opcode_info(13));
+        opcodes[SWAP13 as usize] = Some(OpCode::create_swap_opcode_info(14));
+        opcodes[SWAP14 as usize] = Some(OpCode::create_swap_opcode_info(15));
+        opcodes[SWAP15 as usize] = Some(OpCode::create_swap_opcode_info(16));
+        opcodes[SWAP16 as usize] = Some(OpCode::create_swap_opcode_info(17));
+
+        opcodes[LOG0 as usize] = Some(OpCode::create_log_opcode_info(2));
+        opcodes[LOG1 as usize] = Some(OpCode::create_log_opcode_info(3));
+        opcodes[LOG2 as usize] = Some(OpCode::create_log_opcode_info(4));
+        opcodes[LOG3 as usize] = Some(OpCode::create_log_opcode_info(5));
+        opcodes[LOG4 as usize] = Some(OpCode::create_log_opcode_info(6));
+
+        opcodes[CREATE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(3, 1),
+            max_stack: OpCode::max_stack(3, 1),
+            terminal: false,
+        });
+        opcodes[CALL as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(7, 1),
+            max_stack: OpCode::max_stack(7, 1),
+            terminal: false,
+        });
+        opcodes[CALLCODE as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(7, 1),
+            max_stack: OpCode::max_stack(7, 1),
+            terminal: false,
+        });
+        opcodes[RETURN as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 0),
+            max_stack: OpCode::max_stack(2, 0),
+            terminal: true,
+        });
+        opcodes[DELEGATECALL as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(6, 1),
+            max_stack: OpCode::max_stack(6, 1),
+            terminal: false,
+        });
+        opcodes[CREATE2 as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(4, 1),
+            max_stack: OpCode::max_stack(4, 1),
+            terminal: false,
+        });
+
+        opcodes[STATICCALL as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(6, 1),
+            max_stack: OpCode::max_stack(6, 1),
+            terminal: false,
+        });
+
+        opcodes[REVERT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(2, 0),
+            max_stack: OpCode::max_stack(2, 0),
+            terminal: true,
+        });
+        opcodes[INVALID as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 0),
+            max_stack: OpCode::max_stack(0, 0),
+            terminal: true,
+        });
+
+        opcodes[SELFDESTRUCT as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 0),
+            max_stack: OpCode::max_stack(1, 0),
+            terminal: false,
+        });
+
+        opcodes[RJUMP as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 0),
+            max_stack: OpCode::max_stack(0, 0),
+            terminal: true,
+        });
+        opcodes[RJUMPI as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 0),
+            max_stack: OpCode::max_stack(1, 0),
+            terminal: false,
+        });
+        opcodes[RJUMPV as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(1, 0),
+            max_stack: OpCode::max_stack(1, 0),
+            terminal: false,
+        });
+
+        opcodes[CALLF as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 0),
+            max_stack: OpCode::max_stack(0, 0),
+            terminal: false,
+        });
+
+        opcodes[RETF as usize] = Some(OpcodeInfo {
+            min_stack: OpCode::min_stack(0, 0),
+            max_stack: OpCode::max_stack(0, 0),
+            terminal: true,
+        });
+
+        opcodes
+    };
 }
 
 impl<B: Database> Machine<B> {
