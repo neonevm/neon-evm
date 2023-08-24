@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
 pub use buffer::Buffer;
-pub use precompile::is_precompile_address;
-pub use precompile::precompile;
 
 #[cfg(feature = "tracing")]
 use crate::evm::tracing::event_listener::tracer::TracerType;
@@ -18,7 +16,7 @@ use crate::evm::tracing::event_listener::tracer::TracerType;
 use crate::evm::tracing::EventListener;
 use crate::{
     error::{build_revert_message, Error, Result},
-    evm::opcode::Action,
+    evm::{opcode::Action, precompile::is_precompile_address},
     types::{Address, Transaction},
 };
 
@@ -342,57 +340,56 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        let status = loop {
-            if is_precompile_address(&self.context.contract) {
-                let value = precompile(&self.context.contract, &self.call_data).unwrap_or_default();
+        let status = if is_precompile_address(&self.context.contract) {
+            let value = Self::precompile(&self.context.contract, &self.call_data).unwrap();
+            backend.commit_snapshot();
 
-                backend.commit_snapshot();
-
-                break ExitStatus::Return(value);
-            }
-
-            step += 1;
-            if step > step_limit {
-                break ExitStatus::StepLimit;
-            }
-
-            let opcode = self.execution_code.get_or_default(self.pc);
-
-            tracing_event!(
-                self,
-                tracing::Event::BeginStep {
-                    opcode,
-                    pc: self.pc,
-                    stack: self.stack.to_vec(),
-                    memory: self.memory.to_vec()
+            ExitStatus::Return(value)
+        } else {
+            loop {
+                step += 1;
+                if step > step_limit {
+                    break ExitStatus::StepLimit;
                 }
-            );
 
-            // SAFETY: OPCODES.len() == 256, opcode <= 255
-            let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
+                let opcode = self.execution_code.get_or_default(self.pc);
 
-            let opcode_result = match opcode_fn(self, backend) {
-                Ok(result) => result,
-                Err(e) => {
-                    let message = build_revert_message(&e.to_string());
-                    self.opcode_revert_impl(Buffer::from_slice(&message), backend)?
-                }
-            };
+                tracing_event!(
+                    self,
+                    tracing::Event::BeginStep {
+                        opcode,
+                        pc: self.pc,
+                        stack: self.stack.to_vec(),
+                        memory: self.memory.to_vec()
+                    }
+                );
 
-            trace_end_step!(self, opcode_result != Action::Noop; match &opcode_result {
-                Action::Return(value) | Action::Revert(value) => Some(value.clone()),
-                _ => None,
-            });
+                // SAFETY: OPCODES.len() == 256, opcode <= 255
+                let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
 
-            match opcode_result {
-                Action::Continue => self.pc += 1,
-                Action::Jump(target) => self.pc = target,
-                Action::Stop => break ExitStatus::Stop,
-                Action::Return(value) => break ExitStatus::Return(value),
-                Action::Revert(value) => break ExitStatus::Revert(value),
-                Action::Suicide => break ExitStatus::Suicide,
-                Action::Noop => {}
-            };
+                let opcode_result = match opcode_fn(self, backend) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        let message = build_revert_message(&e.to_string());
+                        self.opcode_revert_impl(Buffer::from_slice(&message), backend)?
+                    }
+                };
+
+                trace_end_step!(self, opcode_result != Action::Noop; match &opcode_result {
+                    Action::Return(value) | Action::Revert(value) => Some(value.clone()),
+                    _ => None,
+                });
+
+                match opcode_result {
+                    Action::Continue => self.pc += 1,
+                    Action::Jump(target) => self.pc = target,
+                    Action::Stop => break ExitStatus::Stop,
+                    Action::Return(value) => break ExitStatus::Return(value),
+                    Action::Revert(value) => break ExitStatus::Revert(value),
+                    Action::Suicide => break ExitStatus::Suicide,
+                    Action::Noop => {}
+                };
+            }
         };
 
         tracing_event!(
