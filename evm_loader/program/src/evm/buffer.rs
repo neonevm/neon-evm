@@ -48,13 +48,17 @@ impl Buffer {
         Buffer { ptr, len, inner }
     }
 
+    /// # Safety
+    ///
+    /// This function was marked as unsafe until correct lifetimes will be set.
+    /// At the moment, `Buffer` may outlive `account`, since no lifetimes has been set,
+    /// so they are not checked by the compiler and it's the user's responsibility to take
+    /// care of them.
     #[must_use]
-    pub fn from_account(account: &AccountInfo, range: Range<usize>) -> Self {
-        let data = unsafe {
-            // todo cell_leak #69099
-            let ptr = account.data.as_ptr();
-            (*ptr).as_mut_ptr()
-        };
+    pub unsafe fn from_account(account: &AccountInfo, range: Range<usize>) -> Self {
+        // todo cell_leak #69099
+        let ptr = account.data.as_ptr();
+        let data = (*ptr).as_mut_ptr();
 
         Buffer::new(Inner::Account {
             key: *account.key,
@@ -96,6 +100,11 @@ impl Buffer {
     #[must_use]
     pub fn empty() -> Self {
         Buffer::new(Inner::Empty)
+    }
+
+    #[must_use]
+    pub fn is_initialized(&self) -> bool {
+        !matches!(self.inner, Inner::AccountUninit { .. })
     }
 
     #[must_use]

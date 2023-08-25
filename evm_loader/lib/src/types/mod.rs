@@ -11,7 +11,7 @@ use tokio::runtime::Runtime;
 use tokio::task::block_in_place;
 pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
 
-use evm_loader::evm::tracing::event_listener::trace::{TraceCallConfig, TraceConfig};
+use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
 use evm_loader::types::hexbytes::HexBytes;
 use {
     ethnum::U256,

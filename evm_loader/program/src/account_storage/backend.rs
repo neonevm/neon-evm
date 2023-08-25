@@ -98,7 +98,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                 return Buffer::empty();
             }
 
-            Buffer::from_account(account.info, account.code_location())
+            unsafe { Buffer::from_account(account.info, account.code_location()) }
         } else {
             Buffer::empty()
         }

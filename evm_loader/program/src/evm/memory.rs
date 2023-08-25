@@ -5,9 +5,7 @@ use solana_program::program_memory::{sol_memcpy, sol_memset};
 
 use crate::error::Error;
 #[cfg(feature = "tracing")]
-use crate::evm::tracing::event_listener::tracer::TracerType;
-#[cfg(feature = "tracing")]
-use crate::evm::tracing::EventListener;
+use crate::evm::tracing::TracerTypeOpt;
 
 use super::utils::checked_next_multiple_of_32;
 use super::{tracing_event, Buffer};
@@ -23,11 +21,11 @@ pub struct Memory {
     capacity: usize,
     size: usize,
     #[cfg(feature = "tracing")]
-    tracer: TracerType,
+    tracer: TracerTypeOpt,
 }
 
 impl Memory {
-    pub fn new(#[cfg(feature = "tracing")] tracer: TracerType) -> Self {
+    pub fn new(#[cfg(feature = "tracing")] tracer: TracerTypeOpt) -> Self {
         Self::with_capacity(
             MEMORY_CAPACITY,
             #[cfg(feature = "tracing")]
@@ -35,7 +33,10 @@ impl Memory {
         )
     }
 
-    pub fn with_capacity(capacity: usize, #[cfg(feature = "tracing")] tracer: TracerType) -> Self {
+    pub fn with_capacity(
+        capacity: usize,
+        #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
+    ) -> Self {
         unsafe {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
             let data = crate::allocator::EVM.alloc_zeroed(layout);

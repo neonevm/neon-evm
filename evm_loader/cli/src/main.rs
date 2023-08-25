@@ -21,7 +21,7 @@ pub use context::Context;
 use std::io::Read;
 
 use ethnum::U256;
-use evm_loader::evm::tracing::event_listener::trace::{TraceCallConfig, TraceConfig};
+use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
 use serde_json::json;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of, values_of};
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -119,13 +119,14 @@ async fn execute<'a>(
                 config.commitment,
                 &accounts,
                 &solana_accounts,
-                trace_call_config,
+                &trace_call_config.block_overrides,
+                trace_call_config.state_overrides,
             )
             .await
             .map(|result| json!(result))
         }
         ("emulate-hash", Some(params)) => {
-            let (tx, trace_config) = parse_tx_hash(context.rpc_client.as_ref()).await;
+            let tx = context.rpc_client.get_transaction_data().await?;
             let (token, chain, steps, accounts, solana_accounts) =
                 parse_tx_params(config, context, params).await;
             emulate::execute(
@@ -138,7 +139,8 @@ async fn execute<'a>(
                 config.commitment,
                 &accounts,
                 &solana_accounts,
-                trace_config.into(),
+                &None,
+                None,
             )
             .await
             .map(|result| json!(result))
