@@ -20,13 +20,7 @@ impl Container {
     pub const STACK_LIMIT: usize = 1024;
     pub const LOC_UNVISITED: isize = -1;
 
-    pub const DEPRECATED_OPCODES: [u8; 5] = [
-        CALLCODE as u8,
-        SELFDESTRUCT as u8,
-        JUMP as u8,
-        JUMPI as u8,
-        PC as u8,
-    ];
+    pub const DEPRECATED_OPCODES: [u8; 5] = [CALLCODE, SELFDESTRUCT, JUMP, JUMPI, PC];
 
     pub fn validate_container(&self) -> Result<()> {
         for (section, code) in self.code.iter().enumerate() {
@@ -64,7 +58,7 @@ impl Container {
             }
 
             if opcode > PUSH0 && opcode <= PUSH32 {
-                let size = opcode - PUSH0 as u8;
+                let size = opcode - PUSH0;
                 if code.len() <= i + size as usize {
                     return Err(Error::ValidationTruncatedImmediate(opcode, i));
                 }
@@ -344,7 +338,7 @@ mod tests {
     fn validation_test() {
         let codes = vec![
             (
-                Buffer::from_slice(&[CALLER as u8, POP as u8, STOP as u8]),
+                Buffer::from_slice(&[CALLER, POP, STOP]),
                 vec![FunctionMetadata {
                     input: 0,
                     output: 0,
@@ -352,7 +346,7 @@ mod tests {
                 }],
             ),
             (
-                Buffer::from_slice(&[CALLF as u8, 0x00, 0x00, STOP as u8]),
+                Buffer::from_slice(&[CALLF, 0x00, 0x00, STOP]),
                 vec![FunctionMetadata {
                     input: 0,
                     output: 0,
@@ -360,7 +354,7 @@ mod tests {
                 }],
             ),
             (
-                Buffer::from_slice(&[ADDRESS as u8, CALLF as u8, 0x00, 0x00, STOP as u8]),
+                Buffer::from_slice(&[ADDRESS, CALLF, 0x00, 0x00, STOP]),
                 vec![FunctionMetadata {
                     input: 0,
                     output: 0,
@@ -369,26 +363,8 @@ mod tests {
             ),
             (
                 Buffer::from_slice(&[
-                    RJUMP as u8,
-                    0x00,
-                    0x03,
-                    JUMPDEST as u8,
-                    JUMPDEST as u8,
-                    RETURN as u8,
-                    PUSH1 as u8,
-                    20,
-                    PUSH1 as u8,
-                    39,
-                    PUSH1 as u8,
-                    0x00,
-                    CODECOPY as u8,
-                    PUSH1 as u8,
-                    20,
-                    PUSH1 as u8,
-                    0x00,
-                    RJUMP as u8,
-                    0xff,
-                    0xef,
+                    RJUMP, 0x00, 0x03, JUMPDEST, JUMPDEST, RETURN, PUSH1, 20, PUSH1, 39, PUSH1,
+                    0x00, CODECOPY, PUSH1, 20, PUSH1, 0x00, RJUMP, 0xff, 0xef,
                 ]),
                 vec![FunctionMetadata {
                     input: 0,
@@ -398,26 +374,8 @@ mod tests {
             ),
             (
                 Buffer::from_slice(&[
-                    PUSH1 as u8,
-                    1,
-                    RJUMPI as u8,
-                    0x00,
-                    0x03,
-                    JUMPDEST as u8,
-                    JUMPDEST as u8,
-                    STOP as u8,
-                    PUSH1 as u8,
-                    20,
-                    PUSH1 as u8,
-                    39,
-                    PUSH1 as u8,
-                    0x00,
-                    CODECOPY as u8,
-                    PUSH1 as u8,
-                    20,
-                    PUSH1 as u8,
-                    0x00,
-                    RETURN as u8,
+                    PUSH1, 1, RJUMPI, 0x00, 0x03, JUMPDEST, JUMPDEST, STOP, PUSH1, 20, PUSH1, 39,
+                    PUSH1, 0x00, CODECOPY, PUSH1, 20, PUSH1, 0x00, RETURN,
                 ]),
                 vec![FunctionMetadata {
                     input: 0,
@@ -427,29 +385,8 @@ mod tests {
             ),
             (
                 Buffer::from_slice(&[
-                    PUSH1 as u8,
-                    1,
-                    RJUMPV as u8,
-                    0x02,
-                    0x00,
-                    0x03,
-                    0xff,
-                    0xf8,
-                    JUMPDEST as u8,
-                    JUMPDEST as u8,
-                    STOP as u8,
-                    PUSH1 as u8,
-                    20,
-                    PUSH1 as u8,
-                    39,
-                    PUSH1 as u8,
-                    0x00,
-                    CODECOPY as u8,
-                    PUSH1 as u8,
-                    20,
-                    PUSH1 as u8,
-                    0x00,
-                    RETURN as u8,
+                    PUSH1, 1, RJUMPV, 0x02, 0x00, 0x03, 0xff, 0xf8, JUMPDEST, JUMPDEST, STOP,
+                    PUSH1, 20, PUSH1, 39, PUSH1, 0x00, CODECOPY, PUSH1, 20, PUSH1, 0x00, RETURN,
                 ]),
                 vec![FunctionMetadata {
                     input: 0,
@@ -458,7 +395,7 @@ mod tests {
                 }],
             ),
             (
-                Buffer::from_slice(&[RETF as u8]),
+                Buffer::from_slice(&[RETF]),
                 vec![FunctionMetadata {
                     input: 3,
                     output: 3,
@@ -466,7 +403,7 @@ mod tests {
                 }],
             ),
             (
-                Buffer::from_slice(&[CALLF as u8, 0x00, 0x01, POP as u8, STOP as u8]),
+                Buffer::from_slice(&[CALLF, 0x00, 0x01, POP, STOP]),
                 vec![
                     FunctionMetadata {
                         input: 0,
@@ -481,15 +418,7 @@ mod tests {
                 ],
             ),
             (
-                Buffer::from_slice(&[
-                    ORIGIN as u8,
-                    ORIGIN as u8,
-                    CALLF as u8,
-                    0x00,
-                    0x01,
-                    POP as u8,
-                    RETF as u8,
-                ]),
+                Buffer::from_slice(&[ORIGIN, ORIGIN, CALLF, 0x00, 0x01, POP, RETF]),
                 vec![
                     FunctionMetadata {
                         input: 0,
@@ -513,7 +442,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "FunctionMetadataNotFound(0)")]
     fn validation_test_with_function_metadata_not_found() {
-        let code = Buffer::from_slice(&[RETF as u8]);
+        let code = Buffer::from_slice(&[RETF]);
         let metas = vec![];
 
         Container::validate_code(&code, 0, &metas).unwrap();
@@ -534,7 +463,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ValidationUnreachableCode")]
     fn validation_test_with_unreachable_code_1() {
-        let code = Buffer::from_slice(&[RJUMP as u8, 0x00, 0x01, CALLER as u8, STOP as u8]);
+        let code = Buffer::from_slice(&[RJUMP, 0x00, 0x01, CALLER, STOP]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
@@ -546,7 +475,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ValidationUnreachableCode")]
     fn validation_test_with_unreachable_code_2() {
-        let code = Buffer::from_slice(&[STOP as u8, STOP as u8, INVALID as u8]);
+        let code = Buffer::from_slice(&[STOP, STOP, INVALID]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
@@ -558,7 +487,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "StackUnderflow")]
     fn validation_test_stack_underflow() {
-        let code = Buffer::from_slice(&[PUSH1 as u8, 0x42, ADD as u8, STOP as u8]);
+        let code = Buffer::from_slice(&[PUSH1, 0x42, ADD, STOP]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
@@ -571,7 +500,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ValidationInvalidMaxStackHeight(0, 1, 2)")]
     fn validation_test_with_invalid_max_stack_height() {
-        let code = Buffer::from_slice(&[PUSH1 as u8, 0x42, POP as u8, STOP as u8]);
+        let code = Buffer::from_slice(&[PUSH1, 0x42, POP, STOP]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
@@ -584,14 +513,8 @@ mod tests {
     #[should_panic(expected = "ValidationInvalidJumpDest(1, 5, 2)")]
     fn validation_test_with_invalid_jump_dest_1() {
         let code = Buffer::from_slice(&[
-            PUSH0 as u8,
-            RJUMPI as u8,
-            0x00,
-            0x01,
-            PUSH1 as u8,
-            0x42, // jumps to here
-            POP as u8,
-            STOP as u8,
+            PUSH0, RJUMPI, 0x00, 0x01, PUSH1, 0x42, // jumps to here
+            POP, STOP,
         ]);
         let meta = FunctionMetadata {
             input: 0,
@@ -605,17 +528,9 @@ mod tests {
     #[should_panic(expected = "ValidationInvalidJumpDest(1, 8, 3)")]
     fn validation_test_with_invalid_jump_dest_2() {
         let code = Buffer::from_slice(&[
-            PUSH0 as u8,
-            RJUMPV as u8,
-            0x02,
-            0x00,
-            0x01,
-            0x00,
-            0x02,
-            PUSH1 as u8,
-            0x42,      // jumps to here
-            POP as u8, // and here
-            STOP as u8,
+            PUSH0, RJUMPV, 0x02, 0x00, 0x01, 0x00, 0x02, PUSH1, 0x42, // jumps to here
+            POP,  // and here
+            STOP,
         ]);
         let meta = FunctionMetadata {
             input: 0,
@@ -628,7 +543,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ValidationInvalidBranchCount(1)")]
     fn validation_test_with_invalid_branch_count() {
-        let code = Buffer::from_slice(&[PUSH0 as u8, RJUMPV as u8, 0x00, STOP as u8]);
+        let code = Buffer::from_slice(&[PUSH0, RJUMPV, 0x00, STOP]);
         let meta = FunctionMetadata {
             input: 0,
             output: 0,
@@ -640,7 +555,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ValidationInvalidOutputs(1, 0, 0)")]
     fn validation_test_with_invalid_outputs() {
-        let code = Buffer::from_slice(&[RETF as u8]);
+        let code = Buffer::from_slice(&[RETF]);
         let meta = FunctionMetadata {
             input: 0,
             output: 1,
