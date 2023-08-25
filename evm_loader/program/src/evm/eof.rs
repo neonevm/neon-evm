@@ -207,7 +207,7 @@ impl Container {
 
         bytes.extend(type_section_content);
 
-        bytes.extend(self.code.clone().iter().flat_map(|buf| buf.to_vec()));
+        bytes.extend(self.code.iter().flat_map(|buf| buf.to_vec()));
         bytes.extend(self.data.to_vec());
 
         Buffer::from_slice(&bytes)
