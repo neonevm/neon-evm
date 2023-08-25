@@ -1080,11 +1080,6 @@ impl<B: Database> Machine<B> {
         }
 
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
-
-        if let Some(container) = &self.container {
-            container.validate_container()?;
-        }
-
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);

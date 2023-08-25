@@ -327,7 +327,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(tracing::Event::BeginVM {
             context: self.context,
-            code: code.to_vec()
+            code: self.execution_code.to_vec()
         });
 
         let opcode_table = if self.container.is_some() {
@@ -421,7 +421,11 @@ impl<B: Database> Machine<B> {
         gas_limit: Option<U256>,
     ) -> Result<()> {
         let container = if has_eof_magic(&execution_code) {
-            Some(Container::unmarshal_binary(&execution_code)?)
+            let container = Container::unmarshal_binary(&execution_code)?;
+            if reason == Reason::Create {
+                container.validate_container()?;
+            }
+            Some(container)
         } else {
             None
         };
@@ -439,12 +443,12 @@ impl<B: Database> Machine<B> {
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
-            code_section: 0, // TODO: set if need
+            code_section: 0,
             return_stack: vec![ReturnContext {
                 stack_height: 0,
                 pc: 0,
                 section: 0,
-            }], // TODO: set if need
+            }],
             is_static: self.is_static,
             reason,
             parent: None,
