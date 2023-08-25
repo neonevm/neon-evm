@@ -11,12 +11,12 @@ use solana_program::log::sol_log_data;
 
 use super::eof::has_eof_magic;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
+use crate::evm::eof::Container;
 use crate::{
     error::{Error, Result},
     evm::{trace_end_step, Buffer},
     types::Address,
 };
-use crate::evm::eof::Container;
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReturnContext {

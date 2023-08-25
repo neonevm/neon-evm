@@ -156,8 +156,8 @@ impl<B: Database> Machine<B> {
             reinit_buffer(&mut machine.return_data, backend);
 
             if let Some(container) = &mut machine.container {
-                for mut code in &mut container.code {
-                    reinit_buffer(&mut code, backend);
+                for code in &mut container.code {
+                    reinit_buffer(code, backend);
                 }
                 reinit_buffer(&mut container.data, backend);
             }

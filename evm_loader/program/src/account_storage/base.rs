@@ -8,9 +8,9 @@ use solana_program::clock::Clock;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
+use solana_program::sysvar::Sysvar;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use solana_program::sysvar::Sysvar;
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn new(
