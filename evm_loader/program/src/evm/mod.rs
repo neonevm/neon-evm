@@ -317,11 +317,11 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
-        let mut code = match &self.container {
+        let mut code = Buffer::from_slice(match &self.container {
             Some(container) => &container.code[self.code_section],
             None => &self.execution_code,
-        }
-        .clone();
+        });
+
         assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
         assert!(self.return_data.uninit_data().is_none());
@@ -330,7 +330,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(tracing::Event::BeginVM {
             context: self.context,
-            code: code.clone().to_vec()
+            code: code.to_vec()
         });
 
         let status = loop {
@@ -386,7 +386,7 @@ impl<B: Database> Machine<B> {
                 Action::Revert(value) => break ExitStatus::Revert(value),
                 Action::CodeSection(code_section, pc) => {
                     self.code_section = code_section;
-                    code = self.get_code().clone();
+                    code = Buffer::from_slice(&self.get_code());
                     self.pc = pc;
                 }
                 Action::Suicide => break ExitStatus::Suicide,
