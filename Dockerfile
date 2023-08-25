@@ -82,17 +82,17 @@ COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/wait-for-solana.sh \
     evm_loader/wait-for-neon.sh \
-    evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
+    evm_loader/create-test-accounts.sh \
     evm_loader/evm_loader-keypair.json \
     /opt/
 
-COPY evm_loader/keys/ /opt/keys
+COPY evm_loader/operator-keypairs/ /opt/operator-keypairs
 COPY evm_loader/tests /opt/tests
-COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
-COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
-
+COPY evm_loader/operator-keypairs/id.json /root/.config/solana/id.json
+COPY evm_loader/operator-keypairs/id2.json /root/.config/solana/id2.json
+COPY evm_loader/keys/ /opt/keys
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt

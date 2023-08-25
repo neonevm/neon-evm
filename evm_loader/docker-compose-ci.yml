@@ -35,13 +35,11 @@ services:
       NEON_DB_INDEXER_DATABASE: indexer
       NEON_DB_INDEXER_USER: postgres
       NEON_DB_INDEXER_PASSWORD: ""
-      KEYPAIR: /opt/id.json
-      FEEPAIR: /opt/id.json
+      KEYPAIR: /opt/operator-keypairs/id.json
+      FEEPAIR: /opt/operator-keypairs/id.json
     image: ${EVM_LOADER_IMAGE}
     ports:
     - 8085
-    volumes:
-    - ./files/id.json:/opt/id.json
     networks:
       - net
 

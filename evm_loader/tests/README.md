@@ -15,7 +15,7 @@ py.test ./ -s -v
 
 Moreover, we can use additional command line keys:
 
-1. --operator-keys - path to 2 comma separated operator keys (by default ~/.config/solana/id.json,~/.config/solana/id2.json)
+1. --neon-api-uri - neon_core_api url (by default 'http://neon_api:8085/api')
 
 Also we can configure some variables from environment variables:
 

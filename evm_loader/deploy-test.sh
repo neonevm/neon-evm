@@ -18,8 +18,6 @@ for key, value in json.loads(sys.argv[1])['value'].items():
    print(f'{key}={value}')
 " "$ELF_PARAMS")
 
-echo "Create test operator accounts"
-create-test-accounts.sh 2
 
 py.test -n 6 tests/
 
