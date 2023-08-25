@@ -317,10 +317,7 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
-        let mut code = Buffer::from_slice(match &self.container {
-            Some(container) => &container.code[self.code_section],
-            None => &self.execution_code,
-        });
+        let code = self.get_code();
 
         assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
@@ -332,6 +329,12 @@ impl<B: Database> Machine<B> {
             context: self.context,
             code: code.to_vec()
         });
+
+        let opcode_table = if self.container.is_some() {
+            Self::EOF_OPCODES
+        } else {
+            Self::OPCODES
+        };
 
         let status = loop {
             if is_precompile_address(&self.context.contract) {
@@ -347,6 +350,7 @@ impl<B: Database> Machine<B> {
                 break ExitStatus::StepLimit;
             }
 
+            let code = self.get_code();
             let opcode = code.get_or_default(self.pc);
 
             tracing_event!(tracing::Event::BeginStep {
@@ -355,12 +359,6 @@ impl<B: Database> Machine<B> {
                 stack: self.stack.to_vec(),
                 memory: self.memory.to_vec()
             });
-
-            let opcode_table = if self.container.is_some() {
-                Self::EOF_OPCODES
-            } else {
-                Self::OPCODES
-            };
 
             // SAFETY: OPCODES.len() == 256, opcode <= 255
             let opcode_fn = unsafe { opcode_table.get_unchecked(opcode as usize) };
@@ -386,7 +384,6 @@ impl<B: Database> Machine<B> {
                 Action::Revert(value) => break ExitStatus::Revert(value),
                 Action::CodeSection(code_section, pc) => {
                     self.code_section = code_section;
-                    code = Buffer::from_slice(&self.get_code());
                     self.pc = pc;
                 }
                 Action::Suicide => break ExitStatus::Suicide,
@@ -401,6 +398,7 @@ impl<B: Database> Machine<B> {
         Ok((status, step))
     }
 
+    #[inline]
     #[must_use]
     pub fn get_code(&self) -> &Buffer {
         self.code_at(self.code_section)
