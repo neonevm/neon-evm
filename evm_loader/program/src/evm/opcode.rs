@@ -11,12 +11,12 @@ use solana_program::log::sol_log_data;
 
 use super::eof::has_eof_magic;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
+use crate::evm::eof::Container;
 use crate::{
     error::{Error, Result},
     evm::{trace_end_step, Buffer},
     types::Address,
 };
-use crate::evm::eof::Container;
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReturnContext {
@@ -1080,11 +1080,6 @@ impl<B: Database> Machine<B> {
         }
 
         self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
-
-        if let Some(container) = &self.container {
-            container.validate_container()?;
-        }
-
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);

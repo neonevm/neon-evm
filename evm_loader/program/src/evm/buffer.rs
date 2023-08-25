@@ -128,7 +128,7 @@ impl Buffer {
     #[inline]
     #[must_use]
     pub fn get_u16_or_default(&self, index: usize) -> u16 {
-        if self.len() < 2 {
+        if self.len() < index + 2 {
             return u16::default();
         };
 
@@ -138,7 +138,7 @@ impl Buffer {
     #[inline]
     #[must_use]
     pub fn get_i16_or_default(&self, index: usize) -> i16 {
-        if self.len() < 2 {
+        if self.len() < index + 2 {
             return i16::default();
         };
 

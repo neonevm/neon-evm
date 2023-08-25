@@ -155,6 +155,13 @@ impl<B: Database> Machine<B> {
             reinit_buffer(&mut machine.execution_code, backend);
             reinit_buffer(&mut machine.return_data, backend);
 
+            if let Some(container) = &mut machine.container {
+                for code in &mut container.code {
+                    reinit_buffer(code, backend);
+                }
+                reinit_buffer(&mut container.data, backend);
+            }
+
             if let Some(parent) = &mut machine.parent {
                 reinit_machine(parent, backend);
             }
@@ -310,11 +317,8 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
-        let mut code = match &self.container {
-            Some(container) => &container.code[self.code_section],
-            None => &self.execution_code,
-        }
-        .clone();
+        let code = self.get_code();
+
         assert!(code.uninit_data().is_none());
         assert!(self.call_data.uninit_data().is_none());
         assert!(self.return_data.uninit_data().is_none());
@@ -323,8 +327,14 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(tracing::Event::BeginVM {
             context: self.context,
-            code: code.clone().to_vec()
+            code: self.execution_code.to_vec()
         });
+
+        let opcode_table = if self.container.is_some() {
+            Self::EOF_OPCODES
+        } else {
+            Self::OPCODES
+        };
 
         let status = loop {
             if is_precompile_address(&self.context.contract) {
@@ -340,6 +350,7 @@ impl<B: Database> Machine<B> {
                 break ExitStatus::StepLimit;
             }
 
+            let code = self.get_code();
             let opcode = code.get_or_default(self.pc);
 
             tracing_event!(tracing::Event::BeginStep {
@@ -348,12 +359,6 @@ impl<B: Database> Machine<B> {
                 stack: self.stack.to_vec(),
                 memory: self.memory.to_vec()
             });
-
-            let opcode_table = if self.container.is_some() {
-                Self::EOF_OPCODES
-            } else {
-                Self::OPCODES
-            };
 
             // SAFETY: OPCODES.len() == 256, opcode <= 255
             let opcode_fn = unsafe { opcode_table.get_unchecked(opcode as usize) };
@@ -379,7 +384,6 @@ impl<B: Database> Machine<B> {
                 Action::Revert(value) => break ExitStatus::Revert(value),
                 Action::CodeSection(code_section, pc) => {
                     self.code_section = code_section;
-                    code = self.get_code().clone();
                     self.pc = pc;
                 }
                 Action::Suicide => break ExitStatus::Suicide,
@@ -396,13 +400,8 @@ impl<B: Database> Machine<B> {
 
     #[must_use]
     pub fn get_code(&self) -> &Buffer {
-        self.code_at(self.code_section)
-    }
-
-    #[must_use]
-    pub fn code_at(&self, code_section: usize) -> &Buffer {
         match &self.container {
-            Some(container) => &container.code[code_section],
+            Some(container) => &container.code[self.code_section],
             None => &self.execution_code,
         }
     }
@@ -416,7 +415,11 @@ impl<B: Database> Machine<B> {
         gas_limit: Option<U256>,
     ) -> Result<()> {
         let container = if has_eof_magic(&execution_code) {
-            Some(Container::unmarshal_binary(&execution_code)?)
+            let container = Container::unmarshal_binary(&execution_code)?;
+            if reason == Reason::Create {
+                container.validate_container()?;
+            }
+            Some(container)
         } else {
             None
         };
@@ -434,12 +437,12 @@ impl<B: Database> Machine<B> {
             stack: Stack::new(),
             memory: Memory::new(),
             pc: 0_usize,
-            code_section: 0, // TODO: set if need
+            code_section: 0,
             return_stack: vec![ReturnContext {
                 stack_height: 0,
                 pc: 0,
                 section: 0,
-            }], // TODO: set if need
+            }],
             is_static: self.is_static,
             reason,
             parent: None,
