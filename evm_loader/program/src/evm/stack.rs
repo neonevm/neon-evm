@@ -8,9 +8,7 @@ use std::{
 use ethnum::{I256, U256};
 
 #[cfg(feature = "tracing")]
-use crate::evm::tracing::event_listener::tracer::TracerType;
-#[cfg(feature = "tracing")]
-use crate::evm::tracing::EventListener;
+use crate::evm::tracing::TracerTypeOpt;
 use crate::{error::Error, types::Address};
 
 use super::tracing_event;
@@ -23,11 +21,11 @@ pub struct Stack {
     end: *mut u8,
     top: *mut u8,
     #[cfg(feature = "tracing")]
-    tracer: TracerType,
+    tracer: TracerTypeOpt,
 }
 
 impl Stack {
-    pub fn new(#[cfg(feature = "tracing")] tracer: TracerType) -> Self {
+    pub fn new(#[cfg(feature = "tracing")] tracer: TracerTypeOpt) -> Self {
         let (begin, end) = unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
             let begin = crate::allocator::EVM.alloc(layout);

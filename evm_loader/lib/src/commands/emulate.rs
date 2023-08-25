@@ -5,8 +5,8 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
-use evm_loader::evm::tracing::event_listener::trace::TraceCallConfig;
-use evm_loader::evm::tracing::event_listener::tracer::TracerType;
+use evm_loader::evm::tracing::TracerTypeOpt;
+use evm_loader::evm::tracing::{AccountOverrides, BlockOverrides};
 use evm_loader::{
     account_storage::AccountStorage,
     config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE},
@@ -47,6 +47,18 @@ impl Display for EmulationResult {
             self.actions.len(),
             hex::encode(&self.result),
         )
+    }
+}
+
+impl From<evm_loader::evm::tracing::EmulationResult> for EmulationResult {
+    fn from(value: evm_loader::evm::tracing::EmulationResult) -> Self {
+        Self {
+            exit_status: value.exit_status.status().to_string(),
+            result: value.exit_status.into_result().unwrap_or_default(),
+            steps_executed: value.steps_executed,
+            used_gas: value.used_gas,
+            actions: value.actions,
+        }
     }
 }
 
@@ -108,7 +120,8 @@ pub async fn execute(
     commitment: CommitmentConfig,
     accounts: &[Address],
     solana_accounts: &[Pubkey],
-    trace_call_config: TraceCallConfig,
+    block_overrides: &Option<BlockOverrides>,
+    state_overrides: Option<AccountOverrides>,
 ) -> NeonResult<EmulationResultWithAccounts> {
     let (emulation_result, storage) = emulate_transaction(
         rpc_client,
@@ -120,7 +133,8 @@ pub async fn execute(
         commitment,
         accounts,
         solana_accounts,
-        trace_call_config,
+        block_overrides,
+        state_overrides,
         None,
     )
     .await?;
@@ -134,7 +148,7 @@ pub async fn execute(
         accounts,
         solana_accounts,
         token_accounts: vec![],
-        emulation_result,
+        emulation_result: emulation_result.into(),
     })
 }
 
@@ -149,9 +163,16 @@ pub(crate) async fn emulate_transaction<'a>(
     commitment: CommitmentConfig,
     accounts: &[Address],
     solana_accounts: &[Pubkey],
-    trace_call_config: TraceCallConfig,
-    tracer: TracerType,
-) -> Result<(EmulationResult, EmulatorAccountStorage<'a>), NeonError> {
+    block_overrides: &Option<BlockOverrides>,
+    state_overrides: Option<AccountOverrides>,
+    tracer: TracerTypeOpt,
+) -> Result<
+    (
+        evm_loader::evm::tracing::EmulationResult,
+        EmulatorAccountStorage<'a>,
+    ),
+    NeonError,
+> {
     setup_syscall_stubs(rpc_client).await?;
 
     let storage = EmulatorAccountStorage::with_accounts(
@@ -162,8 +183,8 @@ pub(crate) async fn emulate_transaction<'a>(
         commitment,
         accounts,
         solana_accounts,
-        &trace_call_config.block_overrides,
-        trace_call_config.state_overrides,
+        block_overrides,
+        state_overrides,
     )
     .await?;
 
@@ -177,8 +198,8 @@ pub(crate) async fn emulate_trx<'a>(
     storage: &'a EmulatorAccountStorage<'a>,
     chain_id: u64,
     step_limit: u64,
-    tracer: TracerType,
-) -> Result<EmulationResult, NeonError> {
+    tracer: TracerTypeOpt,
+) -> Result<evm_loader::evm::tracing::EmulationResult, NeonError> {
     let (exit_status, actions, steps_executed) = {
         let mut backend = ExecutorState::new(storage);
         let trx = Transaction {
@@ -216,16 +237,8 @@ pub(crate) async fn emulate_trx<'a>(
     let accounts_gas = block(storage.apply_accounts_operations(accounts_operations));
     info!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
 
-    let (result, status) = match exit_status {
-        ExitStatus::Return(v) => (v, "succeed"),
-        ExitStatus::Revert(v) => (v, "revert"),
-        ExitStatus::Stop | ExitStatus::Suicide => (vec![], "succeed"),
-        ExitStatus::StepLimit => unreachable!(),
-    };
-
-    Ok(EmulationResult {
-        result,
-        exit_status: status.to_string(),
+    Ok(evm_loader::evm::tracing::EmulationResult {
+        exit_status,
         steps_executed,
         used_gas: steps_gas + begin_end_gas + actions_gas + accounts_gas,
         actions,

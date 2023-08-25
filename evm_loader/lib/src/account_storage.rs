@@ -5,7 +5,7 @@ use crate::{rpc::Rpc, NeonError};
 use ethnum::U256;
 use evm_loader::account::ether_contract;
 use evm_loader::account_storage::{find_slot_hash, AccountOperation, AccountsOperations};
-use evm_loader::evm::tracing::event_listener::trace::{AccountOverrides, BlockOverrides};
+use evm_loader::evm::tracing::{AccountOverrides, BlockOverrides};
 use evm_loader::{
     account::{
         ether_storage::EthereumStorageAddress, EthereumAccount, EthereumStorage,

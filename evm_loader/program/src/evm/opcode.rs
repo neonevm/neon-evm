@@ -1,5 +1,3 @@
-#[cfg(feature = "tracing")]
-use crate::evm::tracing::EventListener;
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
 use solana_program::log::sol_log_data;
@@ -1192,14 +1190,11 @@ impl<B: Database> Machine<B> {
             backend.precompile_extension(&self.context, address, &self.call_data, self.is_static)
         });
 
-        if result.is_none() {
-            return Ok(Action::Noop);
+        if let Some(return_data) = result.transpose()? {
+            return self.opcode_return_impl(Buffer::from_slice(&return_data), backend);
         }
 
-        let result = result.unwrap()?;
-        let return_data = Buffer::from_slice(&result);
-
-        self.opcode_return_impl(return_data, backend)
+        Ok(Action::Noop)
     }
 
     /// Halt execution returning output data

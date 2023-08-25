@@ -1,5 +1,4 @@
 use axum::{http::StatusCode, Json};
-use evm_loader::evm::tracing::event_listener::trace::TraceCallConfig;
 use std::convert::Into;
 
 use crate::{
@@ -49,7 +48,8 @@ pub async fn emulate_hash(
             state.config.commitment,
             &accounts,
             &solana_accounts,
-            TraceCallConfig::default(),
+            &None,
+            None,
         )
         .await
         .map_err(Into::into),

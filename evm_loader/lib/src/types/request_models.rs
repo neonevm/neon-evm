@@ -1,6 +1,6 @@
 use crate::types::{PubkeyBase58, TxParams};
 use ethnum::U256;
-use evm_loader::evm::tracing::event_listener::trace::{TraceCallConfig, TraceConfig};
+use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
 use evm_loader::types::Address;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
