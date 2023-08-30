@@ -27,7 +27,7 @@ def create_holder(signer: Keypair, seed: str = None, size: int = None, fund: int
         trx = Transaction()
         trx.add(
             create_account_with_seed(signer.public_key, signer.public_key, seed, fund, size),
-            create_holder_account(storage, signer.public_key)
+            create_holder_account(storage, signer.public_key, bytes(seed, 'utf8'))
         )
         send_transaction(solana_client, trx, signer)
     print(f"Created holder account: {storage}")
