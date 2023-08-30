@@ -44,10 +44,10 @@ def test_create_the_same_holder_account_by_another_user(operator_keypair, sessio
     trx.add(
         solana_utils.create_account_with_seed(session_user.solana_account.public_key,
                                               session_user.solana_account.public_key, seed, 10 ** 9, 128 * 1024),
-        solana_utils.create_holder_account(storage, session_user.solana_account.public_key)
+        solana_utils.create_holder_account(storage, session_user.solana_account.public_key, bytes(seed, 'utf8'))
     )
 
-    with pytest.raises(solana.rpc.core.RPCException, match='already initialized'):
+    with pytest.raises(solana.rpc.core.RPCException, match="Holder doesn't match seeds"):
         solana_utils.send_transaction(solana_client, trx, session_user.solana_account)
 
 

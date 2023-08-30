@@ -155,14 +155,15 @@ def create_account_with_seed(funding, base, seed, lamports, space, program=Publi
     ))
 
 
-def create_holder_account(account, operator):
+def create_holder_account(account, operator, seed):
     return TransactionInstruction(
         keys=[
             AccountMeta(pubkey=account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=operator, is_signer=True, is_writable=False),
         ],
         program_id=PublicKey(EVM_LOADER),
-        data=bytes.fromhex("24")
+        data=bytes.fromhex("24") + 
+            len(seed).to_bytes(8, 'little') + seed
     )
 
 
