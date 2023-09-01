@@ -63,6 +63,17 @@ class TestExecuteTrxFromInstruction:
 
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                           evm_loader, string_setter_contract):
+        call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                                  evm_loader, string_setter_contract, "exit_status=0x11")
+
+    def test_call_eof_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                          evm_loader, string_setter_eof_contract):
+        call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                                  evm_loader, string_setter_eof_contract, "exit_status=0x12")
+
+
+    def call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                          evm_loader, string_setter_contract, exit_status):
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
         signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
 
@@ -72,17 +83,28 @@ class TestExecuteTrxFromInstruction:
                                              string_setter_contract.solana_address],
                                             operator_keypair)
 
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, exit_status)
         assert text in to_text(
             neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
                                                   "get()"))
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                       evm_loader):
-        transfer_amount = random.randint(1, 1000)
-
+                                                           evm_loader):
         contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
-                                   treasury_pool)
+                                          treasury_pool)
+        call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                               evm_loader, , contract"exit_status=0x11")
+
+    def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                           evm_loader):
+        contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
+                                          treasury_pool)
+        call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                               evm_loader, contract, "exit_status=0x12")
+
+    def call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                       evm_loader, contract, exit_status):
+        transfer_amount = random.randint(1, 1000)
 
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_before = get_neon_balance(solana_client, contract.solana_address)

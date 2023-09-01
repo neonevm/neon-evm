@@ -27,8 +27,10 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     if "RUST_LOG" in os.environ:
         pytest.CONTRACTS_PATH = pathlib.Path("/opt/solidity")
+        pytest.CONTRACTS_PATH = pathlib.Path("/opt/eof-contracts")
     else:
         pytest.CONTRACTS_PATH = pathlib.Path(__file__).parent / "contracts"
+        pytest.EOF_CONTRACTS_PATH = pathlib.Path(__file__).parent / "eof-contracts"
 
 
 @pytest.fixture(scope="session")
@@ -118,6 +120,11 @@ def rw_lock_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_u
                      treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "rw_lock.binary", evm_loader, treasury_pool)
 
+@pytest.fixture(scope="function")
+def rw_lock_eof_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
+                     treasury_pool) -> Contract:
+    return deploy_contract(operator_keypair, session_user, "rw_lock.binary", evm_loader, treasury_pool, eof=True)
+
 
 @pytest.fixture(scope="function")
 def rw_lock_caller(evm_loader: EvmLoader, operator_keypair: Keypair,
@@ -131,3 +138,8 @@ def rw_lock_caller(evm_loader: EvmLoader, operator_keypair: Keypair,
 def string_setter_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
                            treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "string_setter.binary", evm_loader, treasury_pool)
+@pytest.fixture(scope="function")
+
+def string_setter_eof_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
+                           treasury_pool) -> Contract:
+    return deploy_contract(operator_keypair, session_user, "string_setter.binary", evm_loader, treasury_pool, eof=True)

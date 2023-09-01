@@ -54,12 +54,22 @@ class TestTransactionStepFromInstruction:
     @pytest.mark.parametrize("chain_id", [None, 111])
     def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
                              chain_id):
+        self.deploy_contract(operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
+                                     chain_id, False)
+
+    @pytest.mark.parametrize("chain_id", [None, 111])
+    def test_deploy_eof_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
+                             chain_id):
+        self.deploy_contract(operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
+                                     chain_id, True)
+    def deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
+                             chain_id, eof):
         contract_filename = "small.binary"
 
-        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=chain_id)
+        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=chain_id, eof=eof)
         contract = create_contract_address(sender_with_tokens, evm_loader)
 
-        contract_path = pytest.CONTRACTS_PATH / contract_filename
+        contract_path = (pytest.EOF_CONTRACTS_PATH if eof else pytest.CONTRACTS_PATH) / contract_filename
         with open(contract_path, 'rb') as f:
             contract_code = f.read()
 
@@ -70,10 +80,20 @@ class TestTransactionStepFromInstruction:
                                                           steps_count)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
+        check_transaction_logs_have_text(resp.value, exit_status)
 
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                           evm_loader, holder_acc, string_setter_contract):
+        self.call_contract_function_without_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
+                                                                          evm_loader, holder_acc, string_setter_contract, "exit_status=0x11")
+
+    def test_call_eof_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                          evm_loader, holder_acc, string_setter_eof_contract):
+        self.call_contract_function_without_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
+                                                                  evm_loader, holder_acc, string_setter_eof_contract, "exit_status=0x12")
+
+    def call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                          evm_loader, holder_acc, string_setter_contract, exit_status):
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
         signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
 
@@ -91,6 +111,16 @@ class TestTransactionStepFromInstruction:
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                        evm_loader, holder_acc, string_setter_contract):
+        self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
+                                                               evm_loader, holder_acc, string_setter_contract, "exit_status=0x11")
+
+    def test_call_eof_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                       evm_loader, holder_acc, string_setter_eof_contract):
+        self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
+                                                               evm_loader, holder_acc, string_setter_eof_contract, "exit_status=0x12")
+
+    def call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                                       evm_loader, holder_acc, string_setter_contract, exit_status):
         transfer_amount = random.randint(1, 1000)
 
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
@@ -319,7 +349,7 @@ class TestInstructionStepContractCallContractInteractions:
                                                            session_user.solana_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
+        check_transaction_logs_have_text(resp.value, exit_status)
 
     def test_contract_call_set_function(self, rw_lock_contract, session_user, evm_loader, operator_keypair,
                                         treasury_pool, holder_acc, rw_lock_caller):
@@ -347,7 +377,7 @@ class TestInstructionStepContractCallContractInteractions:
                                                            session_user.solana_account_address], 1000)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
+        check_transaction_logs_have_text(resp.value, exit_status)
 
     def test_contract_call_update_storage_map_function(self, rw_lock_contract, session_user, evm_loader,
                                                        operator_keypair, rw_lock_caller,
@@ -441,6 +471,20 @@ class TestStepFromInstructionChangingOperatorsDuringTrxRun:
     def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, user_account, evm_loader,
                                                             operator_keypair, second_operator_keypair, treasury_pool,
                                                             new_holder_acc):
+        self.next_operator_can_continue_trx_after_some_time(rw_lock_contract, user_account, evm_loader,
+                                                            operator_keypair, second_operator_keypair, treasury_pool,
+                                                            new_holder_acc, "exit_status=0x11")
+
+    def test_eof_next_operator_can_continue_trx_after_some_time(self, rw_lock_eof_contract, user_account, evm_loader,
+                                                            operator_keypair, second_operator_keypair, treasury_pool,
+                                                            new_holder_acc):
+        self.next_operator_can_continue_trx_after_some_time(rw_lock_eof_contract, user_account, evm_loader,
+                                                            operator_keypair, second_operator_keypair, treasury_pool,
+                                                            new_holder_acc, "exit_status=0x12")
+
+    def next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, user_account, evm_loader,
+                                                            operator_keypair, second_operator_keypair, treasury_pool,
+                                                            new_holder_acc, exit_status):
         signed_tx = make_contract_call_trx(user_account, rw_lock_contract, 'update_storage_str(string)', ['text'])
 
         send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
