@@ -170,6 +170,7 @@ impl IndexerDb {
             data: Some(data),
             value: Some(value),
             gas_limit: Some(gas_limit),
+            access_list: None,
         })
     }
 }

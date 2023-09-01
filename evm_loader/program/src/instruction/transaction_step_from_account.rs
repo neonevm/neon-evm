@@ -58,7 +58,7 @@ pub fn execute<'a>(
 ) -> Result<()> {
     match crate::account::tag(program_id, holder_or_storage_info)? {
         Holder::TAG => {
-            let trx = {
+            let mut trx = {
                 let holder = Holder::from_account(program_id, holder_or_storage_info)?;
                 holder.validate_owner(&accounts.operator)?;
 
@@ -70,11 +70,11 @@ pub fn execute<'a>(
                 trx
             };
 
-            if trx.chain_id != expected_chain_id {
-                return Err(Error::InvalidChainId(trx.chain_id.unwrap_or(U256::ZERO)));
+            if trx.chain_id() != expected_chain_id {
+                return Err(Error::InvalidChainId(trx.chain_id().unwrap_or(U256::ZERO)));
             }
 
-            solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
+            solana_program::log::sol_log_data(&[b"HASH", &trx.hash()]);
 
             let caller = trx.recover_caller_address()?;
             let mut storage =
@@ -91,7 +91,14 @@ pub fn execute<'a>(
             gasometer.record_iterative_overhead();
             gasometer.record_write_to_holder(&trx);
 
-            do_begin(accounts, storage, account_storage, gasometer, trx, caller)
+            do_begin(
+                accounts,
+                storage,
+                account_storage,
+                gasometer,
+                &mut trx,
+                caller,
+            )
         }
         State::TAG => {
             let (storage, _blocked_accounts) = State::restore(

@@ -4,8 +4,10 @@ import string
 import pytest
 import solana
 import eth_abi
+from eth_account.datastructures import SignedTransaction
 from eth_keys import keys as eth_keys
 from eth_utils import abi, to_text
+from hexbytes import HexBytes
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
@@ -275,3 +277,47 @@ class TestExecuteTrxFromInstruction:
                                          [sender_with_tokens.solana_account_address,
                                           session_user.solana_account_address],
                                          operator_without_money.solana_account)
+
+    def test_transaction_with_access_list(self, operator_keypair, treasury_pool, sender_with_tokens,
+                                          evm_loader, calculator_contract, calculator_caller_contract):
+        access_list = (
+            {
+                "address": '0x' + calculator_contract.eth_address.hex(),
+                "storageKeys": (
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "0x0000000000000000000000000000000000000000000000000000000000000001",
+                )
+            },
+        )
+        signed_tx = make_contract_call_trx(sender_with_tokens, calculator_caller_contract, "callCalculator()", [],
+                                           access_list=access_list)
+
+        resp = execute_trx_from_instruction(operator_keypair, evm_loader, treasury_pool.account, treasury_pool.buffer,
+                                            signed_tx,
+                                            [sender_with_tokens.solana_account_address,
+                                             calculator_caller_contract.solana_address,
+                                             calculator_contract.solana_address],
+                                            operator_keypair)
+
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
+
+    def test_old_trx_type_with_leading_zeros(self, sender_with_tokens, operator_keypair, evm_loader,
+                                             calculator_caller_contract, calculator_contract, treasury_pool,
+                                             holder_acc):
+        signed_tx = make_contract_call_trx(sender_with_tokens, calculator_caller_contract, "callCalculator()", [])
+        new_raw_trx = HexBytes('0x' + (b'\x00' + bytes.fromhex(signed_tx.rawTransaction.hex()[2:])).hex())
+        signed_tx_new = SignedTransaction(
+            rawTransaction=new_raw_trx,
+            hash=signed_tx.hash,
+            r=signed_tx.r,
+            s=signed_tx.s,
+            v=signed_tx.v,
+        )
+
+        resp = execute_trx_from_instruction(operator_keypair, evm_loader, treasury_pool.account, treasury_pool.buffer,
+                                            signed_tx_new,
+                                            [sender_with_tokens.solana_account_address,
+                                             calculator_caller_contract.solana_address,
+                                             calculator_contract.solana_address],
+                                            operator_keypair)
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12")

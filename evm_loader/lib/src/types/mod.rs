@@ -34,6 +34,12 @@ pub struct ChDbConfig {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AccessListItem {
+    pub address: Address,
+    pub storage_keys: Vec<HexBytes>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TxParams {
     pub nonce: Option<u64>,
     pub from: Address,
@@ -41,6 +47,7 @@ pub struct TxParams {
     pub data: Option<Vec<u8>>,
     pub value: Option<U256>,
     pub gas_limit: Option<U256>,
+    pub access_list: Option<Vec<AccessListItem>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
