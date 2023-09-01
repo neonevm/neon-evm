@@ -1,11 +1,13 @@
 import random
 import string
+import solana
 
 import pytest
 from eth_utils import to_text
 
 from .solana_utils import write_transaction_to_holder_account, get_neon_balance, solana_client, \
     execute_transaction_steps_from_account_no_chain_id, neon_cli
+from .utils.assert_messages import InstructionAsserts
 from .utils.constants import TAG_FINALIZED_STATE
 from .utils.contract import make_deployment_transaction, make_contract_call_trx
 from .utils.ethereum import make_eth_transaction, create_contract_address
@@ -88,3 +90,25 @@ class TestTransactionStepFromAccountNoChainId:
         assert text in to_text(
             neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
                                                   "get()"))
+
+    def test_transaction_with_access_list(self, operator_keypair, treasury_pool,
+                                          sender_with_tokens, calculator_contract, calculator_caller_contract,
+                                          holder_acc, evm_loader):
+        access_list = (
+            {
+                "address": '0x' + calculator_contract.eth_address.hex(),
+                "storageKeys": (
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                )
+            },
+        )
+        signed_tx = make_contract_call_trx(sender_with_tokens, calculator_caller_contract, "callCalculator()", [],
+                                           chain_id=None, access_list=access_list)
+        write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_CHAIN_ID):
+            execute_transaction_steps_from_account_no_chain_id(operator_keypair, evm_loader, treasury_pool,
+                                                               holder_acc,
+                                                               [calculator_contract.solana_address,
+                                                                calculator_caller_contract.solana_address,
+                                                                sender_with_tokens.solana_account_address]
+                                                               )

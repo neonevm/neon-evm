@@ -147,6 +147,21 @@ def string_setter_contract(evm_loader: EvmLoader, operator_keypair: Keypair, ses
 
 
 @pytest.fixture(scope="session")
+def calculator_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
+                        treasury_pool) -> Contract:
+    return deploy_contract(operator_keypair, session_user, "Calculator.binary", evm_loader, treasury_pool)
+
+
+@pytest.fixture(scope="session")
+def calculator_caller_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
+                               treasury_pool, calculator_contract) -> Contract:
+    constructor_args = eth_abi.encode(['address'], [calculator_contract.eth_address.hex()])
+
+    return deploy_contract(operator_keypair, session_user, "CalculatorCaller.binary", evm_loader, treasury_pool,
+                           encoded_args=constructor_args)
+
+
+@pytest.fixture(scope="session")
 def neon_api_client(request):
     client = NeonApiClient(url=request.config.getoption("--neon-api-uri"))
     return client

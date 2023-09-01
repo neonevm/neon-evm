@@ -100,3 +100,24 @@ contract rw_lock_caller {
     }
 }
 
+
+contract Calculator {
+    uint public x = 20;
+    uint public y = 20;
+
+    function getSum() public view returns (uint256) {
+        return x + y;
+    }
+}
+
+contract CalculatorCaller {
+    Calculator calculator;
+
+    constructor(address _calc) {
+        calculator = Calculator(_calc);
+    }
+
+    function callCalculator() public view returns (uint sum) {
+        sum = calculator.getSum();
+    }
+}

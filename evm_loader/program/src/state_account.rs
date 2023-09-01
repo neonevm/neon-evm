@@ -48,7 +48,7 @@ impl<'a> State<'a> {
             }
             FinalizedState::TAG => {
                 let finalized_storage = FinalizedState::from_account(program_id, info)?;
-                if !finalized_storage.is_outdated(&trx.hash) {
+                if !finalized_storage.is_outdated(&trx.hash()) {
                     return Err!(Error::StorageAccountFinalized.into(); "Transaction already finalized");
                 }
 
@@ -65,10 +65,10 @@ impl<'a> State<'a> {
 
         let data = crate::account::state::Data {
             owner,
-            transaction_hash: trx.hash,
+            transaction_hash: trx.hash(),
             caller,
-            gas_limit: trx.gas_limit,
-            gas_price: trx.gas_price,
+            gas_limit: trx.gas_limit(),
+            gas_price: trx.gas_price(),
             gas_used: U256::ZERO,
             operator: *accounts.operator.key,
             slot: Clock::get()?.slot,

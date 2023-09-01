@@ -192,7 +192,7 @@ impl<B: Database> Machine<B> {
     }
 
     pub fn new(
-        trx: Transaction,
+        trx: &mut Transaction,
         origin: Address,
         backend: &mut B,
         #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
@@ -203,29 +203,29 @@ impl<B: Database> Machine<B> {
             return Err(Error::NonceOverflow(origin));
         }
 
-        if origin_nonce != trx.nonce {
+        if origin_nonce != trx.nonce() {
             return Err(Error::InvalidTransactionNonce(
                 origin,
                 origin_nonce,
-                trx.nonce,
+                trx.nonce(),
             ));
         }
 
-        if let Some(chain_id) = trx.chain_id {
+        if let Some(chain_id) = trx.chain_id() {
             if backend.chain_id() != chain_id {
                 return Err(Error::InvalidChainId(chain_id));
             }
         }
 
-        if backend.balance(&origin)? < trx.value {
-            return Err(Error::InsufficientBalance(origin, trx.value));
+        if backend.balance(&origin)? < trx.value() {
+            return Err(Error::InsufficientBalance(origin, trx.value()));
         }
 
         if backend.code_size(&origin)? != 0 {
             return Err(Error::SenderHasDeployedCode(origin));
         }
 
-        if trx.target.is_some() {
+        if trx.target().is_some() {
             Self::new_call(
                 trx,
                 origin,
@@ -245,20 +245,20 @@ impl<B: Database> Machine<B> {
     }
 
     fn new_call(
-        trx: Transaction,
+        trx: &mut Transaction,
         origin: Address,
         backend: &mut B,
         #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
     ) -> Result<Self> {
-        assert!(trx.target.is_some());
+        assert!(trx.target().is_some());
 
-        let target = trx.target.unwrap();
+        let target = trx.target().unwrap();
         sol_log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
 
         backend.increment_nonce(origin)?;
         backend.snapshot();
 
-        backend.transfer(origin, target, trx.value)?;
+        backend.transfer(origin, target, trx.value())?;
 
         let execution_code = backend.code(&target)?;
 
@@ -267,13 +267,13 @@ impl<B: Database> Machine<B> {
             context: Context {
                 caller: origin,
                 contract: target,
-                value: trx.value,
+                value: trx.value(),
                 code_address: Some(target),
             },
-            gas_price: trx.gas_price,
-            gas_limit: trx.gas_limit,
+            gas_price: trx.gas_price(),
+            gas_limit: trx.gas_limit(),
             execution_code,
-            call_data: trx.call_data,
+            call_data: trx.extract_call_data(),
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(
@@ -295,14 +295,14 @@ impl<B: Database> Machine<B> {
     }
 
     fn new_create(
-        trx: Transaction,
+        trx: &mut Transaction,
         origin: Address,
         backend: &mut B,
         #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
     ) -> Result<Self> {
-        assert!(trx.target.is_none());
+        assert!(trx.target().is_none());
 
-        let target = Address::from_create(&origin, trx.nonce);
+        let target = Address::from_create(&origin, trx.nonce());
         sol_log_data(&[b"ENTER", b"CREATE", target.as_bytes()]);
 
         if (backend.nonce(&target)? != 0) || (backend.code_size(&target)? != 0) {
@@ -313,18 +313,18 @@ impl<B: Database> Machine<B> {
         backend.snapshot();
 
         backend.increment_nonce(target)?;
-        backend.transfer(origin, target, trx.value)?;
+        backend.transfer(origin, target, trx.value())?;
 
         Ok(Self {
             origin,
             context: Context {
                 caller: origin,
                 contract: target,
-                value: trx.value,
+                value: trx.value(),
                 code_address: None,
             },
-            gas_price: trx.gas_price,
-            gas_limit: trx.gas_limit,
+            gas_price: trx.gas_price(),
+            gas_limit: trx.gas_limit(),
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(
@@ -338,7 +338,7 @@ impl<B: Database> Machine<B> {
             pc: 0_usize,
             is_static: false,
             reason: Reason::Create,
-            execution_code: trx.call_data,
+            execution_code: trx.extract_call_data(),
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,

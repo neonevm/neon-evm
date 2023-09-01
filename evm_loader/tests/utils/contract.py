@@ -10,7 +10,7 @@ from solana.keypair import Keypair
 from .types import Caller, TreasuryPool
 from ..solana_utils import solana_client, \
     get_transaction_count, EvmLoader, write_transaction_to_holder_account, \
-    send_transaction_step_from_account, neon_cli
+    send_transaction_step_from_account
 from .storage import create_holder
 from .ethereum import create_contract_address, make_eth_transaction
 
@@ -21,7 +21,7 @@ def make_deployment_transaction(
         user: Caller,
         contract_path: tp.Union[pathlib.Path, str],
         encoded_args=None,
-        gas: int = 999999999, chain_id=111
+        gas: int = 999999999, chain_id=111, access_list=None
 ) -> SignedTransaction:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
@@ -41,13 +41,17 @@ def make_deployment_transaction(
         'nonce': get_transaction_count(solana_client, user.solana_account_address),
         'data': data
     }
-    if chain_id is not None:
+    if chain_id:
         tx['chainId'] = chain_id
+    if access_list:
+        tx['accessList'] = access_list
+        tx['type'] = 1
     print(tx)
     return w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
 
-def make_contract_call_trx(user, contract, function_signature, params=None, value=0, chain_id=111):
+def make_contract_call_trx(user, contract, function_signature, params=None, value=0, chain_id=111, access_list=None,
+                           trx_type=None):
     data = abi.function_signature_to_4byte_selector(function_signature)
 
     if params is not None:
@@ -58,7 +62,7 @@ def make_contract_call_trx(user, contract, function_signature, params=None, valu
                 data += eth_abi.encode(['string'], [param])
 
     signed_tx = make_eth_transaction(contract.eth_address, data, user.solana_account, user.solana_account_address,
-                                     value=value, chain_id=chain_id)
+                                     value=value, chain_id=chain_id, access_list=access_list, type=trx_type)
     return signed_tx
 
 

@@ -1,4 +1,3 @@
-import json
 import random
 import string
 import time
@@ -15,6 +14,7 @@ from solana.rpc.types import TxOpts
 
 from .solana_utils import get_neon_balance, solana_client, neon_cli, execute_transaction_steps_from_account, \
     write_transaction_to_holder_account, create_treasury_pool_address, send_transaction_step_from_account
+from .test_cli import gen_hash_of_block
 from .utils.assert_messages import InstructionAsserts
 from .utils.constants import TAG_FINALIZED_STATE
 from .utils.contract import make_deployment_transaction, make_contract_call_trx, deploy_contract
@@ -24,6 +24,17 @@ from .utils.layouts import FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
 from .utils.storage import create_holder
 from .utils.transaction_checks import check_transaction_logs_have_text, check_holder_account_tag
 from .utils.types import TreasuryPool
+
+
+def generate_access_lists():
+    addr1 = gen_hash_of_block(20)
+    addr2 = gen_hash_of_block(20)
+    key1, key2, key3, key4 = (f"0x000000000000000000000000000000000000000000000000000000000000000{item}" for item in
+                              (0, 1, 2, 3))
+    return (({"address": addr1, "storageKeys": []},),
+            ({"address": addr1, "storageKeys": (key1, key2, key3, key4)},),
+            ({"address": addr1, "storageKeys": (key1, key2)}, {"address": addr2, "storageKeys": []}),
+            ({"address": addr1, "storageKeys": (key1, key2)}, {"address": addr2, "storageKeys": (key3,)}))
 
 
 class TestTransactionStepFromAccount:
@@ -307,6 +318,49 @@ class TestTransactionStepFromAccount:
                                                [sender_with_tokens.solana_account_address,
                                                 session_user.solana_account_address], 1, operator_keypair)
 
+    def test_transaction_with_access_list(self, operator_keypair, holder_acc, treasury_pool,
+                                          sender_with_tokens, evm_loader, calculator_contract,
+                                          calculator_caller_contract):
+        access_list = (
+            {
+                "address": '0x' + calculator_contract.eth_address.hex(),
+                "storageKeys": (
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "0x0000000000000000000000000000000000000000000000000000000000000001",
+                )
+            },
+        )
+        signed_tx = make_contract_call_trx(sender_with_tokens, calculator_caller_contract, "callCalculator()", [],
+                                           access_list=access_list)
+        write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
+
+        resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                      [calculator_caller_contract.solana_address,
+                                                       calculator_contract.solana_address,
+                                                       sender_with_tokens.solana_account_address])
+
+        check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
+        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
+
+    @pytest.mark.parametrize("access_list", generate_access_lists())
+    def test_access_list_structure(self, operator_keypair, holder_acc, treasury_pool, evm_loader,
+                                   sender_with_tokens, string_setter_contract, access_list):
+        text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
+
+        signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text],
+                                           value=10, access_list=access_list)
+        write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
+        resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                      [string_setter_contract.solana_address,
+                                                       sender_with_tokens.solana_account_address])
+
+        check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
+        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
+
+        assert text in to_text(
+            neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
+                                                  "get()"))
+
 
 class TestAccountStepContractCallContractInteractions:
     def test_contract_call_unchange_storage_function(self, rw_lock_contract, rw_lock_caller, session_user, evm_loader,
@@ -358,9 +412,9 @@ class TestAccountStepContractCallContractInteractions:
         func_name = abi.function_signature_to_4byte_selector('update_storage_map(uint256)')
         data = func_name + eth_abi.encode(['uint256'], [3])
         result = neon_cli().emulate(evm_loader.loader_id,
-                               session_user.eth_address.hex(),
-                               rw_lock_caller.eth_address.hex(),
-                               data.hex())
+                                    session_user.eth_address.hex(),
+                                    rw_lock_caller.eth_address.hex(),
+                                    data.hex())
         additional_accounts = [session_user.solana_account_address, rw_lock_contract.solana_address,
                                rw_lock_caller.solana_address]
         for acc in result['solana_accounts']:
@@ -469,9 +523,10 @@ class TestStepFromAccountChangingOperatorsDuringTrxRun:
 
         # next operator can't continue trx during OPERATOR_PRIORITY_SLOTS*0.4
         with pytest.raises(solana.rpc.core.RPCException,
-                           match=rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"):            send_transaction_step_from_account(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
-                                               [user_account.solana_account_address,
-                                                rw_lock_contract.solana_address], 500, second_operator_keypair)
+                           match=rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"):            send_transaction_step_from_account(
+            second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
+            [user_account.solana_account_address,
+             rw_lock_contract.solana_address], 500, second_operator_keypair)
 
         time.sleep(15)
         send_transaction_step_from_account(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,

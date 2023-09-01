@@ -152,6 +152,14 @@ fn trx_params<'a, 'b>(cmd: &'static str, desc: &'static str) -> App<'a, 'b> {
                 .help("Gas limit"),
         )
         .arg(
+            Arg::with_name("access_list")
+                .long("access-list")
+                .takes_value(true)
+                .required(false)
+                .multiple(true)
+                .value_name("ADDRESS [STORAGE_KEYS ...]"),
+        )
+        .arg(
             Arg::with_name("cached_accounts")
                 .value_name("CACHED_ACCOUNTS")
                 .long("cached_accounts")

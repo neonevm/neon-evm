@@ -93,8 +93,8 @@ impl<'a> Holder<'a> {
     }
 
     pub fn validate_transaction(&self, trx: &Transaction) -> Result<()> {
-        if self.transaction_hash != trx.hash {
-            return Err(Error::HolderInvalidHash(self.transaction_hash, trx.hash));
+        if self.transaction_hash != trx.hash() {
+            return Err(Error::HolderInvalidHash(self.transaction_hash, trx.hash()));
         }
 
         Ok(())
