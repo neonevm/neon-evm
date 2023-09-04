@@ -49,6 +49,22 @@ pub struct SlotParent {
     pub status: u8,
 }
 
+#[derive(Debug, Row, serde::Deserialize, Clone)]
+pub struct SlotParentRooted {
+    pub slot: u64,
+    pub parent: Option<u64>,
+}
+
+impl From<SlotParentRooted> for SlotParent {
+    fn from(slot_parent_rooted: SlotParentRooted) -> Self {
+        SlotParent {
+            slot: slot_parent_rooted.slot,
+            parent: slot_parent_rooted.parent,
+            status: SlotStatus::Rooted as u8,
+        }
+    }
+}
+
 impl SlotParent {
     fn is_rooted(&self) -> bool {
         self.status == SlotStatus::Rooted as u8
@@ -170,13 +186,12 @@ impl ClickHouseDb {
             SELECT DISTINCT ON (slot, parent) slot, parent, status
             FROM events.update_slot
             WHERE slot >= (
-                  SELECT slot - ?
-                  FROM events.update_slot
-                  WHERE status = 'Rooted'
-                  ORDER BY slot DESC
-                  LIMIT 1
-              )
-              AND isNotNull(parent)
+                    SELECT slot - ?
+                    FROM events.rooted_slots
+                    ORDER BY slot DESC
+                    LIMIT 1
+                )
+                AND isNotNull(parent)
             ORDER BY slot DESC, status DESC
             "#;
         let time_start = Instant::now();
@@ -229,18 +244,19 @@ impl ClickHouseDb {
 
     async fn get_account_rooted_slot(&self, key: &str, slot: u64) -> ChResult<Option<u64>> {
         info!("get_account_rooted_slot {{ key: {key}, slot: {slot} }}");
+
         let query = r#"
-            SELECT DISTINCT slot
-            FROM events.update_account_distributed
-            WHERE pubkey = ?
-                AND slot <= ?
-                AND slot IN (
-                    SELECT slot
-                    FROM events.update_slot
-                    WHERE status = 'Rooted'
-                )
-            ORDER BY slot DESC
-            LIMIT 1
+        SELECT DISTINCT uad.slot
+        FROM events.update_account_distributed AS uad
+        WHERE uad.pubkey = ?
+          AND uad.slot <= ?
+          AND (
+            SELECT COUNT(slot)
+            FROM events.rooted_slots
+            WHERE slot = ?
+          ) >= 1
+        ORDER BY uad.slot DESC
+        LIMIT 1
         "#;
 
         let time_start = Instant::now();
@@ -248,6 +264,7 @@ impl ClickHouseDb {
             self.client
                 .query(query)
                 .bind(key)
+                .bind(slot)
                 .bind(slot)
                 .fetch_one::<u64>()
                 .await,
@@ -368,14 +385,13 @@ impl ClickHouseDb {
 
     async fn get_sol_sig_rooted_slot(&self, sol_sig: &[u8; 64]) -> ChResult<Option<SlotParent>> {
         let query = r#"
-            SELECT slot, parent, status
-            FROM events.update_slot
+            SELECT slot, parent
+            FROM events.rooted_slots
             WHERE slot IN (
                     SELECT slot
                     FROM events.notify_transaction_distributed
                     WHERE signature = ?
                 )
-                AND status = 'Rooted'
             ORDER BY slot DESC
             LIMIT 1
         "#;
@@ -384,9 +400,12 @@ impl ClickHouseDb {
             self.client
                 .query(query)
                 .bind(sol_sig.as_slice())
-                .fetch_one::<SlotParent>()
+                .fetch_one::<SlotParentRooted>()
                 .await,
         )
+        .map(|slot_parent_rooted_opt| {
+            slot_parent_rooted_opt.map(|slot_parent_rooted| slot_parent_rooted.into())
+        })
         .map_err(|e| {
             println!("get_sol_sig_rooted_slot error: {e}");
             ChError::Db(e)
