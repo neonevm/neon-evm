@@ -41,7 +41,13 @@ def test_emulate_transfer(user_account, evm_loader, session_user):
 
 def test_emulate_contract_deploy(user_account, evm_loader):
     contract_path = pytest.CONTRACTS_PATH / "hello_world.binary"
+    emulate_contract_deploy(user_account, evm_loader, contract_path)
 
+def test_emulate_eof_contract_deploy(user_account, evm_loader):
+    contract_path = pytest.EOF_CONTRACTS_PATH / "hello_world.binary"
+    emulate_contract_deploy(user_account, evm_loader, contract_path)
+
+def emulate_contract_deploy(user_account, evm_loader, contract_path):
     with open(contract_path, 'rb') as f:
         contract_code = f.read()
 
@@ -57,7 +63,14 @@ def test_emulate_contract_deploy(user_account, evm_loader):
 
 
 def test_emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool):
-    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool)
+    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool, eof=False)
+    emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool, contract)
+
+def test_emulate_call_eof_contract_function(user_account, evm_loader, operator_keypair, treasury_pool):
+    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool, eof=True)
+    emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool, contract)
+
+def emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool, contract):
     assert contract.eth_address
     assert get_solana_balance(contract.solana_address) > 0
     data = abi.function_signature_to_4byte_selector('call_hello_world()')
@@ -141,6 +154,12 @@ def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_poo
 
 
 def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool):
+    cancel_trx_eof(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool)
+
+def test_cancel_trx_eof(evm_loader, user_account, rw_lock_eof_contract, operator_keypair, treasury_pool):
+    cancel_trx_eof(evm_loader, user_account, rw_lock_eof_contract, operator_keypair, treasury_pool)
+
+def cancel_trx_eof(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool):
     func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
     data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
 

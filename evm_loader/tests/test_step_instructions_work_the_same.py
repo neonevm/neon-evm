@@ -32,16 +32,22 @@ class TestTransactionStepFromAccount:
                    resp_from_inst.transaction.meta.post_balances[i] - resp_from_inst.transaction.meta.pre_balances[i]
 
     def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens):
+        self.deploy_contract(operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, False)
+
+    def test_deploy_eof_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens):
+        self.deploy_contract(operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, True)
+
+    def deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, eof):
         contract_filename = "small.binary"
         contract = create_contract_address(sender_with_tokens, evm_loader)
 
-        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename)
+        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, eof=eof)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         resp_from_acc = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                                [contract.solana_address,
                                                                 sender_with_tokens.solana_account_address]).value
-        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename)
+        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, eof=eof)
         holder_acc = create_holder(operator_keypair)
         contract = create_contract_address(sender_with_tokens, evm_loader)
 
