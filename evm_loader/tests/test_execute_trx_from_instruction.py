@@ -93,7 +93,7 @@ class TestExecuteTrxFromInstruction:
         contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
                                           treasury_pool)
         call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                               evm_loader, , contract"exit_status=0x11")
+                                                               evm_loader, contract, "exit_status=0x11")
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                            evm_loader):
