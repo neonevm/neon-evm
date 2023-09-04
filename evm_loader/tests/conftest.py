@@ -27,7 +27,7 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     if "RUST_LOG" in os.environ:
         pytest.CONTRACTS_PATH = pathlib.Path("/opt/solidity")
-        pytest.CONTRACTS_PATH = pathlib.Path("/opt/solidity/eof-contracts")
+        pytest.EOF_CONTRACTS_PATH = pathlib.Path("/opt/solidity/eof-contracts")
     else:
         pytest.CONTRACTS_PATH = pathlib.Path(__file__).parent / "contracts"
         pytest.EOF_CONTRACTS_PATH = pathlib.Path(__file__).parent / "eof-contracts"
