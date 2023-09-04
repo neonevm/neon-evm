@@ -38,7 +38,7 @@ pub fn get_root_module() -> NeonLib_Ref {
 
 #[sabi_extern_fn]
 fn hash() -> RString {
-    "".into()
+    env!("NEON_REVISION").into()
 }
 
 #[sabi_extern_fn]
