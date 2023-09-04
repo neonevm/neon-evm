@@ -63,8 +63,8 @@ def emulate_contract_deploy(user_account, evm_loader, contract_path):
 
 
 def test_emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool):
-    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool)
-    emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool, contract, eof=False)
+    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool, eof=False)
+    emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool, contract)
 
 def test_emulate_call_eof_contract_function(user_account, evm_loader, operator_keypair, treasury_pool):
     contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool, eof=True)
