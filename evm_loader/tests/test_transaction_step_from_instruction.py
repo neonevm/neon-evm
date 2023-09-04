@@ -80,7 +80,7 @@ class TestTransactionStepFromInstruction:
                                                           steps_count)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, exit_status)
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
 
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                           evm_loader, holder_acc, string_setter_contract):
@@ -103,7 +103,7 @@ class TestTransactionStepFromInstruction:
                                                           )
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, exit_status)
 
         assert text in to_text(
             neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
@@ -136,7 +136,7 @@ class TestTransactionStepFromInstruction:
                                                           )
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, exit_status)
 
         sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_after = get_neon_balance(solana_client, string_setter_contract.solana_address)
@@ -349,7 +349,7 @@ class TestInstructionStepContractCallContractInteractions:
                                                            session_user.solana_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, exit_status)
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
 
     def test_contract_call_set_function(self, rw_lock_contract, session_user, evm_loader, operator_keypair,
                                         treasury_pool, holder_acc, rw_lock_caller):
@@ -377,7 +377,7 @@ class TestInstructionStepContractCallContractInteractions:
                                                            session_user.solana_account_address], 1000)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, exit_status)
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12")
 
     def test_contract_call_update_storage_map_function(self, rw_lock_contract, session_user, evm_loader,
                                                        operator_keypair, rw_lock_caller,
@@ -508,7 +508,7 @@ class TestStepFromInstructionChangingOperatorsDuringTrxRun:
                                                       new_holder_acc, signed_tx,
                                                       [user_account.solana_account_address,
                                                        rw_lock_contract.solana_address], 1, second_operator_keypair)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, exit_status)
 
 
 class TestStepFromInstructionWithChangedRLPTrx:

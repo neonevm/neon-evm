@@ -63,12 +63,12 @@ class TestExecuteTrxFromInstruction:
 
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                           evm_loader, string_setter_contract):
-        call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+        self.call_contract_function_without_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
                                                                   evm_loader, string_setter_contract, "exit_status=0x11")
 
     def test_call_eof_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                           evm_loader, string_setter_eof_contract):
-        call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+        self.call_contract_function_without_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
                                                                   evm_loader, string_setter_eof_contract, "exit_status=0x12")
 
 
@@ -92,14 +92,14 @@ class TestExecuteTrxFromInstruction:
                                                            evm_loader):
         contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
                                           treasury_pool)
-        call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+        self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
                                                                evm_loader, contract, "exit_status=0x11")
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                            evm_loader):
         contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
                                           treasury_pool)
-        call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
+        self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool, sender_with_tokens,
                                                                evm_loader, contract, "exit_status=0x12")
 
     def call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,

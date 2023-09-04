@@ -61,7 +61,7 @@ class TestTransactionStepFromAccountNoChainId:
                                                                    sender_with_tokens.solana_account_address],
                                                                   steps_count)
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], exit_status)
+        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool,
                                                        sender_with_tokens, string_setter_contract, holder_acc,
@@ -70,7 +70,7 @@ class TestTransactionStepFromAccountNoChainId:
                                                                    sender_with_tokens, string_setter_contract, holder_acc,
                                                                    evm_loader, "exit_status=0x11")
 
-    def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool,
+    def test_call_eof_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool,
                                                        sender_with_tokens, string_setter_eof_contract, holder_acc,
                                                        evm_loader):
        self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool,
