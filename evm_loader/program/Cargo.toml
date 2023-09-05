@@ -37,12 +37,12 @@ default = ["custom-heap"]
 tracing = ["serde_json"]
 
 [dependencies]
-linked_list_allocator = { version = "0.10", default_features = false }
+linked_list_allocator = { version = "0.10", default-features = false }
 evm-loader-macro = { path = "../program-macro" }
-solana-program = { version = "=1.14.20", default_features = false }
-spl-token = { version = "~3.5", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "~1.1", default_features = false, features = ["no-entrypoint"] }
-mpl-token-metadata = { version = "1.12", default_features = false, features = ["no-entrypoint"] }
+solana-program = { version = "=1.14.20", default-features = false }
+spl-token = { version = "~3.5", default-features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "~1.1", default-features = false, features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "1.12", default-features = false, features = ["no-entrypoint"] }
 thiserror = "1.0"
 arrayref = "0.3.6"
 hex = "0.4.2"
@@ -54,7 +54,7 @@ bincode = "1"
 serde_bytes = "0.11.12"
 serde = { version = "1.0.186", default-features = false, features = ["derive", "rc"] }
 serde_json = { version = "1.0.105", optional = true }
-ethnum = { version = "1", default_features = false, features = ["serde"] }
+ethnum = { version = "1", default-features = false, features = ["serde"] }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
