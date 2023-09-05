@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     'api',
     'cli',
+    'core-api',
     'lib',
     'program',
     'program-macro',
