@@ -13,6 +13,7 @@ use std::{
         Ordering::{Equal, Greater, Less},
     },
     convert::TryFrom,
+    fmt,
     sync::Arc,
     time::Instant,
 };
@@ -71,14 +72,41 @@ impl SlotParent {
     }
 }
 
-#[derive(Debug, Row, serde::Deserialize, Clone)]
+#[derive(Row, serde::Deserialize, Clone)]
 pub struct AccountRow {
-    owner: Vec<u8>,
-    lamports: u64,
-    executable: bool,
-    rent_epoch: u64,
-    data: Vec<u8>,
-    txn_signature: Vec<Option<u8>>,
+    pub owner: Vec<u8>,
+    pub lamports: u64,
+    pub executable: bool,
+    pub rent_epoch: u64,
+    pub data: Vec<u8>,
+    pub txn_signature: Vec<Option<u8>>,
+}
+
+impl fmt::Display for AccountRow {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "AccountRow {{\n    owner: {},\n    lamports: {},\n    executable: {},\n    rent_epoch: {},\n}}",
+            bs58::encode(&self.owner).into_string(),
+            self.lamports,
+            self.executable,
+            self.rent_epoch,
+        )
+    }
+}
+
+impl fmt::Debug for AccountRow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Account")
+            .field(
+                "owner",
+                &format!("{}", bs58::encode(&self.owner).into_string()),
+            )
+            .field("lamports", &self.lamports)
+            .field("executable", &self.executable)
+            .field("rent_epoch", &self.rent_epoch)
+            .finish()
+    }
 }
 
 impl TryInto<Account> for AccountRow {
