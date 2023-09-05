@@ -10,6 +10,7 @@ actix-web = "4.3.1"
 clap = "2.33.3"
 jsonrpc-v2 = "0.13.0"
 neon-interface = { git = "https://github.com/neonlabsorg/neon-interface.git", rev = "4dbcd53d68f495f82c99801cc848e40a8a70b87f" }
+semver = "1.0.18"
 serde = "1.0.147"
 serde_json = "1.0.85"
 tokio = { version = "1", features = ["full"] }
