@@ -1,3 +1,5 @@
+use crate::commands::get_neon_elf::get_elf_parameter;
+
 use super::ChDbConfig;
 use clickhouse::{Client, Row};
 use log::{debug, info};
@@ -560,6 +562,49 @@ impl ClickHouseDb {
             self.get_account_at(pubkey, parent).await
         } else {
             Ok(None)
+        }
+    }
+
+    pub async fn get_neon_revision(&self, slot: Slot, pubkey: &Pubkey) -> ChResult<String> {
+        let query = r#"SELECT data
+        FROM events.update_account_distributed
+        WHERE
+            pubkey = ?
+        ORDER BY
+            abs(? - slot) ASC,
+            pubkey ASC,
+            slot ASC,
+            write_version ASC
+        LIMIT 1
+        "#;
+
+        let pubkey_str = format!("{:?}", pubkey.to_bytes());
+
+        let data = Self::row_opt(
+            self.client
+                .query(query)
+                .bind(pubkey_str)
+                .bind(slot)
+                .fetch_one::<Vec<u8>>()
+                .await,
+        )?;
+
+        match data {
+            Some(data) => {
+                let neon_revision =
+                    get_elf_parameter(data.as_slice(), "NEON_REVISION").map_err(|e| {
+                        ChError::Db(clickhouse::error::Error::Custom(format!(
+                            "Failed to get NEON_REVISION, error: {e:?}",
+                        )))
+                    })?;
+                Ok(neon_revision)
+            }
+            None => {
+                let err = clickhouse::error::Error::Custom(format!(
+                    "get_neon_revision: for slot {slot} and pubkey {pubkey} not found",
+                ));
+                Err(ChError::Db(err))
+            }
         }
     }
 
