@@ -54,7 +54,7 @@ bincode = "1"
 serde_bytes = "0.11.12"
 serde = { version = "1.0.186", default-features = false, features = ["derive", "rc"] }
 serde_json = { version = "1.0.105", optional = true }
-ethnum = { version = "1", default-features = false, features = ["serde"] }
+ethnum = { version = "1.4", default-features = false, features = ["serde"] }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
