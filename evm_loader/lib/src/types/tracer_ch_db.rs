@@ -569,9 +569,8 @@ impl ClickHouseDb {
         let query = r#"SELECT data
         FROM events.update_account_distributed
         WHERE
-            pubkey = ?
+            pubkey = ? AND slot <= ?
         ORDER BY
-            abs(? - slot) ASC,
             pubkey ASC,
             slot ASC,
             write_version ASC
