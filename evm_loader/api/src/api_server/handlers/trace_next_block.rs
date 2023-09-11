@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use super::{parse_emulation_params, process_result};
 
+#[tracing::instrument(skip(state))]
 pub async fn trace_next_block(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(trace_next_block_request): Json<TraceNextBlockRequestModel>,

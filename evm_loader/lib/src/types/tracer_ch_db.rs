@@ -100,10 +100,7 @@ impl fmt::Display for AccountRow {
 impl fmt::Debug for AccountRow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Account")
-            .field(
-                "owner",
-                &format!("{}", bs58::encode(&self.owner).into_string()),
-            )
+            .field("owner", &bs58::encode(&self.owner).into_string())
             .field("lamports", &self.lamports)
             .field("executable", &self.executable)
             .field("rent_epoch", &self.rent_epoch)

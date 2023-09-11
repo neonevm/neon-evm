@@ -8,6 +8,7 @@ use crate::{
 
 use super::{parse_emulation_params, process_error, process_result};
 
+#[tracing::instrument(skip(state))]
 pub async fn emulate(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(emulate_request): Json<EmulateRequestModel>,
