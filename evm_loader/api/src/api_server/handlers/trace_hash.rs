@@ -6,6 +6,7 @@ use neon_lib::commands::trace::trace_transaction;
 
 use super::{parse_emulation_params, process_error, process_result};
 
+#[tracing::instrument(skip(state))]
 pub async fn trace_hash(
     axum::extract::State(state): axum::extract::State<NeonApiState>,
     Json(trace_hash_request): Json<TraceHashRequestModel>,

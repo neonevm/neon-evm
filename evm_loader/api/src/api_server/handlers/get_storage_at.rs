@@ -10,6 +10,7 @@ use crate::commands::get_storage_at as GetStorageAtCommand;
 
 use super::{process_error, process_result};
 
+#[tracing::instrument(skip(state))]
 pub async fn get_storage_at(
     Query(req_params): Query<GetStorageAtRequest>,
     State(state): State<NeonApiState>,

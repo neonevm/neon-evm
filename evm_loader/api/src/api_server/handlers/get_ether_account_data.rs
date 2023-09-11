@@ -9,6 +9,7 @@ use std::convert::Into;
 
 use super::{process_error, process_result};
 
+#[tracing::instrument(skip(state))]
 pub async fn get_ether_account_data(
     Query(req_params): Query<GetEtherRequest>,
     State(state): State<NeonApiState>,

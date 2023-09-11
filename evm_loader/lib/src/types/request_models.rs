@@ -3,7 +3,9 @@ use ethnum::U256;
 use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
 use evm_loader::types::Address;
 use serde::{Deserialize, Serialize};
+use solana_sdk::debug_account_data::debug_account_data;
 use solana_sdk::pubkey::Pubkey;
+use std::fmt;
 
 use super::AccessListItem;
 
@@ -20,7 +22,7 @@ pub struct GetStorageAtRequest {
     pub slot: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct TxParamsRequestModel {
     pub sender: Address,
     pub contract: Option<Address>,
@@ -28,6 +30,24 @@ pub struct TxParamsRequestModel {
     pub value: Option<U256>,
     pub gas_limit: Option<U256>,
     pub access_list: Option<Vec<AccessListItem>>,
+}
+
+impl fmt::Debug for TxParamsRequestModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("TxParamsRequestModel");
+
+        f.field("sender", &self.sender)
+            .field("contract", &self.contract);
+
+        if let Some(data) = &self.data {
+            debug_account_data(&data[..], &mut f);
+        }
+
+        f.field("value", &self.value)
+            .field("gas_limit", &self.gas_limit)
+            .field("access_list", &self.access_list)
+            .finish_non_exhaustive()
+    }
 }
 
 impl From<TxParamsRequestModel> for TxParams {
