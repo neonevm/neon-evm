@@ -11,7 +11,7 @@ if [ -z "$EVM_LOADER" ]; then
   exit 1
 fi
 
-echo "Deployed from " $(solana address) " with " $(solana balance)
+echo "Deploying from " $(solana address) " with " $(solana balance)
 if [ "$SKIP_EVM_DEPLOY" != "YES" ]; then
     echo "Deploying evm_loader at address $EVM_LOADER..."
     if ! solana program deploy --url $SOLANA_URL \
@@ -20,6 +20,7 @@ if [ "$SKIP_EVM_DEPLOY" != "YES" ]; then
       echo "Failed to deploy evm_loader"
       exit 1
     fi
+    echo "Deployed evm_loader at address $EVM_LOADER..."
     sleep 30
 else
     echo "Skip deploying of evm_loader"
