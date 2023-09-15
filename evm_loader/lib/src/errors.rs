@@ -13,7 +13,7 @@ use solana_sdk::signer::SignerError as SolanaSignerError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
-use crate::types::PgError;
+use crate::types::{ChError, PgError};
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
@@ -94,9 +94,13 @@ pub enum NeonError {
     #[error("Hex Error. {0}")]
     FromHexError(#[from] hex::FromHexError),
     #[error("PostgreSQL Error: {0}")]
-    PostgreError(#[from] PgError),
+    PostgresError(#[from] PgError),
     #[error("Panic: {0}")]
     Panic(String),
+    #[error("ClickHouse: {0}")]
+    ClickHouse(ChError),
+    #[error("Slot {0} is less than earliest_rooted_slot={1}")]
+    EarlySlot(u64, u64),
 }
 
 impl NeonError {
@@ -131,7 +135,9 @@ impl NeonError {
             NeonError::IncorrectAddress(_) => 248,
             NeonError::IncorrectIndex(_) => 249,
             NeonError::TxParametersParsingError(_) => 250,
-            NeonError::PostgreError(_) => 251,
+            NeonError::PostgresError(_) => 251,
+            NeonError::ClickHouse(_) => 252,
+            NeonError::EarlySlot(_, _) => 253,
         }
     }
 }

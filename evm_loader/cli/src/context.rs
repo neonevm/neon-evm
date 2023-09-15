@@ -34,10 +34,13 @@ pub async fn create_from_config_and_options<'a>(
         }
         _ => {
             if let Some(slot) = slot {
-                Arc::new(CallDbClient::new(
-                    config.db_config.as_ref().expect("db-config not found"),
-                    *slot,
-                ))
+                Arc::new(
+                    CallDbClient::new(
+                        config.db_config.as_ref().expect("db-config not found"),
+                        *slot,
+                    )
+                    .await?,
+                )
             } else {
                 Arc::new(RpcClient::new_with_commitment(
                     config.json_rpc_url.clone(),
