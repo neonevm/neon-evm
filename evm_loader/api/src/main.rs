@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
+mod api_context;
 mod api_options;
 mod api_server;
 
@@ -49,11 +50,11 @@ async fn main() -> NeonApiResult<()> {
 
     let config = config::create_from_api_config(&api_config)?;
 
-    let state: NeonApiState = Arc::new(api_server::state::State::new(config));
+    let state: NeonApiState = Arc::new(api_server::state::State::new(config).await);
 
     let app = Router::new()
-        .nest("/api", api_server::routes::register(state.clone()))
-        .with_state(state.clone())
+        .nest("/api", api_server::routes::register())
+        .with_state(state)
         .layer(
             // Let's create a tracing span for each request
             TraceLayer::new_for_http().make_span_with(|request: &Request<Body>| {
@@ -82,7 +83,7 @@ async fn main() -> NeonApiResult<()> {
         );
 
     let addr = SocketAddr::from_str(listener_addr.as_str())?;
-    tracing::debug!("listening on {}", addr);
+    tracing::info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
