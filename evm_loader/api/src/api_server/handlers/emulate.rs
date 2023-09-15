@@ -15,7 +15,7 @@ pub async fn emulate(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let tx = emulate_request.tx_params.into();
 
-    let rpc_client = match context::build_rpc_client(&state.config, emulate_request.slot) {
+    let rpc_client = match context::build_rpc_client(&state.config, emulate_request.slot).await {
         Ok(rpc_client) => rpc_client,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };

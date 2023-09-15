@@ -129,7 +129,6 @@ impl TryInto<Account> for AccountRow {
     }
 }
 
-#[allow(dead_code)]
 impl ClickHouseDb {
     pub fn new(config: &ChDbConfig) -> Self {
         let url_id = rand::thread_rng().gen_range(0..config.clickhouse_url.len());
@@ -164,6 +163,23 @@ impl ClickHouseDb {
         let execution_time = Instant::now().duration_since(time_start);
         info!(
             "get_block_time sql time: {} sec",
+            execution_time.as_secs_f64()
+        );
+        result
+    }
+
+    pub async fn get_earliest_rooted_slot(&self) -> ChResult<u64> {
+        let time_start = Instant::now();
+        let query = "SELECT min(slot) FROM events.rooted_slots";
+        let result = self
+            .client
+            .query(query)
+            .fetch_one::<u64>()
+            .await
+            .map_err(std::convert::Into::into);
+        let execution_time = Instant::now().duration_since(time_start);
+        info!(
+            "get_earliest_rooted_slot sql returned {result:?}, time: {} sec",
             execution_time.as_secs_f64()
         );
         result

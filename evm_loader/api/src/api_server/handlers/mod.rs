@@ -14,6 +14,7 @@ use crate::{Config, Context, NeonApiResult};
 use crate::types::request_models::EmulationParamsRequestModel;
 use std::net::AddrParseError;
 use std::str::FromStr;
+use tracing::error;
 
 pub mod emulate;
 pub mod emulate_hash;
@@ -133,6 +134,7 @@ fn process_result<T: Serialize>(
 }
 
 fn process_error(status_code: StatusCode, e: &NeonError) -> (StatusCode, Json<Value>) {
+    error!("NeonError: {e}");
     (
         status_code,
         Json(json!({

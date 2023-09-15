@@ -69,12 +69,12 @@ pub fn build_signer(config: &Config) -> Result<Box<dyn Signer>, NeonError> {
 }
 
 /// # Errors
-pub fn build_rpc_client(
+pub async fn build_rpc_client(
     config: &Config,
     slot: Option<u64>,
 ) -> Result<Arc<dyn rpc::Rpc>, NeonError> {
     if let Some(slot) = slot {
-        return build_call_db_client(config, slot);
+        return build_call_db_client(config, slot).await;
     }
 
     Ok(Arc::new(RpcClient::new_with_commitment(
@@ -84,10 +84,13 @@ pub fn build_rpc_client(
 }
 
 /// # Errors
-pub fn build_call_db_client(config: &Config, slot: u64) -> Result<Arc<dyn rpc::Rpc>, NeonError> {
+pub async fn build_call_db_client(
+    config: &Config,
+    slot: u64,
+) -> Result<Arc<dyn rpc::Rpc>, NeonError> {
     let config = config
         .db_config
         .clone()
         .ok_or(NeonError::InvalidChDbConfig)?;
-    Ok(Arc::new(CallDbClient::new(&config, slot)))
+    Ok(Arc::new(CallDbClient::new(&config, slot).await?))
 }

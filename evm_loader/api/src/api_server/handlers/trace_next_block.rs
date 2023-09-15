@@ -17,7 +17,7 @@ pub async fn trace_next_block(
     Json(trace_next_block_request): Json<TraceNextBlockRequestModel>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let rpc_client =
-        match context::build_call_db_client(&state.config, trace_next_block_request.slot) {
+        match context::build_call_db_client(&state.config, trace_next_block_request.slot).await {
             Ok(rpc_client) => rpc_client,
             Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
         };
@@ -49,7 +49,7 @@ pub async fn trace_next_block(
         Err(e) => {
             return process_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                &errors::NeonError::PostgreError(e),
+                &errors::NeonError::PostgresError(e),
             )
         }
     };
