@@ -126,6 +126,9 @@ def run_tests(github_sha):
         print("Part of tests are skipped")
 
     exec_status = docker_client.exec_inspect(exec_id['Id'])["ExitCode"]
+
+    run_subprocess(f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml logs dk-neon-api")
+
     stop_containers(project_name)
 
     if tests_are_failed or exec_status == 1:

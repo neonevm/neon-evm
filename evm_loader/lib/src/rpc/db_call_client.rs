@@ -1,5 +1,5 @@
 use super::{e, Rpc};
-use crate::types::{ChDbConfig, TracerDb, TxParams};
+use crate::types::{TracerDb, TxParams};
 use crate::NeonError;
 use async_trait::async_trait;
 use solana_client::{
@@ -23,15 +23,13 @@ use solana_transaction_status::{
 use std::any::Any;
 
 pub struct CallDbClient {
-    pub slot: u64,
     tracer_db: TracerDb,
+    pub slot: u64,
 }
 
 impl CallDbClient {
-    pub async fn new(config: &ChDbConfig, slot: u64) -> Result<Self, NeonError> {
-        let db = TracerDb::new(config);
-
-        let earliest_rooted_slot = db
+    pub async fn new(tracer_db: TracerDb, slot: u64) -> Result<Self, NeonError> {
+        let earliest_rooted_slot = tracer_db
             .get_earliest_rooted_slot()
             .await
             .map_err(NeonError::ClickHouse)?;
@@ -39,10 +37,7 @@ impl CallDbClient {
             return Err(NeonError::EarlySlot(slot, earliest_rooted_slot));
         }
 
-        Ok(Self {
-            slot,
-            tracer_db: db,
-        })
+        Ok(Self { tracer_db, slot })
     }
 }
 

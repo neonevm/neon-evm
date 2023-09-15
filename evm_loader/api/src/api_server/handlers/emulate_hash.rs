@@ -2,8 +2,8 @@ use axum::{http::StatusCode, Json};
 use std::convert::Into;
 
 use crate::{
-    commands::emulate as EmulateCommand, context, types::request_models::EmulateHashRequestModel,
-    NeonApiState,
+    api_context, commands::emulate as EmulateCommand, context,
+    types::request_models::EmulateHashRequestModel, NeonApiState,
 };
 
 use super::{parse_emulation_params, process_error, process_result};
@@ -14,7 +14,7 @@ pub async fn emulate_hash(
     Json(emulate_hash_request): Json<EmulateHashRequestModel>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let rpc_client =
-        match context::build_hash_rpc_client(&state.config, &emulate_hash_request.hash).await {
+        match api_context::build_hash_rpc_client(&state, &emulate_hash_request.hash).await {
             Ok(rpc_client) => rpc_client,
             Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
         };
