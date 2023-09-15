@@ -14,7 +14,7 @@ pub async fn trace(
     let tx = trace_request.emulate_request.tx_params.into();
 
     let rpc_client =
-        match context::build_rpc_client(&state.config, trace_request.emulate_request.slot) {
+        match context::build_rpc_client(&state.config, trace_request.emulate_request.slot).await {
             Ok(rpc_client) => rpc_client,
             Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
         };
