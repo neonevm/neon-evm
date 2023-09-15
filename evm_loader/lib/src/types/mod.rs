@@ -10,6 +10,7 @@ use std::str::FromStr;
 use tokio::runtime::Runtime;
 use tokio::task::block_in_place;
 pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
+use tracing::error;
 
 use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
 use evm_loader::types::hexbytes::HexBytes;
@@ -79,10 +80,13 @@ pub async fn do_connect(
     let mut result = None;
 
     while attempt < 3 {
-        result = connect(&authority, NoTls).await.ok();
-        if result.is_some() {
-            break;
-        }
+        match connect(&authority, NoTls).await {
+            Ok(res) => {
+                result = Some(res);
+                break;
+            }
+            Err(e) => error!("Error connecting to database {authority}: {e}"),
+        };
         attempt += 1;
     }
 

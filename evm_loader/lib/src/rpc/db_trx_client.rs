@@ -1,5 +1,5 @@
 use super::{e, Rpc};
-use crate::types::{ChDbConfig, IndexerDb, TracerDb, TxParams};
+use crate::types::{IndexerDb, TracerDb, TxParams};
 use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
@@ -29,9 +29,7 @@ pub struct TrxDbClient {
 }
 
 impl TrxDbClient {
-    pub async fn new(config: &ChDbConfig, hash: [u8; 32]) -> Self {
-        let tracer_db = TracerDb::new(config);
-        let indexer_db = IndexerDb::new(config).await;
+    pub async fn new(tracer_db: TracerDb, indexer_db: IndexerDb, hash: [u8; 32]) -> Self {
         let sol_sig = indexer_db
             .get_sol_sig(&hash)
             .await

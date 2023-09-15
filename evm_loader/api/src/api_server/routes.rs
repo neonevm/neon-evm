@@ -14,7 +14,7 @@ use crate::{
     NeonApiState,
 };
 
-pub fn register(s: NeonApiState) -> Router<NeonApiState> {
+pub fn register() -> Router<NeonApiState> {
     ServiceBuilder::new().service::<Router<NeonApiState>>(
         Router::new()
             .route("/emulate", post(emulate))
@@ -25,7 +25,6 @@ pub fn register(s: NeonApiState) -> Router<NeonApiState> {
             .route("/trace", post(trace))
             .route("/trace-hash", post(trace_hash))
             .route("/trace_hash", post(trace_hash)) // Obsolete
-            .route("/trace-next-block", post(trace_next_block))
-            .with_state(s),
+            .route("/trace-next-block", post(trace_next_block)),
     )
 }
