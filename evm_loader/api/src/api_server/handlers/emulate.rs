@@ -3,7 +3,7 @@ use std::convert::Into;
 
 use crate::api_server::handlers::process_error;
 use crate::{
-    api_context, commands::emulate as EmulateCommand, context,
+    api_context, commands::emulate as EmulateCommand, context::Context,
     types::request_models::EmulateRequestModel, NeonApiState,
 };
 
@@ -21,7 +21,7 @@ pub async fn emulate(
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
-    let context = context::create(rpc_client, state.config.clone());
+    let context = Context::new(rpc_client, state.config.clone());
 
     let (token, chain, steps, accounts, solana_accounts) =
         parse_emulation_params(&state.config, &context, &emulate_request.emulation_params).await;

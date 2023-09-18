@@ -2,7 +2,6 @@
 #![deny(clippy::all, clippy::pedantic)]
 
 mod config;
-mod context;
 mod logs;
 mod program_options;
 
@@ -12,20 +11,19 @@ use neon_lib::{
         get_ether_account_data, get_neon_elf, get_neon_elf::CachedElfParams, get_storage_at,
         init_environment, trace,
     },
-    errors, rpc,
+    errors,
     types::{self, AccessListItem},
+    Context,
 };
 
 use clap::ArgMatches;
 pub use config::Config;
-pub use context::Context;
 use std::io::Read;
 
 use ethnum::U256;
-use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
+use evm_loader::evm::tracing::TraceCallConfig;
 use serde_json::json;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of, values_of};
-use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
@@ -34,8 +32,7 @@ use tokio::time::Instant;
 
 use crate::{
     errors::NeonError,
-    rpc::Rpc,
-    types::{IndexerDb, TraceNextBlockParams, TransactionHashParams, TransactionParams, TxParams},
+    types::{TransactionParams, TxParams},
 };
 use evm_loader::types::Address;
 
@@ -47,10 +44,9 @@ async fn run<'a>(options: &'a ArgMatches<'a>) -> NeonCliResult {
         .map(|slot_str| slot_str.parse().expect("slot parse error"));
     let (cmd, params) = options.subcommand();
     let config = Arc::new(config::create(options)?);
-    let context: Context =
-        context::create_from_config_and_options(options, config.clone(), &slot).await?;
+    let context = Context::new_from_config(config.clone(), slot).await?;
 
-    execute(cmd, params, &config, &context, slot).await
+    execute(cmd, params, &config, &context).await
 }
 
 fn print_result(result: &NeonCliResult) {
@@ -103,7 +99,6 @@ async fn execute<'a>(
     params: Option<&'a ArgMatches<'a>>,
     config: &'a Config,
     context: &'a Context,
-    slot: Option<u64>,
 ) -> NeonCliResult {
     match (cmd, params) {
         ("emulate", Some(params)) => {
@@ -126,26 +121,6 @@ async fn execute<'a>(
             .await
             .map(|result| json!(result))
         }
-        ("emulate-hash", Some(params)) => {
-            let tx = context.rpc_client.get_transaction_data().await?;
-            let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params).await;
-            emulate::execute(
-                context.rpc_client.as_ref(),
-                config.evm_loader,
-                tx,
-                token,
-                chain,
-                steps,
-                config.commitment,
-                &accounts,
-                &solana_accounts,
-                &None,
-                None,
-            )
-            .await
-            .map(|result| json!(result))
-        }
         ("trace", Some(params)) => {
             let (tx, trace_call_config) = parse_tx(params);
             let (token, chain, steps, accounts, solana_accounts) =
@@ -164,61 +139,6 @@ async fn execute<'a>(
             )
             .await
             .map(|trace| json!(trace))
-        }
-        ("trace-hash", Some(params)) => {
-            let (tx, trace_config) = parse_tx_hash(context.rpc_client.as_ref()).await;
-            let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params).await;
-            trace::trace_transaction(
-                context.rpc_client.as_ref(),
-                config.evm_loader,
-                tx,
-                token,
-                chain,
-                steps,
-                config.commitment,
-                &accounts,
-                &solana_accounts,
-                trace_config.into(),
-            )
-            .await
-            .map(|trace| json!(trace))
-        }
-        ("trace-next-block", Some(params)) => {
-            let slot = slot.expect("SLOT argument is not provided");
-            let trace_block_params: Option<TraceNextBlockParams> = read_from_stdin()
-                .unwrap_or_else(|err| {
-                    panic!("Unable to parse `TraceBlockBySlotParams` from STDIN, error: {err:?}")
-                });
-            let trace_config = trace_block_params
-                .map(|params| params.trace_config.unwrap_or_default())
-                .unwrap_or_default();
-            let (token, chain, steps, accounts, solana_accounts) =
-                parse_tx_params(config, context, params).await;
-            let indexer_db =
-                IndexerDb::new(config.db_config.as_ref().expect("db-config is required")).await;
-            let transactions = indexer_db
-                .get_block_transactions(slot + 1)
-                .await
-                .map_err(|e| {
-                    ClientError::from(ClientErrorKind::Custom(format!(
-                        "get_block_transactions error: {e}"
-                    )))
-                })?;
-            trace::trace_block(
-                context.rpc_client.as_ref(),
-                config.evm_loader,
-                transactions,
-                token,
-                chain,
-                steps,
-                config.commitment,
-                &accounts,
-                &solana_accounts,
-                &trace_config,
-            )
-            .await
-            .map(|traces| json!(traces))
         }
         ("create-ether-account", Some(params)) => {
             let ether = address_of(params, "ether").expect("ether parse error");
@@ -338,20 +258,6 @@ fn parse_tx(params: &ArgMatches) -> (TxParams, TraceCallConfig) {
     };
 
     (tx_params, trace_config)
-}
-
-async fn parse_tx_hash(rpc_client: &dyn Rpc) -> (TxParams, TraceConfig) {
-    let tx = rpc_client.get_transaction_data().await.unwrap();
-    let transaction_params: Option<TransactionHashParams> =
-        read_from_stdin().unwrap_or_else(|err| {
-            panic!("Unable to parse `TransactionHashParams` from STDIN, error: {err:?}")
-        });
-
-    let trace_config = transaction_params
-        .map(|params| params.trace_config.unwrap_or_default())
-        .unwrap_or_default();
-
-    (tx, trace_config)
 }
 
 pub async fn parse_tx_params<'a>(

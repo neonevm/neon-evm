@@ -3,7 +3,9 @@ use std::convert::Into;
 
 use crate::api_server::handlers::process_error;
 use crate::commands::trace::trace_transaction;
-use crate::{api_context, context, types::request_models::TraceRequestModel, NeonApiState};
+use crate::{
+    api_context, context::Context, types::request_models::TraceRequestModel, NeonApiState,
+};
 
 use super::{parse_emulation_params, process_result};
 
@@ -20,7 +22,7 @@ pub async fn trace(
             Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
         };
 
-    let context = context::create(rpc_client, state.config.clone());
+    let context = Context::new(rpc_client, state.config.clone());
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,
