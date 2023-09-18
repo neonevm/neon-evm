@@ -30,11 +30,6 @@ services:
       NEON_CHAIN_ID: 111
       COMMITMENT: confirmed
       NEON_DB_CLICKHOUSE_URLS: "http://45.250.253.36:8123;http://45.250.253.38:8123"
-      NEON_DB_INDEXER_HOST: 45.250.253.32
-      NEON_DB_INDEXER_PORT: 5432
-      NEON_DB_INDEXER_DATABASE: indexer
-      NEON_DB_INDEXER_USER: postgres
-      NEON_DB_INDEXER_PASSWORD: $INDEXER_DB_PASSWORD
       KEYPAIR: /opt/operator-keypairs/id.json
       FEEPAIR: /opt/operator-keypairs/id.json
     image: ${EVM_LOADER_IMAGE}

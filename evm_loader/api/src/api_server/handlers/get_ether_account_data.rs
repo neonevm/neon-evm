@@ -1,6 +1,6 @@
 use crate::api_server::handlers::process_error;
 use crate::commands::get_ether_account_data as GetEtherAccountDataCommand;
-use crate::{api_context, context, types::request_models::GetEtherRequest, NeonApiState};
+use crate::{api_context, context::Context, types::request_models::GetEtherRequest, NeonApiState};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -19,8 +19,7 @@ pub async fn get_ether_account_data(
         Ok(rpc_client) => rpc_client,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
-
-    let context = context::create(rpc_client, state.config.clone());
+    let context = Context::new(rpc_client, state.config.clone());
 
     process_result(
         &GetEtherAccountDataCommand::execute(

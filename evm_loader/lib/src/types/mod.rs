@@ -1,25 +1,19 @@
-mod indexer_db;
 pub mod request_models;
 mod tracer_ch_db;
 
 pub use evm_loader::types::Address;
-pub use indexer_db::IndexerDb;
 use lazy_static::lazy_static;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use tokio::runtime::Runtime;
 use tokio::task::block_in_place;
 pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
-use tracing::error;
 
-use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
+use evm_loader::evm::tracing::TraceCallConfig;
 use evm_loader::types::hexbytes::HexBytes;
 use {
     ethnum::U256,
-    postgres::NoTls,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
-    thiserror::Error,
-    tokio_postgres::{connect, Client},
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Default)]
@@ -27,11 +21,6 @@ pub struct ChDbConfig {
     pub clickhouse_url: Vec<String>,
     pub clickhouse_user: Option<String>,
     pub clickhouse_password: Option<String>,
-    pub indexer_host: String,
-    pub indexer_port: String,
-    pub indexer_database: String,
-    pub indexer_user: String,
-    pub indexer_password: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -57,49 +46,6 @@ pub struct TransactionParams {
     pub trace_config: Option<TraceCallConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransactionHashParams {
-    pub trace_config: Option<TraceConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TraceNextBlockParams {
-    pub trace_config: Option<TraceConfig>,
-}
-
-pub async fn do_connect(
-    host: &String,
-    port: &String,
-    db: &String,
-    user: &String,
-    pass: &String,
-) -> Client {
-    let authority = format!("host={host} port={port} dbname={db} user={user} password={pass}");
-
-    let mut attempt = 0;
-    let mut result = None;
-
-    while attempt < 3 {
-        match connect(&authority, NoTls).await {
-            Ok(res) => {
-                result = Some(res);
-                break;
-            }
-            Err(e) => error!("Error connecting to database {authority}: {e}"),
-        };
-        attempt += 1;
-    }
-
-    let (client, connection) = result.expect("error to set DB connection");
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {e}");
-        }
-    });
-    client
-}
-
 lazy_static! {
     pub static ref RT: Runtime = Runtime::new().unwrap();
 }
@@ -113,16 +59,6 @@ where
         Err(_) => RT.block_on(f),
     }
 }
-
-#[derive(Error, Debug)]
-pub enum PgError {
-    #[error("postgres: {}", .0)]
-    Db(#[from] tokio_postgres::Error),
-    #[error("Custom: {0}")]
-    Custom(String),
-}
-
-pub type PgResult<T> = std::result::Result<T, PgError>;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PubkeyBase58(pub Pubkey);

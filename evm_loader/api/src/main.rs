@@ -50,7 +50,7 @@ async fn main() -> NeonApiResult<()> {
 
     let config = config::create_from_api_config(&api_config)?;
 
-    let state: NeonApiState = Arc::new(api_server::state::State::new(config).await);
+    let state: NeonApiState = Arc::new(api_server::state::State::new(config));
 
     let app = Router::new()
         .nest("/api", api_server::routes::register())
