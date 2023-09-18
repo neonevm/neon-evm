@@ -1,5 +1,5 @@
 use super::{e, Rpc};
-use crate::types::{TracerDb, TxParams};
+use crate::types::TracerDb;
 use crate::NeonError;
 use async_trait::async_trait;
 use solana_client::{
@@ -189,12 +189,6 @@ impl Rpc for CallDbClient {
     ) -> ClientResult<(Hash, u64)> {
         Err(e!(
             "get_latest_blockhash_with_commitment() not implemented for db_call_client"
-        ))
-    }
-
-    async fn get_transaction_data(&self) -> ClientResult<TxParams> {
-        Err(e!(
-            "get_transaction_data() not implemented for db_call_client"
         ))
     }
 

@@ -1,8 +1,6 @@
 use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand};
 use ethnum::U256;
 use evm_loader::types::Address;
-use hex::FromHex;
-use neon_lib::context::truncate_0x;
 use solana_clap_utils::input_validators::{is_url_or_moniker, is_valid_pubkey};
 use std::fmt::Display;
 
@@ -40,16 +38,6 @@ where
     }
 
     U256::from_str_prefixed(value)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-fn is_valid_h256<T>(string: T) -> Result<(), String>
-where
-    T: AsRef<str>,
-{
-    let str = truncate_0x(string.as_ref());
-    <[u8; 32]>::from_hex(str)
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -181,24 +169,6 @@ fn trx_params<'a, 'b>(cmd: &'static str, desc: &'static str) -> App<'a, 'b> {
         )
 }
 
-fn trx_hash<'a, 'b>(cmd: &'static str, alias: &'static str, desc: &'static str) -> App<'a, 'b> {
-    SubCommand::with_name(cmd)
-        .alias(alias)
-        .about(desc)
-        .arg(
-            Arg::with_name("hash")
-                .index(1)
-                .value_name("hash")
-                .takes_value(true)
-                .required(true)
-                .validator(is_valid_h256)
-                .help("Neon transaction hash"),
-        )
-        .arg(token_mint_arg())
-        .arg(chain_id_arg())
-        .arg(max_steps_arg())
-}
-
 #[allow(clippy::too_many_lines)]
 pub fn parse<'a>() -> ArgMatches<'a> {
     App::new(crate_name!())
@@ -226,7 +196,7 @@ pub fn parse<'a>() -> ArgMatches<'a> {
                 .long("db_config")
                 .takes_value(true)
                 .global(true)
-                .help("Configuration file to use Postgress DB")
+                .help("Configuration file to use Tracer DB")
         )
         .arg(
             Arg::with_name("slot")
@@ -320,29 +290,6 @@ pub fn parse<'a>() -> ArgMatches<'a> {
                 "trace",
                 "Emulation transaction to collecting traces. Additional `TransactionParams` can be provided via STDIN as a JSON object.",
             )
-        )
-        .subcommand(
-            trx_hash(
-                "emulate-hash",
-                "emulate_hash",
-                "Emulation transaction by hash. Additional `TransactionHashParams` can be provided via STDIN as a JSON object.",
-            )
-        )
-        .subcommand(
-            trx_hash(
-                "trace-hash",
-                "trace_hash",
-                "Emulation transaction by hash to collecting traces. Additional `TransactionHashParams` can be provided via STDIN as a JSON object.",
-            )
-        )
-        .subcommand(
-            SubCommand::with_name("trace-next-block")
-                .about("Tracing all transactions in the block next to a given block (slot) number. \
-                    For this command, SLOT argument is required. \
-                    Additional `TraceNextBlockParams` can be provided via STDIN as a JSON object.")
-                .arg(token_mint_arg())
-                .arg(chain_id_arg())
-                .arg(max_steps_arg())
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")

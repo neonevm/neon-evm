@@ -1,6 +1,6 @@
 use crate::types::{PubkeyBase58, TxParams};
 use ethnum::U256;
-use evm_loader::evm::tracing::{TraceCallConfig, TraceConfig};
+use evm_loader::evm::tracing::TraceCallConfig;
 use evm_loader::types::Address;
 use serde::{Deserialize, Serialize};
 use solana_sdk::debug_account_data::debug_account_data;
@@ -105,30 +105,8 @@ pub struct EmulateRequestModel {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub struct EmulateHashRequestModel {
-    #[serde(flatten)]
-    pub emulation_params: EmulationParamsRequestModel,
-    pub hash: String,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default)]
 pub struct TraceRequestModel {
     #[serde(flatten)]
     pub emulate_request: EmulateRequestModel,
     pub trace_call_config: Option<TraceCallConfig>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct TraceHashRequestModel {
-    #[serde(flatten)]
-    pub emulate_hash_request: EmulateHashRequestModel,
-    pub trace_config: Option<TraceConfig>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct TraceNextBlockRequestModel {
-    #[serde(flatten)]
-    pub emulation_params: EmulationParamsRequestModel,
-    pub slot: u64,
-    pub trace_config: Option<TraceConfig>,
 }

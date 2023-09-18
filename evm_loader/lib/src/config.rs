@@ -129,29 +129,9 @@ fn load_db_config_from_enviroment() -> ChDbConfig {
         .map(Some)
         .unwrap_or(None);
 
-    let indexer_host =
-        env::var("NEON_DB_INDEXER_HOST").expect("neon db indexer host valiable must be set");
-
-    let indexer_port =
-        env::var("NEON_DB_INDEXER_PORT").expect("neon db indexer port valiable must be set");
-
-    let indexer_database = env::var("NEON_DB_INDEXER_DATABASE")
-        .expect("neon db indexer database valiable must be set");
-
-    let indexer_user =
-        env::var("NEON_DB_INDEXER_USER").expect("neon db indexer user valiable must be set");
-
-    let indexer_password = env::var("NEON_DB_INDEXER_PASSWORD")
-        .expect("neon db indexer password valiable must be set");
-
     ChDbConfig {
         clickhouse_url,
         clickhouse_user,
         clickhouse_password,
-        indexer_host,
-        indexer_port,
-        indexer_database,
-        indexer_user,
-        indexer_password,
     }
 }

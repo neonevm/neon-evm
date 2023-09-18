@@ -1,5 +1,7 @@
 use crate::api_server::handlers::process_error;
-use crate::{api_context, context, types::request_models::GetStorageAtRequest, NeonApiState};
+use crate::{
+    api_context, context::Context, types::request_models::GetStorageAtRequest, NeonApiState,
+};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -21,7 +23,7 @@ pub async fn get_storage_at(
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
-    let context = context::create(rpc_client, state.config.clone());
+    let context = Context::new(rpc_client, state.config.clone());
 
     process_result(
         &GetStorageAtCommand::execute(

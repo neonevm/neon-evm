@@ -1,11 +1,8 @@
 mod db_call_client;
-mod db_trx_client;
 mod validator_client;
 
 pub use db_call_client::CallDbClient;
-pub use db_trx_client::TrxDbClient;
 
-use crate::types::TxParams;
 use crate::{NeonError, NeonResult};
 use async_trait::async_trait;
 use solana_cli::cli::CliError;
@@ -83,7 +80,7 @@ pub trait Rpc: Send + Sync {
         &self,
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)>;
-    async fn get_transaction_data(&self) -> ClientResult<TxParams>;
+
     fn as_any(&self) -> &dyn Any;
 }
 
