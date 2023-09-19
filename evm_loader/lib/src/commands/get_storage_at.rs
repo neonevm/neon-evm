@@ -24,7 +24,7 @@ pub struct GetStorageAtReturn(pub [u8; 32]);
 
 impl Display for GetStorageAtReturn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{}", hex::encode(&self.0))
+        write!(f, "0x{}", hex::encode(self.0))
     }
 }
 

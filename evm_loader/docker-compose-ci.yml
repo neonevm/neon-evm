@@ -8,9 +8,13 @@ services:
       - SOLANA_URL=http://solana:8899
     hostname: solana
     ports:
-       - 8899
+       - "8899"
     expose:
       - "8899"
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     entrypoint:
       /opt/solana/bin/solana-run-neon.sh
     networks:
@@ -34,7 +38,7 @@ services:
       FEEPAIR: /opt/operator-keypairs/id.json
     image: ${EVM_LOADER_IMAGE}
     ports:
-    - 8085
+    - "8085"
     networks:
       - net
 

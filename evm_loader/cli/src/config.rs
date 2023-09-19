@@ -28,11 +28,7 @@ pub fn create(options: &ArgMatches) -> Result<Config, NeonError> {
             .unwrap_or(&solana_cli_config.json_rpc_url),
     );
 
-    let evm_loader = if let Some(value) = pubkey_of(options, "evm_loader") {
-        value
-    } else {
-        return Err(NeonError::EvmLoaderNotSpecified);
-    };
+    let evm_loader = pubkey_of(options, "evm_loader").ok_or(NeonError::EvmLoaderNotSpecified)?;
 
     let keypair_path: String = options
         .value_of("keypair")
