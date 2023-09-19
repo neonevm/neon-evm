@@ -262,7 +262,7 @@ impl ClickHouseDb {
                 self.client
                     .query(query)
                     .bind(pubkey_str.clone())
-                    .bind(&branch.as_slice())
+                    .bind(branch.as_slice())
                     .fetch_one::<AccountRow>()
                     .await,
             )
