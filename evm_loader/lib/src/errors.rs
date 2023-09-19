@@ -13,7 +13,7 @@ use solana_sdk::signer::SignerError as SolanaSignerError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
-use crate::types::ChError;
+use crate::types::tracer_ch_common::ChError;
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
