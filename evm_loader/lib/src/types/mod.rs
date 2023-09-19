@@ -1,4 +1,5 @@
 pub mod request_models;
+pub mod tracer_ch_common;
 mod tracer_ch_db;
 
 pub use evm_loader::types::Address;
@@ -7,7 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use tokio::runtime::Runtime;
 use tokio::task::block_in_place;
-pub use tracer_ch_db::{ChError, ChResult, ClickHouseDb as TracerDb};
+pub use tracer_ch_db::ClickHouseDb as TracerDb;
 
 use evm_loader::evm::tracing::TraceCallConfig;
 use evm_loader::types::hexbytes::HexBytes;
