@@ -552,7 +552,7 @@ impl ClickHouseDb {
           SELECT MAX(slot)
           FROM events.update_account_distributed
         )
-        LIMIT 1;
+        LIMIT 1
         "#;
 
         let is_startup = Self::row_opt(
