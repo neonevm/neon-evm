@@ -64,7 +64,9 @@ jobs:
           --github_ref=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
-          --labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          --labels='${{ toJson(github.event.pull_request.labels.*.name) }}' \
+          --pr_url="${{ github.api_url }}/repos/${{ github.repository }}/issues" \
+          --pr_number="${{ github.event.pull_request.number }}"
   finalize-image:
     runs-on: neon-evm-1
     needs:
