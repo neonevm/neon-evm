@@ -166,11 +166,14 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     is_tag_creating = 'refs/tags/' in github_ref
     is_version_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/heads/", "")) is not None
     is_FTS_labeled_not_draft = 'FullTestSuit' in labels and is_draft != "true"
+    is_extended_FTS_labeled_not_draft = 'ExtendedFullTestSuit' in labels and is_draft != "true"
 
-    if is_develop_branch or is_tag_creating or is_version_branch or is_FTS_labeled_not_draft:
-        full_test_suite = "true"
+    if is_extended_FTS_labeled_not_draft:
+        test_set = "extendedFullTestSuite"
+    elif is_develop_branch or is_tag_creating or is_version_branch or is_FTS_labeled_not_draft:
+        test_set = "fullTestSuite"
     else:
-        full_test_suite = "false"
+        test_set = "basic"
 
     github = GithubClient(token)
 
@@ -191,7 +194,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
 
     runs_before = github.get_proxy_runs_list(proxy_branch)
     runs_count_before = github.get_proxy_runs_count(proxy_branch)
-    github.run_proxy_dispatches(proxy_branch, github_ref, github_sha, full_test_suite, initial_pr)
+    github.run_proxy_dispatches(proxy_branch, github_ref, github_sha, test_set, initial_pr)
     wait_condition(lambda: github.get_proxy_runs_count(proxy_branch) > runs_count_before)
 
     runs_after = github.get_proxy_runs_list(proxy_branch)
