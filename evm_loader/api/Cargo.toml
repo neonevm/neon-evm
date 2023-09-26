@@ -25,3 +25,7 @@ http = "0.2.9"
 hyper = "0.14.27"
 tower-http = { version = "0.4.4", features = ["trace"] }
 hex = "0.4.2"
+build-info = { version = "0.0.31", features = ["serde"] }
+
+[build-dependencies]
+build-info-build = "0.0.31"
