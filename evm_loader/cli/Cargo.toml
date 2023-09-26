@@ -20,3 +20,7 @@ fern = "0.6"
 ethnum = { version = "1.4", default-features = false, features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 neon-lib = { path = "../lib" }
+build-info = { version = "0.0.31", features = ["serde"] }
+
+[build-dependencies]
+build-info-build = "0.0.31"

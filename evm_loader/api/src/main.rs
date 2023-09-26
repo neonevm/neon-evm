@@ -4,6 +4,8 @@
 mod api_context;
 mod api_options;
 mod api_server;
+#[allow(clippy::module_name_repetitions)]
+mod build_info;
 
 use api_server::handlers::NeonApiError;
 use axum::Router;
@@ -20,6 +22,7 @@ use tracing_appender::non_blocking::NonBlockingBuilder;
 use std::sync::Arc;
 use std::{env, net::SocketAddr, str::FromStr};
 
+use crate::build_info::get_build_info;
 pub use config::Config;
 pub use context::Context;
 use http::Request;
@@ -27,7 +30,7 @@ use hyper::Body;
 use tokio::signal::{self};
 use tower_http::trace::TraceLayer;
 use tower_request_id::{RequestId, RequestIdLayer};
-use tracing::info_span;
+use tracing::{info, info_span};
 
 type NeonApiResult<T> = Result<T, NeonApiError>;
 type NeonApiState = Arc<api_server::state::State>;
@@ -45,6 +48,8 @@ async fn main() -> NeonApiResult<()> {
         .with_thread_ids(true)
         .with_writer(non_blocking)
         .init();
+
+    info!("{}", get_build_info());
 
     let api_config = config::load_api_config_from_enviroment();
 

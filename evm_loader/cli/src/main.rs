@@ -1,6 +1,8 @@
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 
+#[allow(clippy::module_name_repetitions)]
+mod build_info;
 mod config;
 mod logs;
 mod program_options;
@@ -22,6 +24,7 @@ use std::io::Read;
 
 use ethnum::U256;
 use evm_loader::evm::tracing::TraceCallConfig;
+use log::debug;
 use serde_json::json;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of, values_of};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -30,6 +33,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::time::Instant;
 
+use crate::build_info::get_build_info;
 use crate::{
     errors::NeonError,
     types::{TransactionParams, TxParams},
@@ -82,6 +86,8 @@ async fn main() {
         let message = std::format!("Panic: {info}");
         print_result(&Err(NeonError::Panic(message)));
     }));
+
+    debug!("{}", get_build_info());
 
     let result = run(&options).await;
 

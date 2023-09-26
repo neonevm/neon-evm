@@ -11,8 +11,8 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 
 # Build evm_loader
 FROM builder AS evm-loader-builder
-COPY ./evm_loader/ /opt/evm_loader/
-WORKDIR /opt/evm_loader
+COPY . /opt/neon-evm/
+WORKDIR /opt/neon-evm/evm_loader
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo fmt --check && \
@@ -73,10 +73,10 @@ RUN /opt/solana/bin/solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518
 COPY evm_loader/solana-run-neon.sh \
      /opt/solana/bin/
 
-COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader-dump.txt /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-api /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader*.so /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader-dump.txt /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-cli /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-api /opt/
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc

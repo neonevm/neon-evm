@@ -16,6 +16,7 @@ use std::net::AddrParseError;
 use std::str::FromStr;
 use tracing::error;
 
+pub mod build_info;
 pub mod emulate;
 pub mod get_ether_account_data;
 pub mod get_storage_at;
