@@ -139,16 +139,14 @@ pub async fn execute(
     let program_parameters = Parameters::new(read_elf_parameters(config, &data));
 
     let neon_revision = program_parameters.get::<String>("NEON_REVISION")?;
-    let build_neon_revision =
-        build_info::format!("{}", $.version_control.unwrap().git().unwrap().commit_id);
-    if neon_revision != build_neon_revision {
+    if neon_revision != env!("NEON_REVISION") {
         if force {
             warn!("NeonEVM revision doesn't match CLI revision. This check has been disabled with `--force` flag");
         } else {
             error!("NeonEVM revision doesn't match CLI revision. Use appropriate neon-cli version or add `--force` flag");
             return Err(EnvironmentError::RevisionMismatch(
                 neon_revision,
-                build_neon_revision.to_string(),
+                env!("NEON_REVISION").to_string(),
             )
             .into());
         }
