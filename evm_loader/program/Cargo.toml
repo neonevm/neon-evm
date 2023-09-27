@@ -34,8 +34,6 @@ test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
 
-tracing = ["serde_json"]
-
 [dependencies]
 linked_list_allocator = { version = "0.10", default-features = false }
 evm-loader-macro = { path = "../program-macro" }
@@ -58,6 +56,12 @@ ethnum = { version = "1.4", default-features = false, features = ["serde"] }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
+maybe-async = "0.2.7"
+async-trait = { version = "0.1.73", optional = true }
+
+[target.'cfg(target_os = "solana")'.dependencies.maybe-async]
+version = "0.2.7"
+features = ["is_sync"]
 
 [lib]
 crate-type = ["cdylib", "lib"]

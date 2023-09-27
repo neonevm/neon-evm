@@ -1,6 +1,7 @@
 use std::convert::{Into, TryInto};
 
 use ethnum::U256;
+use maybe_async::maybe_async;
 use solana_program::{
     program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, rent::Rent,
     system_instruction, system_program, sysvar::Sysvar,
@@ -33,8 +34,9 @@ use crate::{
 // [0x7c, 0x0e, 0xb8, 0x10] : "transferWithSeed(bytes32,bytes32,bytes32,uint64)"
 
 #[allow(clippy::too_many_lines)]
-pub fn spl_token<B: AccountStorage>(
-    state: &mut ExecutorState<B>,
+#[maybe_async]
+pub async fn spl_token<B: AccountStorage>(
+    state: &mut ExecutorState<'_, B>,
     address: &Address,
     input: &[u8],
     context: &crate::evm::Context,
@@ -63,7 +65,7 @@ pub fn spl_token<B: AccountStorage>(
             let seed = read_salt(input)?;
             let decimals = read_u8(&input[32..])?;
 
-            initialize_mint(context, state, seed, decimals, None, None)
+            initialize_mint(context, state, seed, decimals, None, None).await
         }
         [0xc3, 0xf3, 0xf2, 0xf2] => {
             // initializeMint(bytes32 seed, uint8 decimals, bytes32 mint_authority, bytes32 freeze_authority)
@@ -83,6 +85,7 @@ pub fn spl_token<B: AccountStorage>(
                 Some(mint_authority),
                 Some(freeze_authority),
             )
+            .await
         }
         [0xda, 0xa1, 0x2c, 0x5c] => {
             // initializeAccount(bytes32 seed, bytes32 mint)
@@ -93,7 +96,7 @@ pub fn spl_token<B: AccountStorage>(
             let seed = read_salt(input)?;
             let mint = read_pubkey(&input[32..])?;
 
-            initialize_account(context, state, seed, mint, None)
+            initialize_account(context, state, seed, mint, None).await
         }
         [0xfc, 0x86, 0xb7, 0x17] => {
             // initializeAccount(bytes32 seed, bytes32 mint, bytes32 owner)
@@ -104,7 +107,7 @@ pub fn spl_token<B: AccountStorage>(
             let seed = read_salt(input)?;
             let mint = read_pubkey(&input[32..])?;
             let owner = read_pubkey(&input[64..])?;
-            initialize_account(context, state, seed, mint, Some(owner))
+            initialize_account(context, state, seed, mint, Some(owner)).await
         }
         [0x57, 0x82, 0xa0, 0x43] => {
             // closeAccount(bytes32 account)
@@ -209,17 +212,17 @@ pub fn spl_token<B: AccountStorage>(
         [0x6d, 0xa9, 0xde, 0x75] => {
             // isSystemAccount(bytes32 account)
             let account = read_pubkey(input)?;
-            is_system_account(context, state, account)
+            is_system_account(context, state, account).await
         }
         [0xd1, 0xde, 0x50, 0x11] => {
             // getAccount(bytes32 account)
             let account = read_pubkey(input)?;
-            get_account(context, state, account)
+            get_account(context, state, account).await
         }
         [0xa2, 0xce, 0x9c, 0x1f] => {
             // getMint(bytes32 account)
             let account = read_pubkey(input)?;
-            get_mint(context, state, account)
+            get_mint(context, state, account).await
         }
         _ => Err(Error::UnknownPrecompileMethodSelector(*address, selector)),
     }
@@ -281,9 +284,10 @@ fn create_account<B: AccountStorage>(
     Ok(())
 }
 
-fn initialize_mint<B: AccountStorage>(
+#[maybe_async]
+async fn initialize_mint<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     seed: &[u8],
     decimals: u8,
     mint_authority: Option<Pubkey>,
@@ -302,7 +306,7 @@ fn initialize_mint<B: AccountStorage>(
         state.backend.program_id(),
     );
 
-    let account = state.external_account(mint_key)?;
+    let account = state.external_account(mint_key).await?;
     if !system_program::check_id(&account.owner) {
         return Err(Error::AccountInvalidOwner(mint_key, system_program::ID));
     }
@@ -329,9 +333,10 @@ fn initialize_mint<B: AccountStorage>(
     Ok(mint_key.to_bytes().to_vec())
 }
 
-fn initialize_account<B: AccountStorage>(
+#[maybe_async]
+async fn initialize_account<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     seed: &[u8],
     mint: Pubkey,
     owner: Option<Pubkey>,
@@ -349,7 +354,7 @@ fn initialize_account<B: AccountStorage>(
         state.backend.program_id(),
     );
 
-    let account = state.external_account(account_key)?;
+    let account = state.external_account(account_key).await?;
     if !system_program::check_id(&account.owner) {
         return Err(Error::AccountInvalidOwner(account_key, system_program::ID));
     }
@@ -652,12 +657,13 @@ fn find_account<B: AccountStorage>(
     Ok(account_key.to_bytes().to_vec())
 }
 
-fn is_system_account<B: AccountStorage>(
+#[maybe_async]
+async fn is_system_account<B: AccountStorage>(
     _context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     account: Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account(account)?;
+    let account = state.external_account(account).await?;
     if system_program::check_id(&account.owner) {
         let mut result = vec![0_u8; 32];
         result[31] = 1; // return true
@@ -668,12 +674,13 @@ fn is_system_account<B: AccountStorage>(
     }
 }
 
-fn get_account<B: AccountStorage>(
+#[maybe_async]
+async fn get_account<B: AccountStorage>(
     _context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     account: Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account(account)?;
+    let account = state.external_account(account).await?;
     let token = if spl_token::check_id(&account.owner) {
         spl_token::state::Account::unpack(&account.data)?
     } else if system_program::check_id(&account.owner) {
@@ -702,12 +709,13 @@ fn get_account<B: AccountStorage>(
     Ok(result.to_vec())
 }
 
-fn get_mint<B: AccountStorage>(
+#[maybe_async]
+async fn get_mint<B: AccountStorage>(
     _context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     account: Pubkey,
 ) -> Result<Vec<u8>> {
-    let account = state.external_account(account)?;
+    let account = state.external_account(account).await?;
     let mint = if spl_token::check_id(&account.owner) {
         spl_token::state::Mint::unpack(&account.data)?
     } else if system_program::check_id(&account.owner) {

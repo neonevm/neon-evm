@@ -17,13 +17,10 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2.2"
-axum = "0.6"
 tower = { version = "0.4", features = ["make"] }
 neon-lib = { path = "../lib" }
-tower-request-id = "0.2.1"
-http = "0.2.9"
-hyper = "0.14.27"
-tower-http = { version = "0.4.4", features = ["trace"] }
+actix-web = "4.4.0"
+actix-request-identifier = "4.1.0"
 hex = "0.4.2"
 build-info = { version = "0.0.31", features = ["serde"] }
 

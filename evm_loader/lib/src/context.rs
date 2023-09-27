@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use crate::{
     rpc::{self},
     Config, NeonError,
 };
 use solana_clap_utils::keypair::signer_from_path;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Signer;
 
 pub fn truncate_0x(in_str: &str) -> &str {
@@ -16,44 +13,17 @@ pub fn truncate_0x(in_str: &str) -> &str {
     }
 }
 
-pub struct Context {
-    pub rpc_client: Arc<dyn rpc::Rpc>,
-    signer_config: Arc<Config>,
+pub struct Context<'a> {
+    pub rpc_client: &'a dyn rpc::Rpc,
+    signer_config: &'a Config,
 }
 
-impl Context {
+impl<'a> Context<'a> {
     pub fn signer(&self) -> Result<Box<dyn Signer>, NeonError> {
-        build_signer(&self.signer_config)
+        build_signer(self.signer_config)
     }
 
-    pub async fn new_from_config(
-        config: Arc<Config>,
-        slot: Option<u64>,
-    ) -> Result<Self, NeonError> {
-        let rpc_client: Arc<dyn rpc::Rpc> = if let Some(slot) = slot {
-            Arc::new(
-                rpc::CallDbClient::new(
-                    crate::types::TracerDb::new(
-                        config.db_config.as_ref().expect("db-config not found"),
-                    ),
-                    slot,
-                )
-                .await?,
-            )
-        } else {
-            Arc::new(RpcClient::new_with_commitment(
-                config.json_rpc_url.clone(),
-                config.commitment,
-            ))
-        };
-
-        Ok(Self {
-            rpc_client,
-            signer_config: config.clone(),
-        })
-    }
-
-    pub fn new(rpc_client: Arc<dyn rpc::Rpc>, signer_config: Arc<Config>) -> Self {
+    pub fn new(rpc_client: &'a dyn rpc::Rpc, signer_config: &'a Config) -> Context<'a> {
         Self {
             rpc_client,
             signer_config,

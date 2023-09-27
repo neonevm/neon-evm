@@ -6,5 +6,6 @@ pub use transaction::Transaction;
 pub use transaction::TransactionPayload;
 
 mod address;
+#[cfg(not(target_os = "solana"))]
 pub mod hexbytes;
 mod transaction;

@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
+use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -44,14 +44,13 @@ pub async fn trace_transaction(
         solana_accounts,
         &trace_call_config.block_overrides,
         trace_call_config.state_overrides,
-        Some(Arc::clone(&tracer)),
+        Some(Rc::clone(&tracer)),
     )
     .await?;
 
-    Ok(Arc::try_unwrap(tracer)
+    Ok(Rc::try_unwrap(tracer)
         .expect("There is must be only one reference")
         .into_inner()
-        .expect("Poisoned RwLock")
         .into_traces(emulation_result))
 }
 
@@ -115,13 +114,12 @@ async fn trace_trx<'a>(
         storage,
         chain_id,
         steps,
-        Some(Arc::clone(&tracer)),
+        Some(Rc::clone(&tracer)),
     )
     .await?;
 
-    Ok(Arc::try_unwrap(tracer)
+    Ok(Rc::try_unwrap(tracer)
         .expect("There is must be only one reference")
         .into_inner()
-        .expect("Poisoned RwLock")
         .into_traces(emulation_result))
 }

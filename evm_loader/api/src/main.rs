@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 mod api_context;
@@ -7,35 +6,35 @@ mod api_server;
 #[allow(clippy::module_name_repetitions)]
 mod build_info;
 
+use actix_web::web;
+use actix_web::App;
+use actix_web::HttpServer;
 use api_server::handlers::NeonApiError;
-use axum::Router;
-pub use neon_lib::account_storage;
 pub use neon_lib::commands;
 pub use neon_lib::config;
 pub use neon_lib::context;
 pub use neon_lib::errors;
-pub use neon_lib::rpc;
-pub use neon_lib::syscall_stubs;
 pub use neon_lib::types;
 use tracing_appender::non_blocking::NonBlockingBuilder;
 
-use std::sync::Arc;
+use actix_request_identifier::RequestIdentifier;
+use actix_web::web::Data;
 use std::{env, net::SocketAddr, str::FromStr};
 
+use crate::api_server::handlers::build_info::build_info_route;
+use crate::api_server::handlers::emulate::emulate;
+use crate::api_server::handlers::get_ether_account_data::get_ether_account_data;
+use crate::api_server::handlers::get_storage_at::get_storage_at;
+use crate::api_server::handlers::trace::trace;
 use crate::build_info::get_build_info;
 pub use config::Config;
 pub use context::Context;
-use http::Request;
-use hyper::Body;
-use tokio::signal::{self};
-use tower_http::trace::TraceLayer;
-use tower_request_id::{RequestId, RequestIdLayer};
-use tracing::{info, info_span};
+use tracing::info;
 
 type NeonApiResult<T> = Result<T, NeonApiError>;
-type NeonApiState = Arc<api_server::state::State>;
+type NeonApiState = Data<api_server::state::State>;
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 512)]
+#[actix_web::main]
 async fn main() -> NeonApiResult<()> {
     let options = api_options::parse();
 
@@ -44,10 +43,7 @@ async fn main() -> NeonApiResult<()> {
         .lossy(false)
         .finish(std::io::stdout());
 
-    tracing_subscriber::fmt()
-        .with_thread_ids(true)
-        .with_writer(non_blocking)
-        .init();
+    tracing_subscriber::fmt().with_writer(non_blocking).init();
 
     info!("{}", get_build_info());
 
@@ -55,29 +51,7 @@ async fn main() -> NeonApiResult<()> {
 
     let config = config::create_from_api_config(&api_config)?;
 
-    let state: NeonApiState = Arc::new(api_server::state::State::new(config));
-
-    let app = Router::new()
-        .nest("/api", api_server::routes::register())
-        .with_state(state)
-        .layer(
-            // Let's create a tracing span for each request
-            TraceLayer::new_for_http().make_span_with(|request: &Request<Body>| {
-                // We get the request id from the extensions
-                let request_id = request
-                    .extensions()
-                    .get::<RequestId>()
-                    .map_or_else(|| "unknown".into(), ToString::to_string);
-                // And then we put it along with other information into the `request` span
-                info_span!(
-                    "request",
-                    id = %request_id,
-                )
-            }),
-        )
-        // This layer creates a new id for each request and puts it into the request extensions.
-        // Note that it should be added after the Trace layer.
-        .layer(RequestIdLayer);
+    let state: NeonApiState = Data::new(api_server::state::State::new(config));
 
     let listener_addr = options
         .value_of("host")
@@ -89,37 +63,23 @@ async fn main() -> NeonApiResult<()> {
 
     let addr = SocketAddr::from_str(listener_addr.as_str())?;
     tracing::info!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    HttpServer::new(move || {
+        App::new().service(
+            web::scope("/api")
+                .app_data(state.clone())
+                .service(build_info_route)
+                .service(emulate)
+                .service(get_ether_account_data)
+                .service(get_storage_at)
+                .service(trace)
+                .wrap(RequestIdentifier::with_uuid()),
+        )
+    })
+    .bind(addr)
+    .unwrap()
+    .run()
+    .await
+    .unwrap();
 
     Ok(())
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-
-    println!("signal received, starting graceful shutdown");
 }
