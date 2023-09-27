@@ -1,15 +1,23 @@
-use crate::{
-    account::{program, EthereumAccount, FinalizedState, Holder, Incinerator, Operator, State},
-    config::OPERATOR_PRIORITY_SLOTS,
-    error::Error,
-    types::{Address, Transaction},
+#[cfg(target_os = "solana")]
+use {
+    crate::account::program,
+    crate::types::{Address, Transaction},
+    ethnum::U256,
 };
-use ethnum::U256;
-use solana_program::{
-    account_info::AccountInfo, clock::Clock, program_error::ProgramError, pubkey::Pubkey,
-    sysvar::Sysvar,
+
+use {
+    crate::account::EthereumAccount,
+    crate::account::Holder,
+    crate::config::OPERATOR_PRIORITY_SLOTS,
+    crate::error::Error,
+    solana_program::account_info::AccountInfo,
+    solana_program::clock::Clock,
+    solana_program::sysvar::Sysvar,
+    std::cell::{Ref, RefMut},
 };
-use std::cell::{Ref, RefMut};
+
+use crate::account::{FinalizedState, Incinerator, Operator, State};
+use solana_program::{program_error::ProgramError, pubkey::Pubkey};
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
@@ -34,6 +42,7 @@ impl<'a> FinalizedState<'a> {
 }
 
 impl<'a> State<'a> {
+    #[cfg(target_os = "solana")]
     pub fn new(
         program_id: &'a Pubkey,
         info: &'a AccountInfo<'a>,
@@ -136,6 +145,7 @@ impl<'a> State<'a> {
         Ok(finalized)
     }
 
+    #[cfg(target_os = "solana")]
     fn make_deposit(
         &self,
         system_program: &program::System<'a>,
@@ -186,6 +196,7 @@ impl<'a> State<'a> {
         Ok(accounts)
     }
 
+    #[cfg(target_os = "solana")]
     fn write_blocked_accounts(
         &mut self,
         program_id: &Pubkey,

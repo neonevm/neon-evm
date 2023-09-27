@@ -1,6 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, RwLock};
+use std::rc::Rc;
 
 use crate::account::EthereumAccount;
 use crate::executor::Action;
@@ -26,7 +27,7 @@ pub trait EventListener: Send + Sync + Debug {
     fn into_traces(self: Box<Self>, emulation_result: EmulationResult) -> Value;
 }
 
-pub type TracerType = Arc<RwLock<Box<dyn EventListener>>>;
+pub type TracerType = Rc<RefCell<Box<dyn EventListener>>>;
 pub type TracerTypeOpt = Option<TracerType>;
 
 /// Trace event

@@ -4,7 +4,7 @@ use std::ops::Range;
 use solana_program::program_memory::{sol_memcpy, sol_memset};
 
 use crate::error::Error;
-#[cfg(feature = "tracing")]
+#[cfg(not(target_os = "solana"))]
 use crate::evm::tracing::TracerTypeOpt;
 
 use super::utils::checked_next_multiple_of_32;
@@ -20,22 +20,22 @@ pub struct Memory {
     data: *mut u8,
     capacity: usize,
     size: usize,
-    #[cfg(feature = "tracing")]
+    #[cfg(not(target_os = "solana"))]
     tracer: TracerTypeOpt,
 }
 
 impl Memory {
-    pub fn new(#[cfg(feature = "tracing")] tracer: TracerTypeOpt) -> Self {
+    pub fn new(#[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt) -> Self {
         Self::with_capacity(
             MEMORY_CAPACITY,
-            #[cfg(feature = "tracing")]
+            #[cfg(not(target_os = "solana"))]
             tracer,
         )
     }
 
     pub fn with_capacity(
         capacity: usize,
-        #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
+        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
     ) -> Self {
         unsafe {
             let layout = Layout::from_size_align_unchecked(capacity, MEMORY_ALIGN);
@@ -48,7 +48,7 @@ impl Memory {
                 data,
                 capacity,
                 size: 0,
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer,
             }
         }
@@ -70,13 +70,13 @@ impl Memory {
                 data,
                 capacity,
                 size: v.len(),
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer: None,
             }
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(not(target_os = "solana"))]
     pub fn to_vec(&self) -> Vec<u8> {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.size) };
         slice.to_vec()

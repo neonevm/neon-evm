@@ -1,4 +1,5 @@
 use crate::{account_storage::AccountStorage, error::Result, evm::Context, types::Address};
+use maybe_async::maybe_async;
 
 use super::ExecutorState;
 
@@ -34,7 +35,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             || *address == Self::SYSTEM_ACCOUNT_METAPLEX
     }
 
-    pub fn call_precompile_extension(
+    #[maybe_async]
+    pub async fn call_precompile_extension(
         &mut self,
         context: &Context,
         address: &Address,
@@ -42,17 +44,17 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         is_static: bool,
     ) -> Option<Result<Vec<u8>>> {
         match *address {
-            Self::SYSTEM_ACCOUNT_QUERY => Some(query_account::query_account(
-                self, address, input, context, is_static,
-            )),
-            Self::SYSTEM_ACCOUNT_NEON_TOKEN => Some(neon_token::neon_token(
-                self, address, input, context, is_static,
-            )),
-            Self::SYSTEM_ACCOUNT_SPL_TOKEN => Some(spl_token::spl_token(
-                self, address, input, context, is_static,
-            )),
+            Self::SYSTEM_ACCOUNT_QUERY => {
+                Some(query_account::query_account(self, address, input, context, is_static).await)
+            }
+            Self::SYSTEM_ACCOUNT_NEON_TOKEN => {
+                Some(neon_token::neon_token(self, address, input, context, is_static).await)
+            }
+            Self::SYSTEM_ACCOUNT_SPL_TOKEN => {
+                Some(spl_token::spl_token(self, address, input, context, is_static).await)
+            }
             Self::SYSTEM_ACCOUNT_METAPLEX => {
-                Some(metaplex::metaplex(self, address, input, context, is_static))
+                Some(metaplex::metaplex(self, address, input, context, is_static).await)
             }
             _ => None,
         }

@@ -5,12 +5,13 @@
 use std::{marker::PhantomData, ops::Range};
 
 use ethnum::U256;
+use maybe_async::maybe_async;
 use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
 pub use buffer::Buffer;
 
-#[cfg(feature = "tracing")]
+#[cfg(not(target_os = "solana"))]
 use crate::evm::tracing::TracerTypeOpt;
 use crate::{
     error::{build_revert_message, Error, Result},
@@ -27,22 +28,22 @@ mod opcode;
 mod opcode_table;
 mod precompile;
 mod stack;
-#[cfg(feature = "tracing")]
+#[cfg(not(target_os = "solana"))]
 pub mod tracing;
 mod utils;
 
 macro_rules! tracing_event {
     ($self:ident, $x:expr) => {
-        #[cfg(feature = "tracing")]
+        #[cfg(not(target_os = "solana"))]
         if let Some(tracer) = &$self.tracer {
-            tracer.write().expect("Poisoned RwLock").event($x);
+            tracer.borrow_mut().event($x);
         }
     };
     ($self:ident, $condition:expr, $x:expr) => {
-        #[cfg(feature = "tracing")]
+        #[cfg(not(target_os = "solana"))]
         if let Some(tracer) = &$self.tracer {
             if $condition {
-                tracer.write().expect("Poisoned RwLock").event($x);
+                tracer.borrow_mut().event($x);
             }
         }
     };
@@ -50,11 +51,10 @@ macro_rules! tracing_event {
 
 macro_rules! trace_end_step {
     ($self:ident, $return_data:expr) => {
-        #[cfg(feature = "tracing")]
+        #[cfg(not(target_os = "solana"))]
         if let Some(tracer) = &$self.tracer {
             tracer
-                .write()
-                .expect("Poisoned RwLock")
+                .borrow_mut()
                 .event(crate::evm::tracing::Event::EndStep {
                     gas_used: 0_u64,
                     return_data: $return_data,
@@ -62,7 +62,7 @@ macro_rules! trace_end_step {
         }
     };
     ($self:ident, $condition:expr; $return_data_getter:expr) => {
-        #[cfg(feature = "tracing")]
+        #[cfg(not(target_os = "solana"))]
         if $condition {
             trace_end_step!($self, $return_data_getter)
         }
@@ -153,8 +153,8 @@ pub struct Machine<B: Database> {
     #[serde(skip)]
     phantom: PhantomData<*const B>,
 
+    #[cfg(not(target_os = "solana"))]
     #[serde(skip)]
-    #[cfg(feature = "tracing")]
     tracer: TracerTypeOpt,
 }
 
@@ -167,6 +167,7 @@ impl<B: Database> Machine<B> {
         cursor.position().try_into().map_err(Error::from)
     }
 
+    #[cfg(target_os = "solana")]
     pub fn deserialize_from(buffer: &[u8], backend: &B) -> Result<Self> {
         fn reinit_buffer<B: Database>(buffer: &mut Buffer, backend: &B) {
             if let Some((key, range)) = buffer.uninit_data() {
@@ -175,13 +176,16 @@ impl<B: Database> Machine<B> {
             }
         }
 
-        fn reinit_machine<B: Database>(machine: &mut Machine<B>, backend: &B) {
-            reinit_buffer(&mut machine.call_data, backend);
-            reinit_buffer(&mut machine.execution_code, backend);
-            reinit_buffer(&mut machine.return_data, backend);
+        fn reinit_machine<B: Database>(mut machine: &mut Machine<B>, backend: &B) {
+            loop {
+                reinit_buffer(&mut machine.call_data, backend);
+                reinit_buffer(&mut machine.execution_code, backend);
+                reinit_buffer(&mut machine.return_data, backend);
 
-            if let Some(parent) = &mut machine.parent {
-                reinit_machine(parent, backend);
+                match &mut machine.parent {
+                    None => break,
+                    Some(parent) => machine = parent,
+                }
             }
         }
 
@@ -191,13 +195,14 @@ impl<B: Database> Machine<B> {
         Ok(evm)
     }
 
-    pub fn new(
+    #[maybe_async]
+    pub async fn new(
         trx: &mut Transaction,
         origin: Address,
         backend: &mut B,
-        #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
+        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
     ) -> Result<Self> {
-        let origin_nonce = backend.nonce(&origin)?;
+        let origin_nonce = backend.nonce(&origin).await?;
 
         if origin_nonce == u64::MAX {
             return Err(Error::NonceOverflow(origin));
@@ -217,11 +222,11 @@ impl<B: Database> Machine<B> {
             }
         }
 
-        if backend.balance(&origin)? < trx.value() {
+        if backend.balance(&origin).await? < trx.value() {
             return Err(Error::InsufficientBalance(origin, trx.value()));
         }
 
-        if backend.code_size(&origin)? != 0 {
+        if backend.code_size(&origin).await? != 0 {
             return Err(Error::SenderHasDeployedCode(origin));
         }
 
@@ -230,25 +235,28 @@ impl<B: Database> Machine<B> {
                 trx,
                 origin,
                 backend,
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer,
             )
+            .await
         } else {
             Self::new_create(
                 trx,
                 origin,
                 backend,
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer,
             )
+            .await
         }
     }
 
-    fn new_call(
+    #[maybe_async]
+    async fn new_call(
         trx: &mut Transaction,
         origin: Address,
         backend: &mut B,
-        #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
+        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
     ) -> Result<Self> {
         assert!(trx.target().is_some());
 
@@ -258,9 +266,9 @@ impl<B: Database> Machine<B> {
         backend.increment_nonce(origin)?;
         backend.snapshot();
 
-        backend.transfer(origin, target, trx.value())?;
+        backend.transfer(origin, target, trx.value()).await?;
 
-        let execution_code = backend.code(&target)?;
+        let execution_code = backend.code(&target).await?;
 
         Ok(Self {
             origin,
@@ -277,11 +285,11 @@ impl<B: Database> Machine<B> {
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer.clone(),
             ),
             memory: Memory::new(
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer.clone(),
             ),
             pc: 0_usize,
@@ -289,23 +297,24 @@ impl<B: Database> Machine<B> {
             reason: Reason::Call,
             parent: None,
             phantom: PhantomData,
-            #[cfg(feature = "tracing")]
+            #[cfg(not(target_os = "solana"))]
             tracer,
         })
     }
 
-    fn new_create(
+    #[maybe_async]
+    async fn new_create(
         trx: &mut Transaction,
         origin: Address,
         backend: &mut B,
-        #[cfg(feature = "tracing")] tracer: TracerTypeOpt,
+        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
     ) -> Result<Self> {
         assert!(trx.target().is_none());
 
         let target = Address::from_create(&origin, trx.nonce());
         sol_log_data(&[b"ENTER", b"CREATE", target.as_bytes()]);
 
-        if (backend.nonce(&target)? != 0) || (backend.code_size(&target)? != 0) {
+        if (backend.nonce(&target).await? != 0) || (backend.code_size(&target).await? != 0) {
             return Err(Error::DeployToExistingAccount(target, origin));
         }
 
@@ -313,7 +322,7 @@ impl<B: Database> Machine<B> {
         backend.snapshot();
 
         backend.increment_nonce(target)?;
-        backend.transfer(origin, target, trx.value())?;
+        backend.transfer(origin, target, trx.value()).await?;
 
         Ok(Self {
             origin,
@@ -328,11 +337,11 @@ impl<B: Database> Machine<B> {
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer.clone(),
             ),
             memory: Memory::new(
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 tracer.clone(),
             ),
             pc: 0_usize,
@@ -342,12 +351,13 @@ impl<B: Database> Machine<B> {
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,
-            #[cfg(feature = "tracing")]
+            #[cfg(not(target_os = "solana"))]
             tracer,
         })
     }
 
-    pub fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
+    #[maybe_async]
+    pub async fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
         assert!(self.execution_code.is_initialized());
         assert!(self.call_data.is_initialized());
         assert!(self.return_data.is_initialized());
@@ -386,14 +396,12 @@ impl<B: Database> Machine<B> {
                     }
                 );
 
-                // SAFETY: OPCODES.len() == 256, opcode <= 255
-                let (_, opcode_fn) = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
-
-                let opcode_result = match opcode_fn(self, backend) {
+                let opcode_result = match self.execute_opcode(backend, opcode).await {
                     Ok(result) => result,
                     Err(e) => {
                         let message = build_revert_message(&e.to_string());
-                        self.opcode_revert_impl(Buffer::from_slice(&message), backend)?
+                        self.opcode_revert_impl(Buffer::from_slice(&message), backend)
+                            .await?
                     }
                 };
 
@@ -442,11 +450,11 @@ impl<B: Database> Machine<B> {
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 self.tracer.clone(),
             ),
             memory: Memory::new(
-                #[cfg(feature = "tracing")]
+                #[cfg(not(target_os = "solana"))]
                 self.tracer.clone(),
             ),
             pc: 0_usize,
@@ -454,7 +462,7 @@ impl<B: Database> Machine<B> {
             reason,
             parent: None,
             phantom: PhantomData,
-            #[cfg(feature = "tracing")]
+            #[cfg(not(target_os = "solana"))]
             tracer: self.tracer.clone(),
         };
 
