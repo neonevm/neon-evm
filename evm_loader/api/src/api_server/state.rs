@@ -3,11 +3,10 @@ use neon_lib::types::TracerDb;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 
-#[derive(Clone)]
 pub struct State {
     pub tracer_db: TracerDb,
     pub rpc_client: Arc<RpcClient>,
-    pub config: Arc<Config>,
+    pub config: Config,
 }
 
 impl State {
@@ -19,7 +18,7 @@ impl State {
                 config.json_rpc_url.clone(),
                 config.commitment,
             )),
-            config: Arc::new(config),
+            config,
         }
     }
 }

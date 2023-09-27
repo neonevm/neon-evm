@@ -110,6 +110,7 @@ mod tests {
         let _deserialized: Action = bincode::deserialize(&serialized).unwrap();
     }
 
+    #[cfg(not(target_os = "solana"))]
     #[test]
     fn roundtrip_json() {
         let action = Action::EvmSetStorage {

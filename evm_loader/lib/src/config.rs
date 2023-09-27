@@ -1,4 +1,4 @@
-use std::{env, str::FromStr, sync::Arc};
+use std::{env, str::FromStr};
 
 use crate::{types::ChDbConfig, NeonError};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature:
 #[derive(Debug)]
 pub struct Config {
     pub evm_loader: Pubkey,
-    pub fee_payer: Option<Arc<Keypair>>,
+    pub fee_payer: Option<Keypair>,
     pub commitment: CommitmentConfig,
     pub solana_cli_config: solana_cli_config::Config,
     pub db_config: Option<ChDbConfig>,
@@ -53,8 +53,7 @@ pub fn create_from_api_config(api_config: &APIOptions) -> Result<Config, NeonErr
         "fee_payer",
         true,
     )
-    .ok()
-    .map(Arc::new);
+    .ok();
 
     let db_config: Option<ChDbConfig> = Option::from(api_config.db_config.clone());
 

@@ -6,7 +6,7 @@ use solana_clap_utils::{
     keypair::keypair_from_path,
 };
 use solana_sdk::commitment_config::CommitmentConfig;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 /// # Panics
 /// # Errors
@@ -43,8 +43,7 @@ pub fn create(options: &ArgMatches) -> Result<Config, NeonError> {
         "fee_payer",
         true,
     )
-    .ok()
-    .map(Arc::new);
+    .ok();
 
     let db_config = options
         .value_of("db_config")

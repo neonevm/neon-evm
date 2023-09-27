@@ -21,14 +21,12 @@ use std::{
         Ord,
         Ordering::{Equal, Greater, Less},
     },
-    sync::Arc,
     time::Instant,
 };
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct ClickHouseDb {
-    pub client: Arc<Client>,
+    pub client: Client,
 }
 
 impl ClickHouseDb {
@@ -45,9 +43,7 @@ impl ClickHouseDb {
                 .with_password(password),
         };
 
-        ClickHouseDb {
-            client: Arc::new(client),
-        }
+        ClickHouseDb { client }
     }
 
     // return value is not used for tracer methods
