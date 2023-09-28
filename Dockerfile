@@ -32,8 +32,8 @@ FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
-COPY evm_loader/tests/contracts/*.sol /opt/
-COPY evm_loader/solidity/*.sol /opt/
+COPY tests/contracts/*.sol /opt/
+COPY solidity/*.sol /opt/
 #COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
@@ -51,10 +51,10 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
     rm -rf /var/lib/apt/lists/*
 
-COPY evm_loader/tests/requirements.txt /tmp/
+COPY tests/requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 
-COPY /evm_loader/solidity/ /opt/contracts/contracts/
+#COPY /evm_loader/solidity/ /opt/contracts/contracts/
 WORKDIR /opt
 
 COPY --from=solana \
@@ -80,19 +80,19 @@ COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-api 
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
-COPY evm_loader/wait-for-solana.sh \
-    evm_loader/wait-for-neon.sh \
-    evm_loader/deploy-evm.sh \
-    evm_loader/deploy-test.sh \
-    evm_loader/create-test-accounts.sh \
-    evm_loader/evm_loader-keypair.json \
+COPY ci/wait-for-solana.sh \
+    ci/wait-for-neon.sh \
+    ci/deploy-evm.sh \
+    ci/deploy-test.sh \
+    ci/create-test-accounts.sh \
+    ci/evm_loader-keypair.json \
     /opt/
 
-COPY evm_loader/operator-keypairs/ /opt/operator-keypairs
-COPY evm_loader/tests /opt/tests
-COPY evm_loader/operator-keypairs/id.json /root/.config/solana/id.json
-COPY evm_loader/operator-keypairs/id2.json /root/.config/solana/id2.json
-COPY evm_loader/keys/ /opt/keys
+COPY ci/operator-keypairs/ /opt/operator-keypairs
+COPY tests /opt/tests
+COPY ci/operator-keypairs/id.json /root/.config/solana/id.json
+COPY ci/operator-keypairs/id2.json /root/.config/solana/id2.json
+COPY ci/keys/ /opt/keys
 
-ENV CONTRACTS_DIR=/opt/solidity/
+#ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
