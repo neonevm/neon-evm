@@ -105,7 +105,7 @@ def run_tests(github_sha):
     project_name = f"neon-evm-{github_sha}"
     stop_containers(project_name)
 
-    run_subprocess(f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml up -d")
+    run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml up -d")
     container_name = get_solana_container_name(project_name)
     click.echo("Start tests")
     exec_id = docker_client.exec_create(
@@ -127,7 +127,7 @@ def run_tests(github_sha):
 
     exec_status = docker_client.exec_inspect(exec_id['Id'])["ExitCode"]
 
-    run_subprocess(f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml logs dk-neon-api")
+    run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml logs dk-neon-api")
 
     stop_containers(project_name)
 
@@ -137,7 +137,7 @@ def run_tests(github_sha):
 
 def get_solana_container_name(project_name):
     data = subprocess.run(
-        f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml ps",
+        f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml ps",
         shell=True, capture_output=True, text=True).stdout
     click.echo(data)
     pattern = rf'{project_name}_solana_[1-9]+'
@@ -147,7 +147,7 @@ def get_solana_container_name(project_name):
 
 
 def stop_containers(project_name):
-    run_subprocess(f"docker-compose -p {project_name} -f ./evm_loader/docker-compose-ci.yml down")
+    run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml down")
 
 
 @cli.command(name="trigger_proxy_action")
