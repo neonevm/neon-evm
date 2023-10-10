@@ -811,7 +811,6 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = *self.stack.pop_array()?;
 
-        tracing_event!(self, super::tracing::Event::StorageSet { index, value });
         tracing_event!(self, super::tracing::Event::StorageAccess { index, value });
 
         backend.set_storage(self.context.contract, index, value)?;
