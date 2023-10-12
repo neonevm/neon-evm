@@ -14,7 +14,7 @@ pub async fn get_ether_account_data(
     request_id: RequestId,
     Query(req_params): Query<GetEtherRequest>,
 ) -> impl Responder {
-    let rpc_client = match api_context::build_rpc_client(&state, req_params.slot).await {
+    let rpc_client = match api_context::build_rpc_client(&state, req_params.slot, None).await {
         Ok(rpc_client) => rpc_client,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };

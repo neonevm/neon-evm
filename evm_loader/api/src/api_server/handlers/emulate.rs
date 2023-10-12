@@ -19,7 +19,13 @@ pub async fn emulate(
 ) -> impl Responder {
     let tx = emulate_request.tx_params.into();
 
-    let rpc_client = match api_context::build_rpc_client(&state, emulate_request.slot).await {
+    let rpc_client = match api_context::build_rpc_client(
+        &state,
+        emulate_request.slot,
+        emulate_request.tx_index_in_block,
+    )
+    .await
+    {
         Ok(rpc_client) => rpc_client,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };

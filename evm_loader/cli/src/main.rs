@@ -59,6 +59,7 @@ async fn run<'a>(options: &'a ArgMatches<'a>) -> NeonCliResult {
             CallDbClient::new(
                 TracerDb::new(config.db_config.as_ref().expect("db-config not found")),
                 slot,
+                None,
             )
             .await?,
         )
