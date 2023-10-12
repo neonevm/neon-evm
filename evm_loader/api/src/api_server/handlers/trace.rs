@@ -19,11 +19,16 @@ pub async fn trace(
 ) -> impl Responder {
     let tx = trace_request.emulate_request.tx_params.into();
 
-    let rpc_client =
-        match api_context::build_rpc_client(&state, trace_request.emulate_request.slot).await {
-            Ok(rpc_client) => rpc_client,
-            Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
-        };
+    let rpc_client = match api_context::build_rpc_client(
+        &state,
+        trace_request.emulate_request.slot,
+        trace_request.emulate_request.tx_index_in_block,
+    )
+    .await
+    {
+        Ok(rpc_client) => rpc_client,
+        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
+    };
 
     let context = Context::new(&*rpc_client, &state.config);
 
