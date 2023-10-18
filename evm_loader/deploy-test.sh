@@ -21,7 +21,7 @@ for key, value in json.loads(sys.argv[1])['value'].items():
 echo "Create test operator accounts"
 create-test-accounts.sh 2
 
-py.test -n 6 tests/
+py.test -vvvvv -n 16 tests/
 
 echo "Deploy test success"
 exit 0
