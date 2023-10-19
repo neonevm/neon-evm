@@ -21,12 +21,12 @@ def make_deployment_transaction(
         user: Caller,
         contract_path: tp.Union[pathlib.Path, str],
         encoded_args=None,
-        gas: int = 999999999, chain_id=111, eof=False
+        gas: int = 999999999, chain_id=111, is_eof=False
 ) -> SignedTransaction:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     if not contract_path.name.startswith("/") or not contract_path.name.startswith("."):
-        contract_path = (pytest.EOF_CONTRACTS_PATH if eof else pytest.CONTRACTS_PATH ) / contract_path
+        contract_path = (pytest.EOF_CONTRACTS_PATH if is_eof else pytest.CONTRACTS_PATH ) / contract_path
     with open(contract_path, 'rb') as f:
         data = f.read()
 
@@ -70,14 +70,14 @@ def deploy_contract(
         treasury_pool: TreasuryPool,
         step_count: int = 1000,
         encoded_args=None,
-        eof=False
+        is_eof=False
 ):
     print("Deploying contract")
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
-    signed_tx = make_deployment_transaction(user, contract_path, encoded_args=encoded_args, eof=eof)
+    signed_tx = make_deployment_transaction(user, contract_path, encoded_args=encoded_args, is_eof=is_eof)
     write_transaction_to_holder_account(signed_tx, holder_acc, operator)
 
     contract_deployed = False

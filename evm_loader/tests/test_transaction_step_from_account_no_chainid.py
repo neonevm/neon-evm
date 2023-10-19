@@ -37,20 +37,14 @@ class TestTransactionStepFromAccountNoChainId:
         assert sender_balance_before - amount == sender_balance_after
         assert recipient_balance_before + amount == recipient_balance_after
 
-    def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens):
-        self.deploy_contract(operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, False)
-
-    def test_deploy_eof_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens):
-        self.deploy_contract(operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, True)
-
-    def deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, eof):
+    def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, contract_path_with_eof):
         contract_filename = "hello_world.binary"
         contract = create_contract_address(sender_with_tokens, evm_loader)
 
         signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=None)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
-        contract_path = (pytest.EOF_CONTRACTS_PATH if eof else pytest.EOF_CONTRACTS_PATH) / contract_filename
+        contract_path = contract_path_with_eof / contract_filename
         with open(contract_path, 'rb') as f:
             contract_code = f.read()
 
@@ -64,22 +58,9 @@ class TestTransactionStepFromAccountNoChainId:
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool,
-                                                       sender_with_tokens, string_setter_contract, holder_acc,
+                                                       sender_with_tokens, string_setter_contract_with_eof, holder_acc,
                                                        evm_loader):
-       self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool,
-                                                                   sender_with_tokens, string_setter_contract, holder_acc,
-                                                                   evm_loader, "exit_status=0x11")
-
-    def test_call_eof_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool,
-                                                       sender_with_tokens, string_setter_eof_contract, holder_acc,
-                                                       evm_loader):
-       self.call_contract_function_with_neon_transfer(operator_keypair, treasury_pool,
-                                                                   sender_with_tokens, string_setter_eof_contract, holder_acc,
-                                                                   evm_loader, "exit_status=0x12")
-
-    def call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool,
-                                                       sender_with_tokens, string_setter_contract, holder_acc,
-                                                       evm_loader, exit_status):
+        string_setter_contract, is_eof = string_setter_contract_with_eof
         transfer_amount = random.randint(1, 1000)
 
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
@@ -98,7 +79,7 @@ class TestTransactionStepFromAccountNoChainId:
                                                                   )
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], exit_status)
+        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12" if is_eof else "exit_status=0x11")
 
         sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_after = get_neon_balance(solana_client, string_setter_contract.solana_address)

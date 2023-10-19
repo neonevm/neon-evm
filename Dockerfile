@@ -40,7 +40,7 @@ COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --optimize --optimize-runs 200 --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
-        ls -l
+    ls -l
 
 # Define solana-image that contains utility
 FROM ${SOLANA_IMAGE} AS solana
