@@ -83,7 +83,7 @@ class TestExecuteTrxFromInstruction:
         transfer_amount = random.randint(1, 1000)
 
         contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
-                                   treasury_pool, is_eof)
+                                   treasury_pool, is_eof=is_eof)
 
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_before = get_neon_balance(solana_client, contract.solana_address)
@@ -99,7 +99,7 @@ class TestExecuteTrxFromInstruction:
                                              contract.solana_address],
                                             operator_keypair)
 
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12" if is_eof else "exit_status=0x11")
 
         assert text in to_text(neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, contract, "get()"))
 
