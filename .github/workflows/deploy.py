@@ -29,7 +29,8 @@ ERR_MSG_TPL = {
 
 DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
-IMAGE_NAME = 'neonlabsorg/evm_loader'
+IMAGE_NAME = os.environ.get("IMAGE_NAME")
+RUN_LINK_REPO = os.environ.get("RUN_LINK_REPO")
 SOLANA_NODE_VERSION = 'v1.16.17'
 SOLANA_BPF_VERSION = 'v1.16.17'
 
@@ -199,7 +200,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
 
     runs_after = github.get_proxy_runs_list(proxy_branch)
     proxy_run_id = list(set(runs_after) - set(runs_before))[0]
-    link = f"https://github.com/neonlabsorg/proxy-model.py/actions/runs/{proxy_run_id}"
+    link = f"https://github.com/{RUN_LINK_REPO}/actions/runs/{proxy_run_id}"
     click.echo(f"Proxy run link: {link}")
     click.echo("Waiting for completed status...")
     wait_condition(lambda: github.get_proxy_run_info(proxy_run_id)["status"] == "completed", timeout_sec=10800, delay=5)
