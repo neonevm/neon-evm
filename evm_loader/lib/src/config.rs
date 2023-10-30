@@ -1,4 +1,4 @@
-use std::{env, str::FromStr, sync::Arc};
+use std::{env, str::FromStr};
 
 use crate::{types::ChDbConfig, NeonError};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature:
 #[derive(Debug)]
 pub struct Config {
     pub evm_loader: Pubkey,
-    pub fee_payer: Option<Arc<Keypair>>,
+    pub fee_payer: Option<Keypair>,
     pub commitment: CommitmentConfig,
     pub solana_cli_config: solana_cli_config::Config,
     pub db_config: Option<ChDbConfig>,
@@ -26,7 +26,7 @@ pub struct Config {
 // }
 
 /// # Errors
-pub fn create_from_api_comnfig(api_config: &APIOptions) -> Result<Config, NeonError> {
+pub fn create_from_api_config(api_config: &APIOptions) -> Result<Config, NeonError> {
     let solana_cli_config: SolanaConfig =
         if let Some(path) = api_config.solana_cli_config_path.clone() {
             solana_cli_config::Config::load(path.as_str()).unwrap_or_default()
@@ -53,8 +53,7 @@ pub fn create_from_api_comnfig(api_config: &APIOptions) -> Result<Config, NeonEr
         "fee_payer",
         true,
     )
-    .ok()
-    .map(Arc::new);
+    .ok();
 
     let db_config: Option<ChDbConfig> = Option::from(api_config.db_config.clone());
 
@@ -129,29 +128,9 @@ fn load_db_config_from_enviroment() -> ChDbConfig {
         .map(Some)
         .unwrap_or(None);
 
-    let indexer_host =
-        env::var("NEON_DB_INDEXER_HOST").expect("neon db indexer host valiable must be set");
-
-    let indexer_port =
-        env::var("NEON_DB_INDEXER_PORT").expect("neon db indexer port valiable must be set");
-
-    let indexer_database = env::var("NEON_DB_INDEXER_DATABASE")
-        .expect("neon db indexer database valiable must be set");
-
-    let indexer_user =
-        env::var("NEON_DB_INDEXER_USER").expect("neon db indexer user valiable must be set");
-
-    let indexer_password = env::var("NEON_DB_INDEXER_PASSWORD")
-        .expect("neon db indexer password valiable must be set");
-
     ChDbConfig {
         clickhouse_url,
         clickhouse_user,
         clickhouse_password,
-        indexer_host,
-        indexer_port,
-        indexer_database,
-        indexer_user,
-        indexer_password,
     }
 }

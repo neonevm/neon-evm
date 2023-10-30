@@ -29,7 +29,7 @@ pub fn do_begin<'a>(
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     gasometer: Gasometer,
-    trx: Transaction,
+    trx: &mut Transaction,
     caller: Address,
 ) -> Result<()> {
     debug_print!("do_begin");

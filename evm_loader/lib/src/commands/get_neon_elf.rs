@@ -1,11 +1,11 @@
-use std::{collections::HashMap, convert::TryFrom, fs::File, io::Read};
-
+use anyhow::{Context as AContext, Result};
 use solana_sdk::{
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     pubkey::Pubkey,
 };
+use std::{collections::HashMap, convert::TryFrom, fs::File, io::Read};
 
 use crate::{context::Context, errors::NeonError, Config, NeonResult};
 
@@ -16,7 +16,7 @@ pub struct CachedElfParams {
 }
 
 impl CachedElfParams {
-    pub async fn new(config: &Config, context: &Context) -> Self {
+    pub async fn new(config: &Config, context: &Context<'_>) -> Self {
         Self {
             elf_params: read_elf_parameters_from_account(config, context)
                 .await
@@ -82,9 +82,68 @@ pub fn read_elf_parameters(_config: &Config, program_data: &[u8]) -> GetNeonElfR
     result
 }
 
+pub fn get_elf_parameter(data: &[u8], elf_parameter: &str) -> Result<String> {
+    let offset = UpgradeableLoaderState::size_of_programdata_metadata();
+    let program_data = &data[offset..];
+
+    let elf = goblin::elf::Elf::parse(program_data).context("Unable to parse ELF file")?;
+    let ctx = goblin::container::Ctx::new(
+        if elf.is_64 {
+            goblin::container::Container::Big
+        } else {
+            goblin::container::Container::Little
+        },
+        if elf.little_endian {
+            scroll::Endian::Little
+        } else {
+            scroll::Endian::Big
+        },
+    );
+
+    let (num_syms, offset) = elf
+        .section_headers
+        .into_iter()
+        .find(|section| section.sh_type == goblin::elf::section_header::SHT_DYNSYM)
+        .map(|section| (section.sh_size / section.sh_entsize, section.sh_offset))
+        .ok_or_else(|| anyhow::anyhow!("SHT_DYNSYM section not found"))?;
+
+    let dynsyms = goblin::elf::Symtab::parse(
+        program_data,
+        offset.try_into().context("Offset too large")?,
+        num_syms.try_into().context("Count too large")?,
+        ctx,
+    )
+    .context("Error parsing Symtab")?;
+
+    for sym in dynsyms.iter() {
+        let name = &elf.dynstrtab[sym.st_name];
+        if name == elf_parameter {
+            let end = program_data.len();
+            let from: usize = usize::try_from(sym.st_value)
+                .map_err(|_| anyhow::anyhow!("Unable to cast usize from u64:{:?}", sym.st_value))?;
+            let to: usize = usize::try_from(sym.st_value + sym.st_size).map_err(|err| {
+                anyhow::anyhow!(
+                    "Unable to cast usize from u64:{:?}. Error: {err}",
+                    sym.st_value + sym.st_size
+                )
+            })?;
+
+            if to < end && from < end {
+                let buf = &program_data[from..to];
+                let value = std::str::from_utf8(buf).context("Read ELF value error")?;
+                return Ok(String::from(value));
+            } else {
+                return Err(anyhow::anyhow!("{name} is out of bounds"));
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!("ELF parameter not found"))
+}
+
 pub async fn read_elf_parameters_from_account(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
 ) -> Result<GetNeonElfReturn, NeonError> {
     let (_, program_data) =
         read_program_data_from_account(config, context, &config.evm_loader).await?;
@@ -93,7 +152,7 @@ pub async fn read_elf_parameters_from_account(
 
 pub async fn read_program_data_from_account(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
     evm_loader: &Pubkey,
 ) -> Result<(Option<Pubkey>, Vec<u8>), NeonError> {
     let account = context
@@ -167,14 +226,14 @@ fn read_program_params_from_file(
 
 async fn read_program_params_from_account(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
 ) -> NeonResult<GetNeonElfReturn> {
     read_elf_parameters_from_account(config, context).await
 }
 
 pub async fn execute(
     config: &Config,
-    context: &Context,
+    context: &Context<'_>,
     program_location: Option<&str>,
 ) -> NeonResult<GetNeonElfReturn> {
     if let Some(program_location) = program_location {

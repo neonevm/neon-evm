@@ -15,8 +15,8 @@ use mpl_token_metadata::instruction::{
     CreateMasterEditionArgs, CreateMetadataAccountArgsV3, MetadataInstruction,
 };
 use mpl_token_metadata::state::{
-    CollectionDetails, Key, MasterEditionV2, Metadata, TokenMetadataAccount, TokenStandard,
-    MAX_MASTER_EDITION_LEN, MAX_METADATA_LEN,
+    Key, MasterEditionV2, Metadata, TokenMetadataAccount, TokenStandard, MAX_MASTER_EDITION_LEN,
+    MAX_METADATA_LEN,
 };
 use solana_program::{
     entrypoint::ProgramResult, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey,
@@ -90,16 +90,7 @@ fn create_metadata_accounts_v3(
 
     assert_collection_update_is_valid(false, &None, &args.data.collection)?;
     metadata.collection = args.data.collection.clone();
-
-    if let Some(details) = &args.collection_details {
-        match details {
-            CollectionDetails::V1 { size: _size } => {
-                metadata.collection_details = Some(CollectionDetails::V1 { size: 0 });
-            }
-        }
-    } else {
-        metadata.collection_details = None;
-    }
+    metadata.collection_details = None;
 
     let token_standard = if mint.decimals == 0 {
         TokenStandard::FungibleAsset

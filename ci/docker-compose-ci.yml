@@ -1,0 +1,46 @@
+version: "2.1"
+
+services:
+  solana:
+    image: ${EVM_LOADER_IMAGE}
+    environment:
+      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
+      - SOLANA_URL=http://solana:8899
+    hostname: solana
+    ports:
+       - "8899"
+    expose:
+      - "8899"
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    entrypoint:
+      /opt/solana/bin/solana-run-neon.sh
+    networks:
+      - net
+
+  dk-neon-api:
+    restart: unless-stopped
+    hostname: neon_api
+    command: /opt/neon-api -H 0.0.0.0:8085
+    environment:
+      RUST_BACKTRACE: 1
+      RUST_LOG: debug
+      NEON_API_LISTENER_ADDR: 0.0.0.0:8085
+      SOLANA_URL: http://solana:8899
+      EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
+      NEON_TOKEN_MINT: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
+      NEON_CHAIN_ID: 111
+      COMMITMENT: confirmed
+      NEON_DB_CLICKHOUSE_URLS: "http://45.250.253.36:8123;http://45.250.253.38:8123"
+      KEYPAIR: /opt/operator-keypairs/id.json
+      FEEPAIR: /opt/operator-keypairs/id.json
+    image: ${EVM_LOADER_IMAGE}
+    ports:
+    - "8085"
+    networks:
+      - net
+
+networks:
+  net:

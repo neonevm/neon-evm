@@ -6,7 +6,7 @@ use solana_clap_utils::{
     keypair::keypair_from_path,
 };
 use solana_sdk::commitment_config::CommitmentConfig;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 /// # Panics
 /// # Errors
@@ -28,11 +28,7 @@ pub fn create(options: &ArgMatches) -> Result<Config, NeonError> {
             .unwrap_or(&solana_cli_config.json_rpc_url),
     );
 
-    let evm_loader = if let Some(value) = pubkey_of(options, "evm_loader") {
-        value
-    } else {
-        return Err(NeonError::EvmLoaderNotSpecified);
-    };
+    let evm_loader = pubkey_of(options, "evm_loader").ok_or(NeonError::EvmLoaderNotSpecified)?;
 
     let keypair_path: String = options
         .value_of("keypair")
@@ -47,8 +43,7 @@ pub fn create(options: &ArgMatches) -> Result<Config, NeonError> {
         "fee_payer",
         true,
     )
-    .ok()
-    .map(Arc::new);
+    .ok();
 
     let db_config = options
         .value_of("db_config")

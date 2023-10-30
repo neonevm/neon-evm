@@ -1,5 +1,6 @@
 use super::{e, Rpc};
-use crate::types::{ChDbConfig, TracerDb, TxParams};
+use crate::types::TracerDb;
+use crate::NeonError;
 use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
@@ -22,21 +23,34 @@ use solana_transaction_status::{
 use std::any::Any;
 
 pub struct CallDbClient {
-    pub slot: u64,
     tracer_db: TracerDb,
+    slot: u64,
+    tx_index_in_block: Option<u64>,
 }
 
 impl CallDbClient {
-    pub fn new(config: &ChDbConfig, slot: u64) -> Self {
-        let db = TracerDb::new(config);
-        Self {
-            slot,
-            tracer_db: db,
+    pub async fn new(
+        tracer_db: TracerDb,
+        slot: u64,
+        tx_index_in_block: Option<u64>,
+    ) -> Result<Self, NeonError> {
+        let earliest_rooted_slot = tracer_db
+            .get_earliest_rooted_slot()
+            .await
+            .map_err(NeonError::ClickHouse)?;
+        if slot < earliest_rooted_slot {
+            return Err(NeonError::EarlySlot(slot, earliest_rooted_slot));
         }
+
+        Ok(Self {
+            tracer_db,
+            slot,
+            tx_index_in_block,
+        })
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Rpc for CallDbClient {
     fn commitment(&self) -> CommitmentConfig {
         CommitmentConfig::default()
@@ -55,7 +69,7 @@ impl Rpc for CallDbClient {
 
     async fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
         self.tracer_db
-            .get_account_at(key, self.slot)
+            .get_account_at(key, self.slot, self.tx_index_in_block)
             .await
             .map_err(|e| e!("load account error", key, e))?
             .ok_or_else(|| e!("account not found", key))
@@ -68,7 +82,7 @@ impl Rpc for CallDbClient {
     ) -> RpcResult<Option<Account>> {
         let account = self
             .tracer_db
-            .get_account_at(key, self.slot)
+            .get_account_at(key, self.slot, self.tx_index_in_block)
             .await
             .map_err(|e| e!("load account error", key, e))?;
 
@@ -90,7 +104,7 @@ impl Rpc for CallDbClient {
         for key in pubkeys {
             let account = self
                 .tracer_db
-                .get_account_at(key, self.slot)
+                .get_account_at(key, self.slot, self.tx_index_in_block)
                 .await
                 .map_err(|e| e!("load account error", key, e))?;
             result.push(account);
@@ -184,12 +198,6 @@ impl Rpc for CallDbClient {
     ) -> ClientResult<(Hash, u64)> {
         Err(e!(
             "get_latest_blockhash_with_commitment() not implemented for db_call_client"
-        ))
-    }
-
-    async fn get_transaction_data(&self) -> ClientResult<TxParams> {
-        Err(e!(
-            "get_transaction_data() not implemented for db_call_client"
         ))
     }
 

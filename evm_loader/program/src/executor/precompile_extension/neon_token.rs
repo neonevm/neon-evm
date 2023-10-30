@@ -2,6 +2,7 @@ use std::convert::TryInto;
 
 use arrayref::array_ref;
 use ethnum::U256;
+use maybe_async::maybe_async;
 use solana_program::{program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar};
 use spl_associated_token_account::get_associated_token_address;
 
@@ -18,8 +19,9 @@ use crate::{
 //--------------------------------------------------
 const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4] = &[0x8e, 0x19, 0x89, 0x9e];
 
-pub fn neon_token<B: AccountStorage>(
-    state: &mut ExecutorState<B>,
+#[maybe_async]
+pub async fn neon_token<B: AccountStorage>(
+    state: &mut ExecutorState<'_, B>,
     address: &Address,
     input: &[u8],
     context: &crate::evm::Context,
@@ -46,7 +48,7 @@ pub fn neon_token<B: AccountStorage>(
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
 
-        withdraw(state, source, destination, context.value)?;
+        withdraw(state, source, destination, context.value).await?;
 
         let mut output = vec![0_u8; 32];
         output[31] = 1; // return true
@@ -58,8 +60,9 @@ pub fn neon_token<B: AccountStorage>(
     Err(Error::UnknownPrecompileMethodSelector(*address, *method_id))
 }
 
-fn withdraw<B: AccountStorage>(
-    state: &mut ExecutorState<B>,
+#[maybe_async]
+async fn withdraw<B: AccountStorage>(
+    state: &mut ExecutorState<'_, B>,
     source: Address,
     target: Pubkey,
     value: U256,
@@ -87,7 +90,7 @@ fn withdraw<B: AccountStorage>(
     }
 
     let target_token = get_associated_token_address(&target, state.backend.neon_token_mint());
-    let account = state.external_account(target_token)?;
+    let account = state.external_account(target_token).await?;
     if !spl_token::check_id(&account.owner) {
         use spl_associated_token_account::instruction::create_associated_token_account;
 

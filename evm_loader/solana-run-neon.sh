@@ -46,6 +46,8 @@ fi
 NEON_VALIDATOR_ARGS=(
     --gossip-host $(hostname -i)
     --log-messages-bytes-limit 50000
+    # See https://github.com/solana-labs/solana/issues/33205 for why this is required for run-neon-evm-tests
+    --allow-private-addr
 )
 
 if [[ -n $GEYSER_PLUGIN_CONFIG ]]; then

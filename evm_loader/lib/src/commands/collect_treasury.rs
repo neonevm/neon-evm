@@ -21,7 +21,7 @@ pub struct CollectTreasuryReturn {
     pub balance: u64,
 }
 
-pub async fn execute(config: &Config, context: &Context) -> NeonResult<CollectTreasuryReturn> {
+pub async fn execute(config: &Config, context: &Context<'_>) -> NeonResult<CollectTreasuryReturn> {
     let neon_params = read_elf_parameters_from_account(config, context).await?;
     let signer = context.signer()?;
 

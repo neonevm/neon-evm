@@ -1,12 +1,13 @@
 #![allow(clippy::inline_always)]
 
-use super::tracing_event;
-use crate::{error::Error, types::Address};
-use ethnum::{I256, U256};
 use std::{
     alloc::{GlobalAlloc, Layout},
     convert::TryInto,
 };
+
+use ethnum::{I256, U256};
+
+use crate::{error::Error, types::Address};
 
 const ELEMENT_SIZE: usize = 32;
 pub const STACK_SIZE: usize = ELEMENT_SIZE * 128;
@@ -44,7 +45,7 @@ impl Stack {
         unsafe { self.top.offset_from(self.begin) as usize / ELEMENT_SIZE }
     }
 
-    #[allow(dead_code)]
+    #[cfg(not(target_os = "solana"))]
     pub fn to_vec(&self) -> Vec<[u8; 32]> {
         let slice = unsafe {
             let start = self.begin.cast::<[u8; 32]>();
@@ -66,10 +67,6 @@ impl Stack {
         if self.top == self.end {
             return Err(Error::StackOverflow);
         }
-
-        tracing_event!(super::tracing::Event::StackPush {
-            value: unsafe { *self.read() }
-        });
 
         unsafe {
             self.top = self.top.add(32);

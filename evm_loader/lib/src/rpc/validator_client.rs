@@ -1,9 +1,7 @@
-use super::{e, Rpc};
-use crate::types::TxParams;
+use super::Rpc;
 use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
-    client_error::{ClientError, ClientErrorKind},
     nonblocking::rpc_client::RpcClient,
     rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
     rpc_response::RpcResult,
@@ -22,7 +20,7 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Rpc for RpcClient {
     fn commitment(&self) -> CommitmentConfig {
         self.commitment()
@@ -132,12 +130,6 @@ impl Rpc for RpcClient {
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
         self.get_latest_blockhash_with_commitment(commitment).await
-    }
-
-    async fn get_transaction_data(&self) -> ClientResult<TxParams> {
-        Err(e!(
-            "get_transaction_data() not implemented for validator_client"
-        ))
     }
 
     fn as_any(&self) -> &dyn Any {

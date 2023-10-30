@@ -13,6 +13,9 @@ on:
 env:
   DHUBU: ${{secrets.DHUBU}}
   DHUBP: ${{secrets.DHUBP}}
+  IMAGE_NAME: ${{vars.IMAGE_NAME}}
+  PROXY_ENDPOINT: ${{vars.PROXY_ENDPOINT}}
+  RUN_LINK_REPO: ${{vars.RUN_LINK_REPO}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
 concurrency:
@@ -20,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build-neon-evm:
-    runs-on: build-runner
+    runs-on: neon-evm-1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -64,9 +67,11 @@ jobs:
           --github_ref=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
-          --labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          --labels='${{ toJson(github.event.pull_request.labels.*.name) }}' \
+          --pr_url="${{ github.api_url }}/repos/${{ github.repository }}/issues" \
+          --pr_number="${{ github.event.pull_request.number }}"
   finalize-image:
-    runs-on: build-runner
+    runs-on: neon-evm-1
     needs:
       - trigger-proxy-tests
       - run-neon-evm-tests

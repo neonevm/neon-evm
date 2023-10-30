@@ -40,10 +40,10 @@ pub fn process<'a>(
 
     match crate::account::tag(program_id, storage_info)? {
         Holder::TAG | FinalizedState::TAG => {
-            let trx = Transaction::from_rlp(message)?;
+            let mut trx = Transaction::from_rlp(message)?;
             let caller = trx.recover_caller_address()?;
 
-            solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
+            solana_program::log::sol_log_data(&[b"HASH", &trx.hash()]);
 
             let storage = State::new(program_id, storage_info, &accounts, caller, &trx)?;
 
@@ -57,7 +57,7 @@ pub fn process<'a>(
                 storage,
                 &mut account_storage,
                 gasometer,
-                trx,
+                &mut trx,
                 caller,
             )
         }
