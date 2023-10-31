@@ -1,9 +1,7 @@
 #![allow(clippy::type_complexity, clippy::inline_always)]
 
-use crate::error::Result;
-
-use super::{database::Database, opcode::Action, Machine};
 use super::eof::Container;
+use super::{database::Database, opcode::Action, Machine};
 use crate::error::{Error, Result};
 
 pub mod opcode {
@@ -934,29 +932,36 @@ opcode_table![
         0xFF, "SELFDESTRUCT", Self::opcode_selfdestruct;
 ];
 
-pub const EOF_OPCODES: [fn(&mut Self, &mut B) -> Result<Action>; 256] = {
-    let mut opcodes: [fn(&mut Self, &mut B) -> Result<Action>; 256] =
-        [Self::opcode_unknown; 256];
+// #[cfg(target_os = "solana")]
+impl<B: Database> Machine<B> {
+    const EOF_OPCODES: [OpCode<B>; 256] = {
+        let mut opcodes: [OpCode<B>; 256] = [Self::opcode_unknown; 256];
 
-    let mut i: usize = 0;
-    while i < 256 {
-        opcodes[i] = Self::OPCODES[i];
-        i += 1;
+        let mut i: usize = 0;
+        while i < 256 {
+            opcodes[i] = Self::OPCODES[i];
+            i += 1;
+        }
+
+        // EOF opcodes
+        opcodes[RJUMP as usize] = Self::opcode_rjump;
+        opcodes[RJUMPI as usize] = Self::opcode_rjumpi;
+        opcodes[RJUMPV as usize] = Self::opcode_rjumpv;
+        opcodes[CALLF as usize] = Self::opcode_callf;
+        opcodes[RETF as usize] = Self::opcode_retf;
+
+        let mut i = 0;
+        while i < Container::DEPRECATED_OPCODES.len() {
+            opcodes[Container::DEPRECATED_OPCODES[i] as usize] = Self::opcode_deprecated;
+            i += 1;
+        }
+
+        opcodes
+    };
+
+    pub fn execute_eof_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
+        // SAFETY: OPCODES.len() == 256, opcode <= 255
+        let opcode_fn = unsafe { Self::EOF_OPCODES.get_unchecked(opcode as usize) };
+        opcode_fn(self, backend)
     }
-
-    // EOF opcodes
-    opcodes[RJUMP as usize] = Self::opcode_rjump;
-    opcodes[RJUMPI as usize] = Self::opcode_rjumpi;
-    opcodes[RJUMPV as usize] = Self::opcode_rjumpv;
-    opcodes[CALLF as usize] = Self::opcode_callf;
-    opcodes[RETF as usize] = Self::opcode_retf;
-
-    // Deprecated opcodes
-    let mut i = 0;
-    while i < Container::DEPRECATED_OPCODES.len() {
-        opcodes[Container::DEPRECATED_OPCODES[i] as usize] = Self::opcode_deprecated;
-        i += 1;
-    }
-
-    opcodes
-};
+}

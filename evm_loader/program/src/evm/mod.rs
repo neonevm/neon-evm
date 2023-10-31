@@ -11,6 +11,7 @@ use solana_program::log::sol_log_data;
 
 pub use buffer::Buffer;
 
+use self::{database::Database, memory::Memory, stack::Stack};
 #[cfg(not(target_os = "solana"))]
 use crate::evm::tracing::TracerTypeOpt;
 use crate::{
@@ -18,7 +19,6 @@ use crate::{
     evm::{opcode::Action, precompile::is_precompile_address},
     types::{Address, Transaction},
 };
-use self::{database::Database, memory::Memory, stack::Stack};
 
 mod analysis;
 mod buffer;
@@ -406,11 +406,7 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        let opcode_table = if self.container.is_some() {
-            Self::EOF_OPCODES
-        } else {
-            Self::OPCODES
-        };
+        let is_eof = self.container.is_some();
 
         let status = if is_precompile_address(&self.context.contract) {
             let value = Self::precompile(&self.context.contract, &self.call_data).unwrap();
@@ -425,7 +421,7 @@ impl<B: Database> Machine<B> {
                 }
 
                 let code = self.get_code();
-            let opcode = code.get_or_default(self.pc);
+                let opcode = code.get_or_default(self.pc);
 
                 tracing_event!(
                     self,
@@ -436,8 +432,13 @@ impl<B: Database> Machine<B> {
                         memory: self.memory.to_vec()
                     }
                 );
+                let execution_result = if is_eof {
+                    self.execute_eof_opcode(backend, opcode).await
+                } else {
+                    self.execute_opcode(backend, opcode).await
+                };
 
-                let opcode_result = match self.execute_opcode(backend, opcode).await {
+                let opcode_result = match execution_result {
                     Ok(result) => result,
                     Err(e) => {
                         let message = build_revert_message(&e.to_string());
@@ -458,12 +459,13 @@ impl<B: Database> Machine<B> {
                     Action::Return(value) => break ExitStatus::Return(value),
                     Action::Revert(value) => break ExitStatus::Revert(value),
                     Action::CodeSection(code_section, pc) => {
-                    self.code_section = code_section;
-                    self.pc = pc;
-                }
-                Action::Suicide => break ExitStatus::Suicide,
-                Action::Noop => {}
-            };}
+                        self.code_section = code_section;
+                        self.pc = pc;
+                    }
+                    Action::Suicide => break ExitStatus::Suicide,
+                    Action::Noop => {}
+                };
+            }
         };
 
         tracing_event!(
