@@ -10,7 +10,7 @@ include = ["config/*.toml"]
 
 [features]
 #! The next feature defines configurations for deploys on different blockchains
-## Builds NeonEVM for testing with goverment system
+## Builds NeonEVM for testing with government system
 govertest = []
 ## Builds NeonEVM for mainnet deployment
 mainnet = []

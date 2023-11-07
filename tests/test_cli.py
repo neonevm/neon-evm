@@ -79,7 +79,7 @@ def test_neon_elf_params(evm_loader):
     some_fields = ['NEON_CHAIN_ID', 'NEON_TOKEN_MINT', 'NEON_REVISION']
     for field in some_fields:
         assert field in result, f"The field {field} is not in result {result}"
-        assert result[field] != "", f"The value for fiels {field} is empty"
+        assert result[field] != "", f"The value for field {field} is empty"
 
 
 def test_collect_treasury(evm_loader):

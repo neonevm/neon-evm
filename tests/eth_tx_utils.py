@@ -82,7 +82,7 @@ def get_int(a):
         return int.from_bytes(a, 'big')
     if a is None:
         return a
-    raise Exception("Invalid convertion from {} to int".format(a))
+    raise Exception("Invalid conversion from {} to int".format(a))
 
 
 class Trx:
