@@ -227,12 +227,14 @@ impl ClickHouseDb {
         tx_index_in_block: Option<u64>,
     ) -> ChResult<Option<Account>> {
         if let Some(tx_index_in_block) = tx_index_in_block {
-            if let Some(account) = self
+            return if let Some(account) = self
                 .get_account_at_index_in_block(pubkey, slot, tx_index_in_block)
                 .await?
             {
-                return Ok(Some(account));
-            }
+                Ok(Some(account))
+            } else {
+                self.get_account_at_slot(pubkey, slot - 1).await
+            };
         }
 
         self.get_account_at_slot(pubkey, slot).await

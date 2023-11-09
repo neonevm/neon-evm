@@ -6,6 +6,7 @@ use ethnum::U256;
 use evm_loader::account::ether_contract;
 use evm_loader::account_storage::{find_slot_hash, AccountOperation, AccountsOperations};
 use evm_loader::evm::tracing::{AccountOverrides, BlockOverrides};
+use evm_loader::evm::Buffer;
 use evm_loader::{
     account::{
         ether_storage::EthereumStorageAddress, EthereumAccount, EthereumStorage,
@@ -479,6 +480,19 @@ impl<'a> EmulatorAccountStorage<'a> {
             default
         }
     }
+
+    async fn get_code(&self, address: &Address) -> Buffer {
+        self.ethereum_contract_map_or(address, Buffer::empty(), |c| {
+            self.state_overrides
+                .as_ref()
+                .and_then(|account_overrides| account_overrides.get(address)?.code.as_ref())
+                .map_or_else(
+                    || Buffer::from_slice(&c.code()),
+                    |code| Buffer::from_slice(&code.0),
+                )
+        })
+        .await
+    }
 }
 
 #[async_trait(?Send)]
@@ -569,27 +583,13 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         }
 
         // return empty hash(&[]) as a default value, or code's hash if contract exists
-        self.ethereum_contract_map_or(address, hash(&[]).to_bytes(), |c| {
-            hash(&c.code()).to_bytes()
-        })
-        .await
+        hash(self.get_code(address).await.as_ref()).to_bytes()
     }
 
-    async fn code(&self, address: &Address) -> evm_loader::evm::Buffer {
-        use evm_loader::evm::Buffer;
-
+    async fn code(&self, address: &Address) -> Buffer {
         info!("code {address}");
 
-        self.ethereum_contract_map_or(address, Buffer::empty(), |c| {
-            self.state_overrides
-                .as_ref()
-                .and_then(|account_overrides| account_overrides.get(address)?.code.as_ref())
-                .map_or_else(
-                    || Buffer::from_slice(&c.code()),
-                    |code| Buffer::from_slice(&code.0),
-                )
-        })
-        .await
+        self.get_code(address).await
     }
 
     async fn generation(&self, address: &Address) -> u32 {

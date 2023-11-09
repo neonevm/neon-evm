@@ -268,6 +268,8 @@ fn parse_tx(params: &ArgMatches) -> (TxParams, TraceCallConfig) {
 
     let gas_limit = u256_of(params, "gas_limit");
 
+    let gas_price = u256_of(params, "gas_price");
+
     let access_list = access_list_of(params, "access_list");
 
     let tx_params = TxParams {
@@ -277,6 +279,7 @@ fn parse_tx(params: &ArgMatches) -> (TxParams, TraceCallConfig) {
         data,
         value,
         gas_limit,
+        gas_price,
         access_list,
     };
 
