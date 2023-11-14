@@ -4,49 +4,31 @@ use std::convert::Into;
 
 use crate::api_server::handlers::process_error;
 use crate::{
-    api_context, commands::emulate as EmulateCommand, context::Context,
-    types::request_models::EmulateRequestModel, NeonApiState,
+    api_context, commands::emulate as EmulateCommand, types::EmulateApiRequest, NeonApiState,
 };
 
-use super::{parse_emulation_params, process_result};
+use super::process_result;
 
 #[tracing::instrument(skip(state, request_id), fields(id = request_id.as_str()))]
 #[post("/emulate")]
 pub async fn emulate(
     state: NeonApiState,
     request_id: RequestId,
-    Json(emulate_request): Json<EmulateRequestModel>,
+    Json(emulate_request): Json<EmulateApiRequest>,
 ) -> impl Responder {
-    let tx = emulate_request.tx_params.into();
+    let slot = emulate_request.slot;
+    let index = emulate_request.tx_index_in_block;
 
-    let rpc_client = match api_context::build_rpc_client(
-        &state,
-        emulate_request.slot,
-        emulate_request.tx_index_in_block,
-    )
-    .await
-    {
+    let rpc_client = match api_context::build_rpc_client(&state, slot, index).await {
         Ok(rpc_client) => rpc_client,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
-    let context = Context::new(&*rpc_client, &state.config);
-
-    let (token, chain, steps, accounts, solana_accounts) =
-        parse_emulation_params(&state.config, &context, &emulate_request.emulation_params).await;
-
     process_result(
         &EmulateCommand::execute(
-            context.rpc_client,
+            rpc_client.as_ref(),
             state.config.evm_loader,
-            tx,
-            token,
-            chain,
-            steps,
-            state.config.commitment,
-            &accounts,
-            &solana_accounts,
-            &None,
+            emulate_request.body,
             None,
         )
         .await
