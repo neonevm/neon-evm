@@ -115,7 +115,7 @@ impl Stack {
     }
 
     #[inline(always)]
-    pub fn pop_address(&mut self) -> Result<&Address, Error> {
+    pub fn pop_address(&mut self) -> Result<Address, Error> {
         static_assertions::assert_eq_align!(Address, u8);
         static_assertions::assert_eq_size!(Address, [u8; 20]);
 
@@ -123,7 +123,7 @@ impl Stack {
 
         let address = unsafe {
             let ptr = self.top.add(12); // discard 12 bytes
-            &*(ptr as *const Address)
+            *(ptr as *const Address)
         };
 
         Ok(address)

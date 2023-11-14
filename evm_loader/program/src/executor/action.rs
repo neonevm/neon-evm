@@ -14,14 +14,16 @@ pub enum Action {
         seeds: Vec<Vec<u8>>,
         fee: u64,
     },
-    NeonTransfer {
+    Transfer {
         source: Address,
         target: Address,
+        chain_id: u64,
         #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
-    NeonWithdraw {
+    Burn {
         source: Address,
+        chain_id: u64,
         #[serde(with = "ethnum::serde::bytes::le")]
         value: U256,
     },
@@ -34,14 +36,49 @@ pub enum Action {
     },
     EvmIncrementNonce {
         address: Address,
+        chain_id: u64,
     },
     EvmSetCode {
         address: Address,
-        code: crate::evm::Buffer,
+        chain_id: u64,
+        #[serde(with = "serde_bytes")]
+        code: Vec<u8>,
     },
     EvmSelfDestruct {
         address: Address,
     },
+}
+
+pub fn filter_selfdestruct(actions: Vec<Action>) -> Vec<Action> {
+    // Find all the account addresses which are scheduled to EvmSelfDestruct
+    let accounts_to_destroy: std::collections::HashSet<_> = actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::EvmSelfDestruct { address } => Some(*address),
+            _ => None,
+        })
+        .collect();
+
+    actions
+        .into_iter()
+        .filter(|action| {
+            match action {
+                // We always apply ExternalInstruction for Solana accounts
+                // and NeonTransfer + NeonWithdraw
+                Action::ExternalInstruction { .. }
+                | Action::Transfer { .. }
+                | Action::Burn { .. } => true,
+                // We remove EvmSetStorage|EvmIncrementNonce|EvmSetCode if account is scheduled for destroy
+                Action::EvmSetStorage { address, .. }
+                | Action::EvmSetCode { address, .. }
+                | Action::EvmIncrementNonce { address, .. } => {
+                    !accounts_to_destroy.contains(address)
+                }
+                // SelfDestruct is only aplied to contracts deployed in the current transaction
+                Action::EvmSelfDestruct { .. } => false,
+            }
+        })
+        .collect()
 }
 
 mod serde_bytes_32 {
@@ -49,7 +86,11 @@ mod serde_bytes_32 {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_bytes(value)
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(value))
+        } else {
+            serializer.serialize_bytes(value)
+        }
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
@@ -63,6 +104,21 @@ mod serde_bytes_32 {
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("[u8; 32]")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                use serde::de::Unexpected::Str;
+
+                let value = hex::decode(value)
+                    .map_err(|_| serde::de::Error::invalid_value(Str(value), &self))?;
+
+                let value_len = value.len();
+                value
+                    .try_into()
+                    .map_err(|_| serde::de::Error::invalid_length(value_len, &self))
             }
 
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
@@ -88,7 +144,11 @@ mod serde_bytes_32 {
             }
         }
 
-        deserializer.deserialize_bytes(BytesVisitor)
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(BytesVisitor)
+        } else {
+            deserializer.deserialize_bytes(BytesVisitor)
+        }
     }
 }
 

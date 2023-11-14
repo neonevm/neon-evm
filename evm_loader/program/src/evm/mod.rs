@@ -2,7 +2,7 @@
 #![allow(clippy::type_repetition_in_bounds)]
 #![allow(clippy::unsafe_derive_deserialize)]
 
-use std::{marker::PhantomData, ops::Range};
+use std::{fmt::Display, marker::PhantomData, ops::Range};
 
 use ethnum::U256;
 use maybe_async::maybe_async;
@@ -81,6 +81,12 @@ pub enum ExitStatus {
     StepLimit,
 }
 
+impl Display for ExitStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.status())
+    }
+}
+
 impl ExitStatus {
     #[must_use]
     pub fn status(&self) -> &'static str {
@@ -119,6 +125,7 @@ pub enum Reason {
 pub struct Context {
     pub caller: Address,
     pub contract: Address,
+    pub contract_chain_id: u64,
     #[serde(with = "ethnum::serde::bytes::le")]
     pub value: U256,
 
@@ -129,6 +136,7 @@ pub struct Context {
 #[serde(bound = "B: Database")]
 pub struct Machine<B: Database> {
     origin: Address,
+    chain_id: u64,
     context: Context,
 
     #[serde(with = "ethnum::serde::bytes::le")]
@@ -197,41 +205,44 @@ impl<B: Database> Machine<B> {
 
     #[maybe_async]
     pub async fn new(
-        trx: &mut Transaction,
+        trx: Transaction,
         origin: Address,
         backend: &mut B,
         #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
     ) -> Result<Self> {
-        let origin_nonce = backend.nonce(&origin).await?;
+        let trx_chain_id = trx.chain_id().unwrap_or_else(|| backend.default_chain_id());
 
-        if origin_nonce == u64::MAX {
+        if !backend.is_valid_chain_id(trx_chain_id) {
+            return Err(Error::InvalidChainId(trx_chain_id));
+        }
+
+        let nonce = backend.nonce(origin, trx_chain_id).await?;
+
+        if nonce == u64::MAX {
             return Err(Error::NonceOverflow(origin));
         }
 
-        if origin_nonce != trx.nonce() {
-            return Err(Error::InvalidTransactionNonce(
+        if nonce != trx.nonce() {
+            return Err(Error::InvalidTransactionNonce(origin, nonce, trx.nonce()));
+        }
+
+        if backend.balance(origin, trx_chain_id).await? < trx.value() {
+            return Err(Error::InsufficientBalance(
                 origin,
-                origin_nonce,
-                trx.nonce(),
+                trx_chain_id,
+                trx.value(),
             ));
         }
 
-        if let Some(chain_id) = trx.chain_id() {
-            if backend.chain_id() != chain_id {
-                return Err(Error::InvalidChainId(chain_id));
-            }
-        }
-
-        if backend.balance(&origin).await? < trx.value() {
-            return Err(Error::InsufficientBalance(origin, trx.value()));
-        }
-
-        if backend.code_size(&origin).await? != 0 {
-            return Err(Error::SenderHasDeployedCode(origin));
-        }
+        // TODO may be remove. This requires additional account
+        // Never actually happens, or at least should not
+        // if backend.code_size(origin).await? != 0 {
+        //     return Err(Error::SenderHasDeployedCode(origin));
+        // }
 
         if trx.target().is_some() {
             Self::new_call(
+                trx_chain_id,
                 trx,
                 origin,
                 backend,
@@ -241,6 +252,7 @@ impl<B: Database> Machine<B> {
             .await
         } else {
             Self::new_create(
+                trx_chain_id,
                 trx,
                 origin,
                 backend,
@@ -253,7 +265,8 @@ impl<B: Database> Machine<B> {
 
     #[maybe_async]
     async fn new_call(
-        trx: &mut Transaction,
+        chain_id: u64,
+        trx: Transaction,
         origin: Address,
         backend: &mut B,
         #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
@@ -263,25 +276,29 @@ impl<B: Database> Machine<B> {
         let target = trx.target().unwrap();
         sol_log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
 
-        backend.increment_nonce(origin)?;
+        backend.increment_nonce(origin, chain_id)?;
         backend.snapshot();
 
-        backend.transfer(origin, target, trx.value()).await?;
+        backend
+            .transfer(origin, target, chain_id, trx.value())
+            .await?;
 
-        let execution_code = backend.code(&target).await?;
+        let execution_code = backend.code(target).await?;
 
         Ok(Self {
             origin,
+            chain_id,
             context: Context {
                 caller: origin,
                 contract: target,
+                contract_chain_id: backend.contract_chain_id(target).await.unwrap_or(chain_id),
                 value: trx.value(),
                 code_address: Some(target),
             },
             gas_price: trx.gas_price(),
             gas_limit: trx.gas_limit(),
             execution_code,
-            call_data: trx.extract_call_data(),
+            call_data: trx.into_call_data(),
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(),
@@ -298,7 +315,8 @@ impl<B: Database> Machine<B> {
 
     #[maybe_async]
     async fn new_create(
-        trx: &mut Transaction,
+        chain_id: u64,
+        trx: Transaction,
         origin: Address,
         backend: &mut B,
         #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
@@ -308,21 +326,26 @@ impl<B: Database> Machine<B> {
         let target = Address::from_create(&origin, trx.nonce());
         sol_log_data(&[b"ENTER", b"CREATE", target.as_bytes()]);
 
-        if (backend.nonce(&target).await? != 0) || (backend.code_size(&target).await? != 0) {
+        if (backend.nonce(target, chain_id).await? != 0) || (backend.code_size(target).await? != 0)
+        {
             return Err(Error::DeployToExistingAccount(target, origin));
         }
 
-        backend.increment_nonce(origin)?;
+        backend.increment_nonce(origin, chain_id)?;
         backend.snapshot();
 
-        backend.increment_nonce(target)?;
-        backend.transfer(origin, target, trx.value()).await?;
+        backend.increment_nonce(target, chain_id)?;
+        backend
+            .transfer(origin, target, chain_id, trx.value())
+            .await?;
 
         Ok(Self {
             origin,
+            chain_id,
             context: Context {
                 caller: origin,
                 contract: target,
+                contract_chain_id: chain_id,
                 value: trx.value(),
                 code_address: None,
             },
@@ -335,7 +358,7 @@ impl<B: Database> Machine<B> {
             pc: 0_usize,
             is_static: false,
             reason: Reason::Create,
-            execution_code: trx.extract_call_data(),
+            execution_code: trx.into_call_data(),
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,
@@ -388,8 +411,7 @@ impl<B: Database> Machine<B> {
                     Ok(result) => result,
                     Err(e) => {
                         let message = build_revert_message(&e.to_string());
-                        self.opcode_revert_impl(Buffer::from_slice(&message), backend)
-                            .await?
+                        self.opcode_revert_impl(message, backend).await?
                     }
                 };
 
@@ -423,6 +445,7 @@ impl<B: Database> Machine<B> {
     fn fork(
         &mut self,
         reason: Reason,
+        chain_id: u64,
         context: Context,
         execution_code: Buffer,
         call_data: Buffer,
@@ -430,6 +453,7 @@ impl<B: Database> Machine<B> {
     ) {
         let mut other = Self {
             origin: self.origin,
+            chain_id,
             context,
             gas_price: self.gas_price,
             gas_limit: gas_limit.unwrap_or(self.gas_limit),

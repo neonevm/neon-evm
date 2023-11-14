@@ -1,24 +1,19 @@
 use std::{
-    alloc::{GlobalAlloc, Layout},
     ops::{Deref, Range},
     ptr::NonNull,
 };
 
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
-const BUFFER_ALIGN: usize = 1;
-
-#[derive(Debug)]
 enum Inner {
     Empty,
     Owned {
-        ptr: NonNull<u8>,
-        len: usize,
+        data: Vec<u8>,
     },
     Account {
         key: Pubkey,
-        data: *mut u8,
         range: Range<usize>,
+        data: *const u8,
     },
     AccountUninit {
         key: Pubkey,
@@ -26,7 +21,6 @@ enum Inner {
     },
 }
 
-#[derive(Debug)]
 pub struct Buffer {
     ptr: *const u8,
     len: usize,
@@ -36,13 +30,13 @@ pub struct Buffer {
 impl Buffer {
     fn new(inner: Inner) -> Self {
         let (ptr, len) = match &inner {
-            Inner::Empty => (NonNull::dangling().as_ptr(), 0),
-            Inner::Owned { ptr, len } => (ptr.as_ptr(), *len),
+            Inner::Empty => (NonNull::dangling().as_ptr() as *const _, 0),
+            Inner::Owned { data } => (data.as_ptr(), data.len()),
             Inner::Account { data, range, .. } => {
                 let ptr = unsafe { data.add(range.start) };
                 (ptr, range.len())
             }
-            Inner::AccountUninit { .. } => (std::ptr::null_mut(), 0),
+            Inner::AccountUninit { .. } => (std::ptr::null(), 0),
         };
 
         Buffer { ptr, len, inner }
@@ -56,9 +50,11 @@ impl Buffer {
     /// care of them.
     #[must_use]
     pub unsafe fn from_account(account: &AccountInfo, range: Range<usize>) -> Self {
-        // todo cell_leak #69099
-        let ptr = account.data.as_ptr();
-        let data = (*ptr).as_mut_ptr();
+        let data = unsafe {
+            // todo cell_leak #69099
+            let ptr = account.data.as_ptr();
+            (*ptr).as_ptr()
+        };
 
         Buffer::new(Inner::Account {
             key: *account.key,
@@ -68,33 +64,18 @@ impl Buffer {
     }
 
     #[must_use]
-    pub fn from_slice(v: &[u8]) -> Self {
+    pub fn from_vec(v: Vec<u8>) -> Self {
         if v.is_empty() {
             return Self::empty();
         }
 
-        unsafe {
-            let len = v.len();
+        let inner = Inner::Owned { data: v };
+        Self::new(inner)
+    }
 
-            let layout = Layout::from_size_align_unchecked(len, BUFFER_ALIGN);
-            let ptr = crate::allocator::EVM.alloc(layout);
-            if ptr.is_null() {
-                std::alloc::handle_alloc_error(layout);
-            }
-
-            cfg_if::cfg_if! {
-                if #[cfg(target_os = "solana")] {
-                    solana_program::syscalls::sol_memcpy_(ptr, v.as_ptr(), len as u64);
-                } else {
-                    std::ptr::copy_nonoverlapping(v.as_ptr(), ptr, len);
-                }
-            }
-
-            Buffer::new(Inner::Owned {
-                ptr: NonNull::new_unchecked(ptr),
-                len,
-            })
-        }
+    #[must_use]
+    pub fn from_slice(v: &[u8]) -> Self {
+        Self::from_vec(v.to_vec())
     }
 
     #[must_use]
@@ -129,17 +110,6 @@ impl Buffer {
     }
 }
 
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        if let Inner::Owned { ptr, len } = self.inner {
-            unsafe {
-                let layout = Layout::from_size_align_unchecked(len, BUFFER_ALIGN);
-                crate::allocator::EVM.dealloc(ptr.as_ptr(), layout);
-            }
-        }
-    }
-}
-
 impl Deref for Buffer {
     type Target = [u8];
 
@@ -159,8 +129,8 @@ impl Clone for Buffer {
             Inner::Owned { .. } => Self::from_slice(self),
             Inner::Account { key, data, range } => Self::new(Inner::Account {
                 key: *key,
-                data: *data,
                 range: range.clone(),
+                data: *data,
             }),
             Inner::AccountUninit { key, range } => Self::new(Inner::AccountUninit {
                 key: *key,
@@ -185,9 +155,8 @@ impl serde::Serialize for Buffer {
 
         match &self.inner {
             Inner::Empty => serializer.serialize_unit_variant("evm_buffer", 0, "empty"),
-            Inner::Owned { ptr, len } => {
-                let slice = unsafe { std::slice::from_raw_parts(ptr.as_ptr(), *len) };
-                let bytes = serde_bytes::Bytes::new(slice);
+            Inner::Owned { data } => {
+                let bytes = serde_bytes::Bytes::new(data);
                 serializer.serialize_newtype_variant("evm_buffer", 1, "owned", bytes)
             }
             Inner::Account { key, range, .. } => {

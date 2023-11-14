@@ -13,7 +13,7 @@ use crate::evm::{Context, ExitStatus};
 use crate::types::Address;
 
 use super::action::Action;
-use super::cache::Cache;
+use super::cache::{cache_get_or_insert_account, Cache};
 use super::OwnedAccountInfo;
 
 /// Represents the state of executor abstracted away from a self.backend.
@@ -67,7 +67,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn into_actions(self) -> Vec<Action> {
         assert!(self.stack.is_empty());
 
-        self.actions
+        crate::executor::action::filter_selfdestruct(self.actions)
     }
 
     pub fn exit_status(&self) -> Option<&ExitStatus> {
@@ -82,9 +82,13 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.stack.len()
     }
 
-    pub fn withdraw_neons(&mut self, source: Address, value: U256) {
-        let withdraw = Action::NeonWithdraw { source, value };
-        self.actions.push(withdraw);
+    pub fn burn(&mut self, source: Address, chain_id: u64, value: U256) {
+        let burn = Action::Burn {
+            source,
+            chain_id,
+            value,
+        };
+        self.actions.push(burn);
     }
 
     pub fn queue_external_instruction(
@@ -120,29 +124,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .collect::<Vec<_>>();
 
         if !metas.iter().any(|m| (m.pubkey == address) && m.is_writable) {
-            insert_account_if_not_present(&self.cache, address, self.backend).await;
-            return Ok(self
-                .cache
-                .borrow()
-                .solana_accounts
-                .get(&address)
-                .unwrap()
-                .clone());
+            let account = cache_get_or_insert_account(&self.cache, address, self.backend).await;
+            return Ok(account);
         }
 
         let mut accounts = BTreeMap::<Pubkey, OwnedAccountInfo>::new();
 
         for m in metas {
-            insert_account_if_not_present(&self.cache, m.pubkey, self.backend).await;
-            accounts.insert(
-                m.pubkey,
-                self.cache
-                    .borrow()
-                    .solana_accounts
-                    .get(&m.pubkey)
-                    .unwrap()
-                    .clone(),
-            );
+            let account = cache_get_or_insert_account(&self.cache, m.pubkey, self.backend).await;
+            accounts.insert(account.key, account);
         }
 
         for action in &self.actions {
@@ -183,71 +173,57 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 }
 
-#[maybe_async]
-async fn insert_account_if_not_present<B: AccountStorage>(
-    cache: &RefCell<Cache>,
-    key: Pubkey,
-    backend: &B,
-) {
-    if !cache.borrow().solana_accounts.contains_key(&key) {
-        let owned_account_info = backend.clone_solana_account(&key).await;
-        cache
-            .borrow_mut()
-            .solana_accounts
-            .insert(key, owned_account_info);
-    }
-}
-
 #[maybe_async(?Send)]
 impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
-    fn chain_id(&self) -> U256 {
-        let chain_id = self.backend.chain_id();
-        U256::from(chain_id)
-    }
-
-    async fn nonce(&self, from_address: &Address) -> Result<u64> {
-        let mut nonce = self.backend.nonce(from_address).await;
+    async fn nonce(&self, from_address: Address, from_chain_id: u64) -> Result<u64> {
+        let mut nonce = self.backend.nonce(from_address, from_chain_id).await;
+        let mut increment = 0_u64;
 
         for action in &self.actions {
-            if let Action::EvmIncrementNonce { address } = action {
-                if from_address == address {
-                    nonce = nonce.checked_add(1).ok_or(Error::IntegerOverflow)?;
+            if let Action::EvmIncrementNonce { address, chain_id } = action {
+                if (&from_address == address) && (&from_chain_id == chain_id) {
+                    increment += 1;
                 }
             }
         }
 
+        nonce = nonce.checked_add(increment).ok_or(Error::IntegerOverflow)?;
+
         Ok(nonce)
     }
 
-    fn increment_nonce(&mut self, address: Address) -> Result<()> {
-        let increment = Action::EvmIncrementNonce { address };
+    fn increment_nonce(&mut self, address: Address, chain_id: u64) -> Result<()> {
+        let increment = Action::EvmIncrementNonce { address, chain_id };
         self.actions.push(increment);
 
         Ok(())
     }
 
-    async fn balance(&self, from_address: &Address) -> Result<U256> {
-        let mut balance = self.backend.balance(from_address).await;
+    async fn balance(&self, from_address: Address, from_chain_id: u64) -> Result<U256> {
+        let mut balance = self.backend.balance(from_address, from_chain_id).await;
 
         for action in &self.actions {
             match action {
-                Action::NeonTransfer {
+                Action::Transfer {
                     source,
                     target,
+                    chain_id,
                     value,
-                } => {
-                    if from_address == source {
+                } if (&from_chain_id == chain_id) => {
+                    if &from_address == source {
                         balance = balance.checked_sub(*value).ok_or(Error::IntegerOverflow)?;
                     }
 
-                    if from_address == target {
+                    if &from_address == target {
                         balance = balance.checked_add(*value).ok_or(Error::IntegerOverflow)?;
                     }
                 }
-                Action::NeonWithdraw { source, value } => {
-                    if from_address == source {
-                        balance = balance.checked_sub(*value).ok_or(Error::IntegerOverflow)?;
-                    }
+                Action::Burn {
+                    source,
+                    chain_id,
+                    value,
+                } if (&from_chain_id == chain_id) && (&from_address == source) => {
+                    balance = balance.checked_sub(*value).ok_or(Error::IntegerOverflow)?;
                 }
                 _ => {}
             }
@@ -256,22 +232,35 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(balance)
     }
 
-    async fn transfer(&mut self, source: Address, target: Address, value: U256) -> Result<()> {
+    async fn transfer(
+        &mut self,
+        source: Address,
+        target: Address,
+        chain_id: u64,
+        value: U256,
+    ) -> Result<()> {
         if value == U256::ZERO {
             return Ok(());
+        }
+
+        let target_chain_id = self.contract_chain_id(target).await.unwrap_or(chain_id);
+
+        if (self.code_size(target).await? > 0) && (target_chain_id != chain_id) {
+            return Err(Error::InvalidTransferToken(source, chain_id));
         }
 
         if source == target {
             return Ok(());
         }
 
-        if self.balance(&source).await? < value {
-            return Err(Error::InsufficientBalance(source, value));
+        if self.balance(source, chain_id).await? < value {
+            return Err(Error::InsufficientBalance(source, chain_id, value));
         }
 
-        let transfer = Action::NeonTransfer {
+        let transfer = Action::Transfer {
             source,
             target,
+            chain_id,
             value,
         };
         self.actions.push(transfer);
@@ -279,14 +268,14 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(())
     }
 
-    async fn code_size(&self, from_address: &Address) -> Result<usize> {
-        if self.is_precompile_extension(from_address) {
+    async fn code_size(&self, from_address: Address) -> Result<usize> {
+        if self.is_precompile_extension(&from_address) {
             return Ok(1); // This is required in order to make a normal call to an extension contract
         }
 
         for action in &self.actions {
-            if let Action::EvmSetCode { address, code } = action {
-                if from_address == address {
+            if let Action::EvmSetCode { address, code, .. } = action {
+                if &from_address == address {
                     return Ok(code.len());
                 }
             }
@@ -295,25 +284,25 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(self.backend.code_size(from_address).await)
     }
 
-    async fn code_hash(&self, from_address: &Address) -> Result<[u8; 32]> {
+    async fn code_hash(&self, from_address: Address, chain_id: u64) -> Result<[u8; 32]> {
         use solana_program::keccak::hash;
 
         for action in &self.actions {
-            if let Action::EvmSetCode { address, code } = action {
-                if from_address == address {
+            if let Action::EvmSetCode { address, code, .. } = action {
+                if &from_address == address {
                     return Ok(hash(code).to_bytes());
                 }
             }
         }
 
-        Ok(self.backend.code_hash(from_address).await)
+        Ok(self.backend.code_hash(from_address, chain_id).await)
     }
 
-    async fn code(&self, from_address: &Address) -> Result<crate::evm::Buffer> {
+    async fn code(&self, from_address: Address) -> Result<crate::evm::Buffer> {
         for action in &self.actions {
-            if let Action::EvmSetCode { address, code } = action {
-                if from_address == address {
-                    return Ok(code.clone());
+            if let Action::EvmSetCode { address, code, .. } = action {
+                if &from_address == address {
+                    return Ok(crate::evm::Buffer::from_slice(code));
                 }
             }
         }
@@ -321,7 +310,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(self.backend.code(from_address).await)
     }
 
-    fn set_code(&mut self, address: Address, code: crate::evm::Buffer) -> Result<()> {
+    fn set_code(&mut self, address: Address, chain_id: u64, code: Vec<u8>) -> Result<()> {
         if code.starts_with(&[0xEF]) {
             // https://eips.ethereum.org/EIPS/eip-3541
             return Err(Error::EVMObjectFormatNotSupported(address));
@@ -332,7 +321,11 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             return Err(Error::ContractCodeSizeLimit(address, code.len()));
         }
 
-        let set_code = Action::EvmSetCode { address, code };
+        let set_code = Action::EvmSetCode {
+            address,
+            chain_id,
+            code,
+        };
         self.actions.push(set_code);
 
         Ok(())
@@ -345,7 +338,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(())
     }
 
-    async fn storage(&self, from_address: &Address, from_index: &U256) -> Result<[u8; 32]> {
+    async fn storage(&self, from_address: Address, from_index: U256) -> Result<[u8; 32]> {
         for action in self.actions.iter().rev() {
             if let Action::EvmSetStorage {
                 address,
@@ -353,7 +346,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
                 value,
             } = action
             {
-                if (from_address == address) && (from_index == index) {
+                if (&from_address == address) && (&from_index == index) {
                     return Ok(*value);
                 }
             }
@@ -449,5 +442,28 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     ) -> Option<Result<Vec<u8>>> {
         self.call_precompile_extension(context, address, data, is_static)
             .await
+    }
+
+    fn default_chain_id(&self) -> u64 {
+        self.backend.default_chain_id()
+    }
+
+    fn is_valid_chain_id(&self, chain_id: u64) -> bool {
+        self.backend.is_valid_chain_id(chain_id)
+    }
+
+    async fn contract_chain_id(&self, contract: Address) -> Result<u64> {
+        for action in self.actions.iter().rev() {
+            if let Action::EvmSetCode {
+                address, chain_id, ..
+            } = action
+            {
+                if &contract == address {
+                    return Ok(*chain_id);
+                }
+            }
+        }
+
+        self.backend.contract_chain_id(contract).await
     }
 }

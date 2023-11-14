@@ -1,8 +1,11 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use ethnum::U256;
+use maybe_async::maybe_async;
 use serde::{Deserialize, Serialize};
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
+
+use crate::account_storage::AccountStorage;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OwnedAccountInfo {
@@ -61,4 +64,23 @@ pub struct Cache {
     pub block_number: U256,
     #[serde(with = "ethnum::serde::bytes::le")]
     pub block_timestamp: U256,
+}
+
+#[maybe_async]
+#[allow(clippy::await_holding_refcell_ref)] // We don't use this RefCell<Cache> in other execution context
+pub async fn cache_get_or_insert_account<B: AccountStorage>(
+    cache: &RefCell<Cache>,
+    key: Pubkey,
+    backend: &B,
+) -> OwnedAccountInfo {
+    use std::collections::btree_map::Entry;
+
+    let mut cache = cache.borrow_mut();
+    match cache.solana_accounts.entry(key) {
+        Entry::Vacant(entry) => {
+            let owned_account_info = backend.clone_solana_account(&key).await;
+            entry.insert(owned_account_info).clone()
+        }
+        Entry::Occupied(entry) => entry.get().clone(),
+    }
 }
