@@ -1,4 +1,4 @@
-chain_id = 111
+program_id = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
 operators_whitelist = [
     "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
     "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
@@ -33,6 +33,6 @@ operators_whitelist = [
     "eXiURdoUQ4JpUysAevcTPiLMdWwG8q6mRAmice5Kioh",
 ]
 
-[token_mint]
-neon_token_mint = "EjLGfD8mpxKLwGDi8AiTisAbGtWWM2L3htkJ6MpvS8Hk"
-decimals = 9
+[chain.neon]
+id = 111
+token = "EjLGfD8mpxKLwGDi8AiTisAbGtWWM2L3htkJ6MpvS8Hk"

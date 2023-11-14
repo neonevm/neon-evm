@@ -2,12 +2,7 @@
 #![allow(clippy::useless_transmute)]
 
 use cfg_if::cfg_if;
-use const_format::formatcp;
-use evm_loader_macro::{
-    common_config_parser, declare_param_id, elf_config_parser, neon_elf_param,
-    net_specific_config_parser, operators_whitelist,
-};
-use static_assertions::const_assert;
+use evm_loader_macro::{common_config_parser, neon_elf_param, net_specific_config_parser};
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
@@ -23,16 +18,15 @@ cfg_if! {
     }
 }
 
-common_config_parser!("config/common.toml");
-
 cfg_if! {
     if #[cfg(feature = "emergency")] {
-        neon_elf_param!( NEON_STATUS_NAME, "EMERGENCY");
+        neon_elf_param!(NEON_STATUS_NAME, "EMERGENCY");
     } else {
-        neon_elf_param!( NEON_STATUS_NAME, "WORK");
+        neon_elf_param!(NEON_STATUS_NAME, "WORK");
     }
 }
 
-elf_config_parser!("config/elf_params.toml");
+common_config_parser!("config/common.toml");
 
-const_assert!(token_mint::decimals() <= 18);
+neon_elf_param!(NEON_PKG_VERSION, env!("CARGO_PKG_VERSION"));
+neon_elf_param!(NEON_REVISION, env!("NEON_REVISION"));

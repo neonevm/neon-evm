@@ -3,53 +3,16 @@
 
 mod config_parser;
 
-use config_parser::{CommonConfig, ElfParams, NetSpecificConfig, TokenMint};
+use std::collections::BTreeMap;
+
+use config_parser::{CommonConfig, NetSpecificConfig};
 use proc_macro::TokenStream;
 use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, Expr, Ident, LitStr, Result, Token};
 
 use quote::quote;
 
 extern crate proc_macro;
-
-struct OperatorsWhitelistInput {
-    list: Punctuated<LitStr, Token![,]>,
-}
-
-impl Parse for OperatorsWhitelistInput {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let list = Punctuated::parse_terminated(input)?;
-        Ok(Self { list })
-    }
-}
-
-#[proc_macro]
-pub fn operators_whitelist(tokens: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(tokens as OperatorsWhitelistInput);
-
-    let mut operators: Vec<Vec<u8>> = input
-        .list
-        .iter()
-        .map(LitStr::value)
-        .map(|key| {
-            bs58::decode(key)
-                .into_vec()
-                .expect("Pubkey is base64 encoded")
-        })
-        .collect();
-
-    operators.sort_unstable();
-
-    let len = operators.len();
-
-    quote! {
-        pub static AUTHORIZED_OPERATOR_LIST: [::solana_program::pubkey::Pubkey; #len] = [
-            #(::solana_program::pubkey::Pubkey::new_from_array([#((#operators),)*]),)*
-        ];
-    }
-    .into()
-}
 
 struct ElfParamInput {
     name: Ident,
@@ -94,76 +57,52 @@ pub fn neon_elf_param(tokens: TokenStream) -> TokenStream {
     .into()
 }
 
-struct ElfParamIdInput {
-    name: Ident,
-    _separator: Token![,],
-    value: LitStr,
-}
-
-impl Parse for ElfParamIdInput {
-    fn parse(input: ParseStream) -> Result<Self> {
-        Ok(Self {
-            name: input.parse()?,
-            _separator: input.parse()?,
-            value: input.parse()?,
-        })
-    }
-}
-
-#[proc_macro]
-pub fn declare_param_id(tokens: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(tokens as ElfParamIdInput);
-
-    let name = input.name;
-
-    let value = input.value.value();
-    let value_bytes = value.as_bytes();
-
-    let len = value.len();
-
-    quote! {
-        ::solana_program::declare_id!(#value);
-
-        #[no_mangle]
-        #[used]
-        #[doc(hidden)]
-        pub static #name: [u8; #len] = [
-            #((#value_bytes),)*
-        ];
-    }
-    .into()
-}
-
+/// # Panics
+/// Panic at compile time if config file is not correct
 #[proc_macro]
 pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
     let NetSpecificConfig {
-        chain_id,
+        program_id,
+        neon_chain_id,
+        neon_token_mint,
         operators_whitelist,
-        token_mint: TokenMint {
-            neon_token_mint,
-            decimals,
-        },
+        mut chains,
     } = parse_macro_input!(tokens as NetSpecificConfig);
 
+    let mut operators: Vec<Vec<u8>> = operators_whitelist
+        .iter()
+        .map(|key| bs58::decode(key).into_vec().unwrap())
+        .collect();
+
+    operators.sort_unstable();
+    let operators_len = operators.len();
+
+    chains.sort_unstable_by_key(|c| c.id);
+    let chains_len = chains.len();
+
+    let chain_ids = chains.iter().map(|c| c.id).collect::<Vec<_>>();
+    let chain_names = chains.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+    let chain_tokens = chains
+        .iter()
+        .map(|c| bs58::decode(&c.token).into_vec().unwrap())
+        .collect::<Vec<_>>();
+
+    let neon_chain_id_str = neon_chain_id.to_string();
+
     quote! {
-        /// Supported CHAIN_ID value for transactions
-        pub const CHAIN_ID: u64 = #chain_id;
+        pub const PROGRAM_ID: solana_program::pubkey::Pubkey = solana_program::pubkey!(#program_id);
+        pub const DEFAULT_CHAIN_ID: u64 = #neon_chain_id;
 
-        operators_whitelist![#(#operators_whitelist),*];
+        neon_elf_param!(NEON_CHAIN_ID, #neon_chain_id_str);
+        neon_elf_param!(NEON_TOKEN_MINT, #neon_token_mint);
 
-        /// Token Mint ID
-        pub mod token_mint {
-            use super::declare_param_id;
+        pub static AUTHORIZED_OPERATOR_LIST: [::solana_program::pubkey::Pubkey; #operators_len] = [
+            #(::solana_program::pubkey::Pubkey::new_from_array([#((#operators),)*]),)*
+        ];
 
-            declare_param_id!(NEON_TOKEN_MINT, #neon_token_mint);
-            /// Ethereum account version
-            pub const DECIMALS: u8 = #decimals;
-
-            /// Number of base 10 digits to the right of the decimal place
-            #[must_use]
-            pub const fn decimals() -> u8 { DECIMALS }
-
-        }
+        pub static CHAIN_ID_LIST: [(u64, &str, ::solana_program::pubkey::Pubkey); #chains_len] = [
+            #( (#chain_ids, #chain_names, ::solana_program::pubkey::Pubkey::new_from_array([#(#chain_tokens),*])) ),*
+        ];
     }
     .into()
 }
@@ -171,11 +110,43 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn common_config_parser(tokens: TokenStream) -> TokenStream {
     let config = parse_macro_input!(tokens as CommonConfig);
-    config.token_stream
-}
 
-#[proc_macro]
-pub fn elf_config_parser(tokens: TokenStream) -> TokenStream {
-    let config = parse_macro_input!(tokens as ElfParams);
-    config.token_stream
+    let mut variables = BTreeMap::new();
+    let mut tokens = Vec::<proc_macro2::TokenStream>::new();
+
+    for v in config.variables {
+        let t = v.r#type;
+        let name = v.name;
+        let value = v.value;
+
+        let elf_name_string = "NEON_".to_string() + &name.to_string();
+        let elf_name = Ident::new(&elf_name_string, name.span());
+        let elf_value = match &value {
+            syn::Lit::Str(s) => s.clone(),
+            syn::Lit::Int(i) => LitStr::new(&i.to_string(), i.span()),
+            syn::Lit::Float(f) => LitStr::new(&f.to_string(), f.span()),
+            syn::Lit::Bool(b) => LitStr::new(&b.value().to_string(), b.span()),
+            _ => unreachable!(),
+        };
+
+        tokens.push(quote! {
+            pub const #name: #t = #value;
+            neon_elf_param!(#elf_name, #elf_value);
+        });
+
+        variables.insert(elf_name_string, elf_value);
+    }
+
+    let variables_len = variables.len();
+    let variable_names = variables.keys();
+    let variable_values = variables.values();
+
+    quote! {
+        #(#tokens)*
+
+        pub static PARAMETERS: [(&str, &str); #variables_len] = [
+            #( (#variable_names, #variable_values) ),*
+        ];
+    }
+    .into()
 }
