@@ -3,10 +3,13 @@ use std::convert::TryInto;
 use arrayref::array_ref;
 use ethnum::U256;
 use maybe_async::maybe_async;
-use solana_program::{program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar};
+use solana_program::{
+    account_info::IntoAccountInfo, program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
+};
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::{
+    account::token,
     account_storage::AccountStorage,
     error::{Error, Result},
     executor::ExecutorState,
@@ -44,11 +47,13 @@ pub async fn neon_token<B: AccountStorage>(
         }
 
         let source = context.contract;
+        let chain_id = context.contract_chain_id;
+        let value = context.value;
         // owner of the associated token account
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
 
-        withdraw(state, source, destination, context.value).await?;
+        withdraw(state, source, chain_id, destination, value).await?;
 
         let mut output = vec![0_u8; 32];
         output[31] = 1; // return true
@@ -64,6 +69,7 @@ pub async fn neon_token<B: AccountStorage>(
 async fn withdraw<B: AccountStorage>(
     state: &mut ExecutorState<'_, B>,
     source: Address,
+    chain_id: u64,
     target: Pubkey,
     value: U256,
 ) -> Result<()> {
@@ -71,7 +77,17 @@ async fn withdraw<B: AccountStorage>(
         return Err(Error::Custom("Neon Withdraw: value == 0".to_string()));
     }
 
-    let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
+    let mint_address = state.backend.chain_id_to_token(chain_id);
+
+    let mut mint_account = state.external_account(mint_address).await?;
+    let mint_data = {
+        let info = mint_account.into_account_info();
+        token::Mint::from_account(&info)?.into_data()
+    };
+
+    assert!(mint_data.decimals < 18);
+
+    let additional_decimals: u32 = (18 - mint_data.decimals).into();
     let min_amount: u128 = u128::pow(10, additional_decimals);
 
     let spl_amount = value / min_amount;
@@ -89,15 +105,15 @@ async fn withdraw<B: AccountStorage>(
         )));
     }
 
-    let target_token = get_associated_token_address(&target, state.backend.neon_token_mint());
+    let target_token = get_associated_token_address(&target, &mint_address);
     let account = state.external_account(target_token).await?;
     if !spl_token::check_id(&account.owner) {
         use spl_associated_token_account::instruction::create_associated_token_account;
 
         let create_associated = create_associated_token_account(
-            state.backend.operator(),
+            &state.backend.operator(),
             &target,
-            state.backend.neon_token_mint(),
+            &mint_address,
             &spl_token::ID,
         );
 
@@ -108,22 +124,22 @@ async fn withdraw<B: AccountStorage>(
 
     let (authority, bump_seed) =
         Pubkey::find_program_address(&[b"Deposit"], state.backend.program_id());
-    let pool = get_associated_token_address(&authority, state.backend.neon_token_mint());
+    let pool = get_associated_token_address(&authority, &mint_address);
 
     let transfer = spl_token::instruction::transfer_checked(
         &spl_token::ID,
         &pool,
-        state.backend.neon_token_mint(),
+        &mint_address,
         &target_token,
         &authority,
         &[],
         spl_amount.as_u64(),
-        crate::config::token_mint::decimals(),
+        mint_data.decimals,
     )?;
     let transfer_seeds = vec![b"Deposit".to_vec(), vec![bump_seed]];
     state.queue_external_instruction(transfer, transfer_seeds, 0);
 
-    state.withdraw_neons(source, value);
+    state.burn(source, chain_id, value);
 
     Ok(())
 }

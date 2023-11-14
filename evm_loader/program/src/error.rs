@@ -1,11 +1,13 @@
 //! Error types
 #![allow(clippy::use_self)]
 
-use std::{array::TryFromSliceError, num::TryFromIntError};
+use std::{array::TryFromSliceError, num::TryFromIntError, str::Utf8Error};
 
 use ethnum::U256;
 use solana_program::{
-    program_error::ProgramError, pubkey::Pubkey, secp256k1_recover::Secp256k1RecoverError,
+    program_error::ProgramError,
+    pubkey::{Pubkey, PubkeyError},
+    secp256k1_recover::Secp256k1RecoverError,
 };
 use thiserror::Error;
 
@@ -19,6 +21,9 @@ pub enum Error {
 
     #[error("Solana Program Error: {0}")]
     ProgramError(#[from] ProgramError),
+
+    #[error("Solana Pubkey Error: {0}")]
+    PubkeyError(#[from] PubkeyError),
 
     #[error("RLP error: {0}")]
     RlpError(#[from] rlp::DecoderError),
@@ -38,11 +43,17 @@ pub enum Error {
     #[error("TryFromSliceError error: {0}")]
     TryFromSliceError(#[from] TryFromSliceError),
 
-    #[error("Account {0} - not found")]
-    AccountMissing(Address),
+    #[error("Utf8Error error: {0}")]
+    Utf8Error(#[from] Utf8Error),
 
-    #[error("Account {0} - blocked")]
-    AccountBlocked(Address),
+    #[error("Account {0} - not found")]
+    AccountMissing(Pubkey),
+
+    #[error("Account {0} - blocked, trying to execute transaction on rw locked account")]
+    AccountBlocked(Pubkey),
+
+    #[error("Account {0} - was empty, created by another transaction")]
+    AccountCreatedByAnotherTransaction(Pubkey),
 
     #[error("Account {0} - invalid tag, expected {1}")]
     AccountInvalidTag(Pubkey, u8),
@@ -74,17 +85,23 @@ pub enum Error {
     #[error("Storage Account is uninitialized")]
     StorageAccountUninitialized,
 
-    #[error("Storage Account is finalized")]
+    #[error("Transaction already finalized")]
     StorageAccountFinalized,
 
     #[error("Unknown extension method selector {1:?}, contract {0}")]
     UnknownPrecompileMethodSelector(Address, [u8; 4]),
 
-    #[error("Insufficient balance for transfer, account = {0}, required = {1}")]
-    InsufficientBalance(Address, U256),
+    #[error("Insufficient balance for transfer, account = {0}, chain = {1}, required = {2}")]
+    InsufficientBalance(Address, u64, U256),
+
+    #[error("Invalid token for transfer, account = {0}, chain = {1}")]
+    InvalidTransferToken(Address, u64),
 
     #[error("Out of Gas, limit = {0}, required = {1}")]
     OutOfGas(U256, U256),
+
+    #[error("Invalid gas balance account")]
+    GasReceiverInvalidChainId,
 
     #[error("EVM Stack Overflow")]
     StackOverflow,
@@ -113,14 +130,14 @@ pub enum Error {
     #[error("EVM encountered unknown opcode, contract = {0}, opcode = {1:X}")]
     UnknownOpcode(Address, u8),
 
-    #[error("Account {0} nonce overflow")]
+    #[error("Account {0} - nonce overflow")]
     NonceOverflow(Address),
 
     #[error("Invalid Nonce, origin {0} nonce {1} != Transaction nonce {2}")]
     InvalidTransactionNonce(Address, u64, u64),
 
     #[error("Invalid Chain ID {0}")]
-    InvalidChainId(U256),
+    InvalidChainId(u64),
 
     #[error("Attempt to deploy to existing account {0}, caller = {1}")]
     DeployToExistingAccount(Address, Address),
@@ -143,8 +160,18 @@ pub enum Error {
     #[error("Holder Account - invalid owner {0}, expected = {1}")]
     HolderInvalidOwner(Pubkey, Pubkey),
 
+    #[error("Holder Account - insufficient size {0}, required = {1}")]
+    HolderInsufficientSize(usize, usize),
+
     #[error("Holder Account - invalid transaction hash {}, expected = {}", hex::encode(.0), hex::encode(.1))]
     HolderInvalidHash([u8; 32], [u8; 32]),
+
+    #[error(
+        "Deployment of contract which needs more than 10kb of account space needs several \
+    transactions for reallocation and cannot be performed in a single instruction. \
+    That's why you have to use iterative transaction for the deployment."
+    )]
+    AccountSpaceAllocationFailure,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -162,6 +189,12 @@ impl From<Error> for ProgramError {
 impl From<&'static str> for Error {
     fn from(value: &'static str) -> Self {
         Self::Custom(value.to_string())
+    }
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Self::Custom(value)
     }
 }
 
@@ -185,29 +218,6 @@ macro_rules! Err {
         log::error!("{}", &format!($($args),*));
 
         Err($n)
-    });
-}
-
-/// Macro to log a `ProgramError` in the current transaction log.
-/// with the source file position like: file.rc:777
-/// and additional info if needed
-/// See `https://github.com/neonlabsorg/neon-evm/issues/159`
-///
-/// # Examples
-///
-/// ```ignore
-/// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
-/// ```
-///
-macro_rules! E {
-    ( $n:expr; $($args:expr),* ) => ({
-        #[cfg(target_os = "solana")]
-        solana_program::msg!("{}:{} : {}", file!(), line!(), &format!($($args),*));
-
-        #[cfg(all(not(target_os = "solana"), feature = "log"))]
-        log::error!("{}", &format!($($args),*));
-
-        $n
     });
 }
 

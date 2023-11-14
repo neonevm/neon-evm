@@ -270,8 +270,11 @@ fn create_account<B: AccountStorage>(
     let required_lamports = minimum_balance.saturating_sub(account.lamports);
 
     if required_lamports > 0 {
-        let transfer =
-            system_instruction::transfer(state.backend.operator(), &account.key, required_lamports);
+        let transfer = system_instruction::transfer(
+            &state.backend.operator(),
+            &account.key,
+            required_lamports,
+        );
         state.queue_external_instruction(transfer, vec![], required_lamports);
     }
 
@@ -294,7 +297,7 @@ async fn initialize_mint<B: AccountStorage>(
     freeze_authority: Option<Pubkey>,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, _) = state.backend.solana_address(&signer);
+    let (signer_pubkey, _) = state.backend.contract_pubkey(signer);
 
     let (mint_key, bump_seed) = Pubkey::find_program_address(
         &[
@@ -342,7 +345,7 @@ async fn initialize_account<B: AccountStorage>(
     owner: Option<Pubkey>,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, _) = state.backend.solana_address(&signer);
+    let (signer_pubkey, _) = state.backend.contract_pubkey(signer);
 
     let (account_key, bump_seed) = Pubkey::find_program_address(
         &[
@@ -386,7 +389,7 @@ fn close_account<B: AccountStorage>(
     account: Pubkey,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -397,7 +400,7 @@ fn close_account<B: AccountStorage>(
     let close_account = spl_token::instruction::close_account(
         &spl_token::ID,
         &account,
-        state.backend.operator(),
+        &state.backend.operator(),
         &signer_pubkey,
         &[],
     )?;
@@ -414,7 +417,7 @@ fn approve<B: AccountStorage>(
     amount: u64,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -441,7 +444,7 @@ fn revoke<B: AccountStorage>(
     account: Pubkey,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -463,7 +466,7 @@ fn transfer<B: AccountStorage>(
     amount: u64,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -530,7 +533,7 @@ fn mint_to<B: AccountStorage>(
     amount: u64,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -559,7 +562,7 @@ fn burn<B: AccountStorage>(
     amount: u64,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -588,7 +591,7 @@ fn freeze<B: AccountStorage>(
     target: Pubkey,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],
@@ -615,7 +618,7 @@ fn thaw<B: AccountStorage>(
     target: Pubkey,
 ) -> Result<Vec<u8>> {
     let signer = context.caller;
-    let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
+    let (signer_pubkey, bump_seed) = state.backend.contract_pubkey(signer);
 
     let seeds = vec![
         vec![ACCOUNT_SEED_VERSION],

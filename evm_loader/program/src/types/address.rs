@@ -1,3 +1,4 @@
+use ethnum::U256;
 use hex::FromHex;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
@@ -55,6 +56,14 @@ impl Address {
     #[must_use]
     pub fn find_solana_address(&self, program_id: &Pubkey) -> (Pubkey, u8) {
         let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], &self.0];
+        Pubkey::find_program_address(seeds, program_id)
+    }
+
+    #[must_use]
+    pub fn find_balance_address(&self, program_id: &Pubkey, chain_id: u64) -> (Pubkey, u8) {
+        let chain_id = U256::from(chain_id);
+
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], &self.0, &chain_id.to_be_bytes()];
         Pubkey::find_program_address(seeds, program_id)
     }
 }

@@ -11,6 +11,8 @@
 )]
 #![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
+solana_program::declare_id!(crate::config::PROGRAM_ID);
+
 mod allocator;
 #[macro_use]
 mod debug;
@@ -27,7 +29,6 @@ pub mod external_programs;
 pub mod gasometer;
 #[cfg(target_os = "solana")]
 pub mod instruction;
-pub mod state_account;
 pub mod types;
 
 // Export current solana-sdk types for downstream users who may also be building with a different

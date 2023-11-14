@@ -20,12 +20,11 @@ impl rlp::Decodable for StorageKey {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
-impl TryFrom<crate::types::hexbytes::HexBytes> for StorageKey {
+impl TryFrom<Vec<u8>> for StorageKey {
     type Error = String;
 
-    fn try_from(hex: crate::types::hexbytes::HexBytes) -> Result<Self, Self::Error> {
-        let bytes = hex.0;
+    fn try_from(hex: Vec<u8>) -> Result<Self, Self::Error> {
+        let bytes = hex;
 
         if bytes.len() != 32 {
             return Err(String::from("Hex string must be 32 bytes"));
@@ -35,6 +34,12 @@ impl TryFrom<crate::types::hexbytes::HexBytes> for StorageKey {
         array.copy_from_slice(&bytes);
 
         Ok(StorageKey(array))
+    }
+}
+
+impl AsRef<[u8]> for StorageKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -62,14 +67,14 @@ impl TransactionEnvelope {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LegacyTx {
     pub nonce: u64,
     pub gas_price: U256,
     pub gas_limit: U256,
     pub target: Option<Address>,
     pub value: U256,
-    pub call_data: crate::evm::Buffer,
+    pub call_data: Vec<u8>,
     pub v: U256,
     pub r: U256,
     pub s: U256,
@@ -104,7 +109,7 @@ impl rlp::Decodable for LegacyTx {
             }
         };
         let value: U256 = u256(&rlp.at(4)?)?;
-        let call_data = crate::evm::Buffer::from_slice(rlp.at(5)?.data()?);
+        let call_data = rlp.val_at(5)?;
         let v: U256 = u256(&rlp.at(6)?)?;
         let r: U256 = u256(&rlp.at(7)?)?;
         let s: U256 = u256(&rlp.at(8)?)?;
@@ -143,14 +148,14 @@ impl rlp::Decodable for LegacyTx {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AccessListTx {
     pub nonce: u64,
     pub gas_price: U256,
     pub gas_limit: U256,
     pub target: Option<Address>,
     pub value: U256,
-    pub call_data: crate::evm::Buffer,
+    pub call_data: Vec<u8>,
     pub r: U256,
     pub s: U256,
     pub chain_id: U256,
@@ -187,7 +192,7 @@ impl rlp::Decodable for AccessListTx {
         };
 
         let value: U256 = u256(&rlp.at(5)?)?;
-        let call_data = crate::evm::Buffer::from_slice(rlp.at(6)?.data()?);
+        let call_data = rlp.val_at(6)?;
 
         let rlp_access_list = rlp.at(7)?;
         let mut access_list = vec![];
@@ -240,13 +245,13 @@ impl rlp::Decodable for AccessListTx {
 // TODO: Will be added as a part of EIP-1559
 // struct DynamicFeeTx {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TransactionPayload {
     Legacy(LegacyTx),
     AccessList(AccessListTx),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Transaction {
     pub transaction: TransactionPayload,
     pub byte_len: usize,
@@ -503,23 +508,20 @@ impl Transaction {
     }
 
     #[must_use]
-    pub fn call_data(&self) -> &crate::evm::Buffer {
+    pub fn call_data(&self) -> &[u8] {
         match &self.transaction {
             TransactionPayload::Legacy(LegacyTx { call_data, .. })
             | TransactionPayload::AccessList(AccessListTx { call_data, .. }) => call_data,
         }
     }
 
-    // Mem replace for call_data to avoid cloning it
     #[must_use]
-    pub fn extract_call_data(&mut self) -> crate::evm::Buffer {
+    pub fn into_call_data(self) -> crate::evm::Buffer {
         match self.transaction {
-            TransactionPayload::Legacy(LegacyTx {
-                ref mut call_data, ..
-            })
-            | TransactionPayload::AccessList(AccessListTx {
-                ref mut call_data, ..
-            }) => std::mem::take(call_data),
+            TransactionPayload::Legacy(LegacyTx { call_data, .. })
+            | TransactionPayload::AccessList(AccessListTx { call_data, .. }) => {
+                crate::evm::Buffer::from_vec(call_data)
+            }
         }
     }
 
@@ -540,11 +542,14 @@ impl Transaction {
     }
 
     #[must_use]
-    pub fn chain_id(&self) -> Option<U256> {
+    pub fn chain_id(&self) -> Option<u64> {
         match self.transaction {
             TransactionPayload::Legacy(LegacyTx { chain_id, .. }) => chain_id,
             TransactionPayload::AccessList(AccessListTx { chain_id, .. }) => Some(chain_id),
         }
+        .map(std::convert::TryInto::try_into)
+        .transpose()
+        .expect("chain_id < u64::max")
     }
 
     #[must_use]
