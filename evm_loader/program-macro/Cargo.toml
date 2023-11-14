@@ -10,8 +10,9 @@ proc-macro = true
 
 [dependencies]
 syn = "1"
+proc-macro2 = "1"
 quote = "1"
-itertools = "0.10.5"
+itertools = "0.11"
 bs58 = "0.4"
-serde = { version = "1.0.186", features = [ "derive" ] }
-toml = "0.5"
+serde = { version = "1.0", features = [ "derive" ] }
+toml = "0.8"

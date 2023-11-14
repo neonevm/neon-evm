@@ -16,12 +16,15 @@ solana-clap-utils = "=1.16.18"
 solana-cli-config = "=1.16.18"
 solana-cli = "=1.16.18"
 solana-transaction-status = "=1.16.18"
+solana-program-test = "=1.16.18"
 spl-token = { version = "~3.5", default-features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "~1.1", default-features = false, features = ["no-entrypoint"] }
 bs58 = "0.4.0"
-hex = "0.4.2"
-serde = "1.0.186"
-serde_json = { version = "1.0.107", features = ["preserve_order"] }
+base64 = "0.21"
+hex = { version = "0.4", features = ["serde"] }
+serde = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_with = { version = "3.3", features = ["hex"] }
 log = "0.4.17"
 rand = "0.8"
 ethnum = { version = "1.4", default-features = false, features = ["serde"] }
