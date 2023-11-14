@@ -1,5 +1,5 @@
-use crate::account::{FinalizedState, Holder, Operator};
-use crate::error::{Error, Result};
+use crate::account::{Holder, Operator};
+use crate::error::Result;
 use arrayref::array_ref;
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
@@ -14,32 +14,14 @@ pub fn process<'a>(
     let offset = usize::from_le_bytes(*array_ref![instruction, 32, 8]);
     let data = &instruction[32 + 8..];
 
-    let holder_info = &accounts[0];
-
-    let mut holder = match crate::account::tag(program_id, holder_info)? {
-        Holder::TAG => Holder::from_account(program_id, holder_info),
-        FinalizedState::TAG => {
-            let finalized_state = FinalizedState::from_account(program_id, holder_info)?;
-            let holder_data = crate::account::holder::Data {
-                owner: finalized_state.owner,
-                transaction_hash,
-                transaction_len: 0,
-            };
-            unsafe { finalized_state.replace(holder_data) }
-        }
-        _ => {
-            return Err(Error::AccountInvalidTag(*holder_info.key, Holder::TAG));
-        }
-    }?;
-
+    let holder_info = accounts[0].clone();
     let operator = unsafe { Operator::from_account_not_whitelisted(&accounts[1]) }?;
 
-    holder.validate_owner(&operator)?;
+    crate::account::legacy::update_holder_account(&holder_info)?;
 
-    if holder.transaction_hash != transaction_hash {
-        holder.clear()?;
-        holder.transaction_hash = transaction_hash;
-    }
+    let mut holder = Holder::from_account(program_id, holder_info)?;
+    holder.validate_owner(&operator)?;
+    holder.update_transaction_hash(transaction_hash);
 
     solana_program::log::sol_log_data(&[b"HASH", &transaction_hash]);
 

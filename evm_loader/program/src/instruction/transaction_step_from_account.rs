@@ -1,9 +1,12 @@
-use crate::account::{program, EthereumAccount, FinalizedState, Holder, Operator, State, Treasury};
-use crate::account_storage::ProgramAccountStorage;
-use crate::config::{CHAIN_ID, GAS_LIMIT_MULTIPLIER_NO_CHAINID};
+use crate::account::legacy::{TAG_HOLDER_DEPRECATED, TAG_STATE_FINALIZED_DEPRECATED};
+use crate::account::{
+    program, AccountsDB, BalanceAccount, Holder, Operator, StateAccount, Treasury, TAG_HOLDER,
+    TAG_STATE, TAG_STATE_FINALIZED,
+};
+
 use crate::error::{Error, Result};
 use crate::gasometer::Gasometer;
-use crate::instruction::transaction_step::{do_begin, do_continue, Accounts};
+use crate::instruction::transaction_step::{do_begin, do_continue};
 use crate::types::Transaction;
 use arrayref::array_ref;
 use ethnum::U256;
@@ -16,51 +19,45 @@ pub fn process<'a>(
 ) -> Result<()> {
     solana_program::msg!("Instruction: Begin or Continue Transaction from Account");
 
+    process_inner(program_id, accounts, instruction, false)
+}
+
+pub fn process_inner<'a>(
+    program_id: &'a Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    instruction: &[u8],
+    increase_gas_limit: bool,
+) -> Result<()> {
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
     let step_count = u64::from(u32::from_le_bytes(*array_ref![instruction, 4, 4]));
 
-    let holder_or_storage_info = &accounts[0];
+    let holder_or_storage = &accounts[0];
 
-    let accounts = Accounts {
-        operator: Operator::from_account(&accounts[1])?,
-        treasury: Treasury::from_account(program_id, treasury_index, &accounts[2])?,
-        operator_ether_account: EthereumAccount::from_account(program_id, &accounts[3])?,
-        system_program: program::System::from_account(&accounts[4])?,
-        neon_program: program::Neon::from_account(program_id, &accounts[5])?,
-        remaining_accounts: &accounts[6..],
-        all_accounts: accounts,
-    };
+    let operator = Operator::from_account(&accounts[1])?;
+    let treasury = Treasury::from_account(program_id, treasury_index, &accounts[2])?;
+    let operator_balance = BalanceAccount::from_account(program_id, accounts[3].clone(), None)?;
+    let system = program::System::from_account(&accounts[4])?;
 
-    let mut account_storage = ProgramAccountStorage::new(
-        program_id,
-        &accounts.operator,
-        Some(&accounts.system_program),
-        accounts.remaining_accounts,
-    )?;
+    let accounts_db = AccountsDB::new(
+        &accounts[5..],
+        operator.clone(),
+        Some(operator_balance),
+        Some(system),
+        Some(treasury),
+    );
 
-    execute(
-        program_id,
-        holder_or_storage_info,
-        accounts,
-        &mut account_storage,
-        step_count,
-        Some(CHAIN_ID.into()),
-    )
-}
+    let mut excessive_lamports = 0_u64;
 
-pub fn execute<'a>(
-    program_id: &'a Pubkey,
-    holder_or_storage_info: &'a AccountInfo<'a>,
-    accounts: Accounts<'a>,
-    account_storage: &mut ProgramAccountStorage<'a>,
-    step_count: u64,
-    expected_chain_id: Option<U256>,
-) -> Result<()> {
-    match crate::account::tag(program_id, holder_or_storage_info)? {
-        Holder::TAG => {
-            let mut trx = {
-                let holder = Holder::from_account(program_id, holder_or_storage_info)?;
-                holder.validate_owner(&accounts.operator)?;
+    let mut tag = crate::account::tag(program_id, &holder_or_storage)?;
+    if (tag == TAG_HOLDER_DEPRECATED) || (tag == TAG_STATE_FINALIZED_DEPRECATED) {
+        tag = crate::account::legacy::update_holder_account(&holder_or_storage)?;
+    }
+
+    match tag {
+        TAG_HOLDER | TAG_HOLDER_DEPRECATED => {
+            let trx = {
+                let holder = Holder::from_account(program_id, holder_or_storage.clone())?;
+                holder.validate_owner(accounts_db.operator())?;
 
                 let message = holder.transaction();
                 let trx = Transaction::from_rlp(&message)?;
@@ -70,56 +67,48 @@ pub fn execute<'a>(
                 trx
             };
 
-            if trx.chain_id() != expected_chain_id {
-                return Err(Error::InvalidChainId(trx.chain_id().unwrap_or(U256::ZERO)));
-            }
+            solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
+            let origin = trx.recover_caller_address()?;
 
-            solana_program::log::sol_log_data(&[b"HASH", &trx.hash()]);
-
-            let caller = trx.recover_caller_address()?;
-            let mut storage =
-                State::new(program_id, holder_or_storage_info, &accounts, caller, &trx)?;
-
-            if expected_chain_id.is_none() {
-                let gas_multiplier = U256::from(GAS_LIMIT_MULTIPLIER_NO_CHAINID);
-                storage.gas_limit = storage.gas_limit.saturating_mul(gas_multiplier);
-            }
-
-            let mut gasometer = Gasometer::new(None, &accounts.operator)?;
+            let mut gasometer = Gasometer::new(U256::ZERO, accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();
-            gasometer.record_address_lookup_table(accounts.all_accounts);
-            gasometer.record_iterative_overhead();
+            gasometer.record_address_lookup_table(accounts);
             gasometer.record_write_to_holder(&trx);
 
-            do_begin(
-                accounts,
-                storage,
-                account_storage,
-                gasometer,
-                &mut trx,
-                caller,
-            )
-        }
-        State::TAG => {
-            let (storage, _blocked_accounts) = State::restore(
+            excessive_lamports += crate::account::legacy::update_legacy_accounts(&accounts_db)?;
+            gasometer.refund_lamports(excessive_lamports);
+
+            let mut storage = StateAccount::new(
                 program_id,
-                holder_or_storage_info,
-                &accounts.operator,
-                accounts.remaining_accounts,
-                false,
+                holder_or_storage.clone(),
+                &accounts_db,
+                origin,
+                &trx,
             )?;
 
-            solana_program::log::sol_log_data(&[b"HASH", &storage.transaction_hash]);
+            if increase_gas_limit {
+                assert!(trx.chain_id().is_none());
+                storage.use_gas_limit_multiplier();
+            }
 
-            let mut gasometer = Gasometer::new(Some(storage.gas_used), &accounts.operator)?;
+            do_begin(accounts_db, storage, gasometer, trx, origin)
+        }
+        TAG_STATE => {
+            let storage =
+                StateAccount::restore(program_id, holder_or_storage.clone(), &accounts_db, false)?;
+
+            solana_program::log::sol_log_data(&[b"HASH", &storage.trx_hash()]);
+
+            let mut gasometer = Gasometer::new(storage.gas_used(), accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();
 
-            do_continue(step_count, accounts, storage, account_storage, gasometer)
+            do_continue(step_count, accounts_db, storage, gasometer)
         }
-        FinalizedState::TAG => Err(Error::StorageAccountFinalized),
-        _ => Err(Error::AccountInvalidTag(
-            *holder_or_storage_info.key,
-            Holder::TAG,
-        )),
-    }
+        TAG_STATE_FINALIZED | TAG_STATE_FINALIZED_DEPRECATED => Err(Error::StorageAccountFinalized),
+        _ => Err(Error::AccountInvalidTag(*holder_or_storage.key, TAG_HOLDER)),
+    }?;
+
+    **operator.try_borrow_mut_lamports()? += excessive_lamports;
+
+    Ok(())
 }

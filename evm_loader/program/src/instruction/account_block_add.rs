@@ -1,14 +1,10 @@
-use std::collections::BTreeSet;
-
-use crate::account::{EthereumAccount, Operator, State};
-use crate::error::{Error, Result};
-use crate::state_account::BlockedAccountMeta;
+use crate::error::Result;
 use solana_program::instruction::TRANSACTION_LEVEL_STACK_HEIGHT;
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 pub fn process<'a>(
-    program_id: &'a Pubkey,
-    accounts: &'a [AccountInfo<'a>],
+    _program_id: &'a Pubkey,
+    _accounts: &'a [AccountInfo<'a>],
     _instruction: &[u8],
 ) -> Result<()> {
     let stack_height = solana_program::instruction::get_stack_height();
@@ -16,37 +12,39 @@ pub fn process<'a>(
 
     solana_program::msg!("Instruction: Block Accounts");
 
-    let mut state = State::from_account(program_id, &accounts[0])?;
-    let operator = Operator::from_account(&accounts[1])?;
+    todo!();
 
-    if &state.owner != operator.key {
-        return Err(Error::HolderInvalidOwner(state.owner, *operator.key));
-    }
+    // let mut state = State::from_account(program_id, &accounts[0])?;
+    // let operator = Operator::from_account(&accounts[1])?;
 
-    let mut blocked_accounts = state.read_blocked_accounts()?;
-    let mut blocked_keys: BTreeSet<Pubkey> = blocked_accounts.iter().map(|a| a.key).collect();
+    // if &state.owner != operator.key {
+    //     return Err(Error::HolderInvalidOwner(state.owner, *operator.key));
+    // }
 
-    for account_info in &accounts[2..] {
-        if blocked_keys.contains(account_info.key) {
-            continue;
-        }
+    // let mut blocked_accounts = state.read_blocked_accounts()?;
+    // let mut blocked_keys: BTreeSet<Pubkey> = blocked_accounts.iter().map(|a| a.key).collect();
 
-        let mut meta = BlockedAccountMeta {
-            key: *account_info.key,
-            exists: false,
-            is_writable: account_info.is_writable,
-        };
+    // for account_info in &accounts[2..] {
+    //     if blocked_keys.contains(account_info.key) {
+    //         continue;
+    //     }
 
-        if let Ok(mut account) = EthereumAccount::from_account(program_id, account_info) {
-            account.check_blocked()?;
-            account.rw_blocked = true;
+    //     let mut meta = BlockedAccountMeta {
+    //         key: *account_info.key,
+    //         exists: false,
+    //         is_writable: account_info.is_writable,
+    //     };
 
-            meta.exists = true;
-        }
+    //     if let Ok(mut account) = EthereumAccount::from_account(program_id, account_info) {
+    //         account.check_blocked()?;
+    //         account.rw_blocked = true;
 
-        blocked_accounts.push(meta);
-        blocked_keys.insert(*account_info.key);
-    }
+    //         meta.exists = true;
+    //     }
 
-    state.update_blocked_accounts(blocked_accounts.into_iter())
+    //     blocked_accounts.push(meta);
+    //     blocked_keys.insert(*account_info.key);
+    // }
+
+    // state.update_blocked_accounts(blocked_accounts.into_iter())
 }

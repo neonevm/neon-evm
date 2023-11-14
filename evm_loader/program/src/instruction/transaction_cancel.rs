@@ -1,90 +1,70 @@
-use crate::account::{EthereumAccount, Incinerator, Operator, State};
-use crate::state_account::{BlockedAccounts, Deposit};
+use crate::account::{AccountsDB, BalanceAccount, Operator, StateAccount};
+use crate::error::{Error, Result};
+use crate::gasometer::{CANCEL_TRX_COST, LAST_ITERATION_COST};
 use arrayref::array_ref;
 use ethnum::U256;
-use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
-    pubkey::Pubkey,
-};
-
-struct Accounts<'a> {
-    storage: State<'a>,
-    incinerator: Incinerator<'a>,
-    remaining_accounts: &'a [AccountInfo<'a>],
-}
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 pub fn process<'a>(
     program_id: &'a Pubkey,
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
-) -> ProgramResult {
+) -> Result<()> {
     solana_program::msg!("Instruction: Cancel Transaction");
 
-    let storage_info = &accounts[0];
+    let storage_info = accounts[0].clone();
     let operator = Operator::from_account(&accounts[1])?;
-    let incinerator = Incinerator::from_account(&accounts[2])?;
-    let remaining_accounts = &accounts[3..];
+    let balance = BalanceAccount::from_account(program_id, accounts[2].clone(), None)?;
 
-    let (storage, blocked_accounts) = State::restore(
-        program_id,
-        storage_info,
-        &operator,
-        remaining_accounts,
-        true,
-    )?;
+    let accounts_database = AccountsDB::new(&accounts[3..], operator, Some(balance), None, None);
 
-    let accounts = Accounts {
-        storage,
-        incinerator,
-        remaining_accounts,
-    };
+    let storage = StateAccount::restore(program_id, storage_info, &accounts_database, true)?;
+
     let transaction_hash = array_ref![instruction, 0, 32];
 
     solana_program::log::sol_log_data(&[b"HASH", transaction_hash]);
 
-    validate(&accounts, transaction_hash)?;
-    execute(program_id, accounts, &blocked_accounts)
+    validate(&storage, transaction_hash)?;
+    execute(program_id, accounts_database, storage)
 }
 
-fn validate(accounts: &Accounts, transaction_hash: &[u8; 32]) -> ProgramResult {
-    let storage = &accounts.storage;
-
-    if &storage.transaction_hash != transaction_hash {
-        return Err!(ProgramError::InvalidInstructionData; "Invalid transaction hash");
+fn validate(storage: &StateAccount, transaction_hash: &[u8; 32]) -> Result<()> {
+    if &storage.trx_hash() != transaction_hash {
+        return Err(Error::HolderInvalidHash(
+            storage.trx_hash(),
+            *transaction_hash,
+        ));
     }
 
     Ok(())
 }
 
 fn execute<'a>(
-    program_id: &'a Pubkey,
-    accounts: Accounts<'a>,
-    blocked_accounts: &BlockedAccounts,
-) -> ProgramResult {
+    program_id: &Pubkey,
+    mut accounts: AccountsDB<'a>,
+    mut storage: StateAccount<'a>,
+) -> Result<()> {
     let used_gas = U256::ZERO;
-    let total_used_gas = accounts.storage.gas_used;
+    let total_used_gas = storage.gas_used();
     solana_program::log::sol_log_data(&[
         b"GAS",
         &used_gas.to_le_bytes(),
         &total_used_gas.to_le_bytes(),
     ]);
 
-    for (info, blocked) in accounts.remaining_accounts.iter().zip(blocked_accounts) {
-        if !blocked.exists {
-            continue;
-        }
+    let gas = U256::from(CANCEL_TRX_COST + LAST_ITERATION_COST);
+    let _ = storage.consume_gas(gas, accounts.operator_balance()); // ignore error
 
-        if let Ok(mut ether_account) = EthereumAccount::from_account(program_id, info) {
-            ether_account.rw_blocked = false;
-            if ether_account.address == accounts.storage.caller {
-                ether_account.trx_count += 1;
-            }
-        }
+    let origin = storage.trx_origin();
+    let (origin_pubkey, _) = origin.find_balance_address(program_id, storage.trx_chain_id());
+
+    {
+        let origin_info = accounts.get(&origin_pubkey).clone();
+        let mut account = BalanceAccount::from_account(program_id, origin_info, Some(origin))?;
+        account.increment_nonce()?;
+
+        storage.refund_unused_gas(&mut account)?;
     }
 
-    accounts
-        .storage
-        .finalize(Deposit::Burn(accounts.incinerator))?;
-
-    Ok(())
+    storage.finalize(program_id, &accounts)
 }

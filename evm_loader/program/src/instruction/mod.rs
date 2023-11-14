@@ -20,13 +20,6 @@ pub enum EvmInstruction {
     ///   5. `[]` System program.
     DepositV03,
 
-    /// Create Ethereum account V3
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [] System Program
-    ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
-    CreateAccountV03,
-
     /// Collect lamports from treasury pool accounts to main pool balance
     ///   0. `[WRITE]` Main treasury balance: PDA["treasury_pool"]
     ///   1. `[WRITE]` Auxiliary treasury balance: PDA["treasury_pool", index.to_le_bytes()]
@@ -73,8 +66,17 @@ pub enum EvmInstruction {
     /// Block additional accounts
     AccountBlockAdd,
 
-    /// Modify account's nonce. Only for test environment.
-    TestAccountUpdateNonce,
+    /// Create User Balance account
+    AccountCreateBalance,
+
+    ConfigGetChainCount,
+    ConfigGetChainInfo,
+    ConfigGetEnvironment,
+    ConfigGetPropertyCount,
+    ConfigGetPropertyByIndex,
+    ConfigGetPropertyByName,
+    ConfigGetStatus,
+    ConfigGetVersion,
 }
 
 impl EvmInstruction {
@@ -94,23 +96,39 @@ impl EvmInstruction {
             0x25 => Self::HolderDelete,                        // 37
             0x26 => Self::HolderWrite,                         // 38
             0x27 => Self::DepositV03,                          // 39
-            0x28 => Self::CreateAccountV03,                    // 40
             0x29 => Self::CreateMainTreasury,                  // 41
             0x2A => Self::TransactionExecuteFromAccount,       // 42
             0x2B => Self::AccountBlockAdd,                     // 43
-            0x2C => Self::TestAccountUpdateNonce,              // 44
+            // 0x2C => Self::TestAccountUpdateNonce,              // 44
+            0x2D => Self::AccountCreateBalance, // 45
 
+            0xA0 => Self::ConfigGetChainCount, // 160
+            0xA1 => Self::ConfigGetChainInfo,
+            0xA2 => Self::ConfigGetEnvironment,
+            0xA3 => Self::ConfigGetPropertyCount,
+            0xA4 => Self::ConfigGetPropertyByIndex,
+            0xA5 => Self::ConfigGetPropertyByName,
+            0xA6 => Self::ConfigGetStatus,
+            0xA7 => Self::ConfigGetVersion,
             _ => return Err(ProgramError::InvalidInstructionData),
         })
     }
 }
 
 pub mod account_block_add;
-pub mod account_create;
+pub mod account_create_balance;
 pub mod account_holder_create;
 pub mod account_holder_delete;
 pub mod account_holder_write;
 pub mod collect_treasury;
+pub mod config_get_chain_count;
+pub mod config_get_chain_info;
+pub mod config_get_environment;
+pub mod config_get_property_by_index;
+pub mod config_get_property_by_name;
+pub mod config_get_property_count;
+pub mod config_get_status;
+pub mod config_get_version;
 pub mod create_main_treasury;
 pub mod neon_tokens_deposit;
 pub mod transaction_cancel;
@@ -121,5 +139,3 @@ pub mod transaction_step;
 pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod transaction_step_from_instruction;
-
-pub mod test_account_update_nonce;

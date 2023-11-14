@@ -9,32 +9,38 @@ use solana_program::program_error::ProgramError;
 pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
-const CANCEL_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
-const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
+pub const CANCEL_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
+pub const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
 
 pub struct Gasometer {
     paid_gas: U256,
     gas: u64,
+    refund: u64,
     operator_balance: u64,
 }
 
 impl Gasometer {
-    pub fn new(paid_gas: Option<U256>, operator: &Operator) -> Result<Self, ProgramError> {
+    pub fn new(paid_gas: U256, operator: &Operator) -> Result<Self, ProgramError> {
         Ok(Self {
-            paid_gas: paid_gas.unwrap_or(U256::ZERO),
+            paid_gas,
             gas: 0_u64,
+            refund: 0_u64,
             operator_balance: operator.lamports(),
         })
     }
 
     #[must_use]
     pub fn used_gas(&self) -> U256 {
-        U256::from(self.gas)
+        U256::from(self.gas.saturating_sub(self.refund))
     }
 
     #[must_use]
     pub fn used_gas_total(&self) -> U256 {
-        self.paid_gas.saturating_add(U256::from(self.gas))
+        self.paid_gas.saturating_add(self.used_gas())
+    }
+
+    pub fn refund_lamports(&mut self, lamports: u64) {
+        self.refund = self.refund.saturating_add(lamports);
     }
 
     pub fn record_operator_expenses(&mut self, operator: &Operator) {
@@ -45,15 +51,6 @@ impl Gasometer {
 
     pub fn record_solana_transaction_cost(&mut self) {
         self.gas = self.gas.saturating_add(LAMPORTS_PER_SIGNATURE);
-    }
-
-    pub fn record_iterative_overhead(&mut self) {
-        // High chance of last iteration to fail with solana error
-        // Consume gas for it in the first iteration
-        self.gas = self
-            .gas
-            .saturating_add(LAST_ITERATION_COST)
-            .saturating_add(CANCEL_TRX_COST);
     }
 
     pub fn record_write_to_holder(&mut self, trx: &Transaction) {
