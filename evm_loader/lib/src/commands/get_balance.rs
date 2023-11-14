@@ -1,7 +1,7 @@
 use ethnum::U256;
 use evm_loader::account::legacy::LegacyEtherData;
 use evm_loader::account::BalanceAccount;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{account_storage::account_info, rpc::Rpc, types::BalanceAddress, NeonResult};
@@ -10,7 +10,7 @@ use serde_with::{serde_as, DisplayFromStr};
 
 use super::get_config::ChainInfo;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum BalanceStatus {
     Ok,
     Legacy,
@@ -18,7 +18,7 @@ pub enum BalanceStatus {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GetBalanceResponse {
     #[serde_as(as = "DisplayFromStr")]
     pub solana_address: Pubkey,

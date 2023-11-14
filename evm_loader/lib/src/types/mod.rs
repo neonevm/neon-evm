@@ -19,7 +19,7 @@ use serde_with::{hex::Hex, serde_as, DisplayFromStr, OneOrMany};
 
 use crate::commands::get_config::ChainInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
 pub struct ChDbConfig {
     pub clickhouse_url: Vec<String>,
     pub clickhouse_user: Option<String>,
@@ -152,7 +152,7 @@ impl BalanceAddress {
 }
 
 #[serde_as]
-#[derive(Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetBalanceRequest {
     #[serde_as(as = "OneOrMany<_>")]
     pub account: Vec<BalanceAddress>,
@@ -160,14 +160,14 @@ pub struct GetBalanceRequest {
 }
 
 #[serde_as]
-#[derive(Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetContractRequest {
     #[serde_as(as = "OneOrMany<_>")]
     pub contract: Vec<Address>,
     pub slot: Option<u64>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetStorageAtRequest {
     pub contract: Address,
     pub index: U256,

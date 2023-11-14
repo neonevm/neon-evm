@@ -6,7 +6,7 @@ use evm_loader::{account_storage::AccountStorage, types::Address};
 
 use crate::{account_storage::EmulatorAccountStorage, rpc::Rpc, NeonResult};
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct GetStorageAtReturn(pub [u8; 32]);
 
 pub async fn execute(

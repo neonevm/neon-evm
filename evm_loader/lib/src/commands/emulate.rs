@@ -1,6 +1,6 @@
 use evm_loader::account::ContractAccount;
 use log::{debug, info};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use solana_sdk::pubkey::Pubkey;
 
@@ -19,13 +19,12 @@ use evm_loader::{
     executor::{Action, ExecutorState},
     gasometer::LAMPORTS_PER_SIGNATURE,
 };
-use serde_with::{hex::Hex, serde_as, DisplayFromStr};
+use serde_with::{hex::Hex, serde_as};
 
 #[serde_as]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmulateResponse {
-    #[serde_as(as = "DisplayFromStr")]
-    pub exit_status: ExitStatus,
+    pub exit_status: String,
     #[serde_as(as = "Hex")]
     pub result: Vec<u8>,
     pub steps_executed: u64,
@@ -109,14 +108,12 @@ async fn emulate_trx(
 
     let solana_accounts = storage.accounts.borrow().values().cloned().collect();
 
-    let result = exit_status.clone().into_result().unwrap_or_default();
-
     Ok(EmulateResponse {
-        exit_status,
+        exit_status: exit_status.status().to_string(),
         steps_executed,
         used_gas,
         solana_accounts,
-        result,
+        result: exit_status.into_result().unwrap_or_default(),
         iterations,
     })
 }

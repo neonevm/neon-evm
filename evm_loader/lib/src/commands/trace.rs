@@ -28,9 +28,7 @@ pub async fn trace_transaction(
         .expect("There is must be only one reference")
         .into_inner()
         .into_traces();
-    traces["failed"] = r.exit_status.is_succeed().unwrap().into();
     traces["gas"] = r.used_gas.into();
-    traces["return_value"] = hex::encode(&r.result).into();
 
     Ok(traces)
 }

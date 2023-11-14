@@ -2,7 +2,7 @@ use evm_loader::{
     account::{legacy::LegacyEtherData, ContractAccount},
     types::Address,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{account_storage::account_info, rpc::Rpc, NeonResult};
@@ -12,7 +12,7 @@ use serde_with::{hex::Hex, serde_as, DisplayFromStr};
 use super::get_config::ChainInfo;
 
 #[serde_as]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GetContractResponse {
     #[serde_as(as = "DisplayFromStr")]
     pub solana_address: Pubkey,

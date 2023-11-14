@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::evm::ExitStatus;
 use ethnum::U256;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -120,6 +121,7 @@ pub struct StructLogger {
     logs: Vec<StructLog>,
     depth: usize,
     storage_access: Option<(U256, U256)>,
+    exit_status: Option<ExitStatus>,
 }
 
 impl StructLogger {
@@ -130,6 +132,7 @@ impl StructLogger {
             logs: vec![],
             depth: 0,
             storage_access: None,
+            exit_status: None,
         }
     }
 }
@@ -140,7 +143,10 @@ impl EventListener for StructLogger {
             Event::BeginVM { .. } => {
                 self.depth += 1;
             }
-            Event::EndVM { .. } => {
+            Event::EndVM { status } => {
+                if self.depth == 1 {
+                    self.exit_status = Some(status);
+                }
                 self.depth -= 1;
             }
             Event::BeginStep {
@@ -199,8 +205,17 @@ impl EventListener for StructLogger {
     }
 
     fn into_traces(self: Box<Self>) -> Value {
+        let exit_status = self.exit_status.expect("Emulation is not completed");
         json!({
-            "struct_logs": self.logs
+            "struct_logs": self.logs,
+            "failed": exit_status
+                .is_succeed()
+                .expect("Emulation is not completed"),
+            "return_value": hex::encode(
+                exit_status
+                    .into_result()
+                    .unwrap_or_default(),
+            )
         })
     }
 }
