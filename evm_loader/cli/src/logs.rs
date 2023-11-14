@@ -29,13 +29,16 @@ pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
 
     fern::Dispatch::new()
         .filter(move |metadata| {
-            let target = metadata.target();
+            const MODULES: [&str; 3] = ["neon_cli", "neon_lib", "evm_loader"];
 
-            if target.starts_with("neon_cli") || target.starts_with("evm_loader") {
-                return metadata.level().to_level_filter() <= log_level;
+            let target = metadata.target();
+            for module in MODULES {
+                if target.starts_with(module) {
+                    return metadata.level().to_level_filter() <= log_level;
+                }
             }
 
-            metadata.level() <= log::Level::Warn
+            metadata.level() <= log::Level::Error
         })
         .chain(fern::Output::call(|record| {
             let file: &str = record.file().unwrap_or("undefined");
