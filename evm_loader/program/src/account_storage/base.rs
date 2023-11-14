@@ -1,154 +1,93 @@
-use crate::account::ether_storage::EthereumStorageAddress;
-use crate::account::{program, EthereumAccount, EthereumStorage, Operator, TAG_EMPTY};
-use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::account::{
+    AccountsDB, BalanceAccount, ContractAccount, Operator, StorageCell, Treasury,
+};
+use crate::account_storage::ProgramAccountStorage;
+use crate::config::DEFAULT_CHAIN_ID;
+use crate::error::Result;
 use crate::types::Address;
 use ethnum::U256;
-use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
-use solana_program::program_error::ProgramError;
-use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+
+use super::keys_cache::KeysCache;
 
 impl<'a> ProgramAccountStorage<'a> {
-    pub fn new(
-        program_id: &'a Pubkey,
-        operator: &Operator<'a>,
-        system_program: Option<&program::System<'a>>,
-        accounts: &'a [AccountInfo<'a>],
-    ) -> Result<Self, ProgramError> {
-        debug_print!("ProgramAccountStorage::new");
-
-        let mut solana_accounts = accounts
-            .iter()
-            .map(|a| (a.key, a))
-            .collect::<HashMap<_, _>>();
-
-        solana_accounts.insert(operator.key, operator.info);
-        if let Some(system) = system_program {
-            solana_accounts.insert(system.key, system.into());
-        }
-
-        let mut ethereum_accounts = HashMap::with_capacity(accounts.len());
-        let mut storage_accounts = HashMap::with_capacity(accounts.len());
-
-        for &account_info in solana_accounts.values() {
-            if account_info.owner != program_id {
-                continue;
-            }
-
-            match crate::account::tag(program_id, account_info) {
-                Ok(EthereumAccount::TAG) => {
-                    let account = EthereumAccount::from_account(program_id, account_info)?;
-                    ethereum_accounts.insert(account.address, account);
-                }
-                Ok(EthereumStorage::TAG) => {
-                    let account = EthereumStorage::from_account(program_id, account_info)?;
-                    storage_accounts.insert((account.address, account.index), account);
-                }
-                Ok(_) | Err(_) => continue,
-            }
-        }
-
-        for storage in storage_accounts.values_mut() {
-            let owner = &ethereum_accounts[&storage.address];
-            if storage.generation != owner.generation {
-                storage.clear(owner.generation, operator)?;
-            }
-        }
-
+    pub fn new(accounts: AccountsDB<'a>) -> Result<Self> {
         Ok(Self {
-            program_id,
-            operator: operator.key,
             clock: Clock::get()?,
-            solana_accounts,
-            ethereum_accounts,
-            empty_ethereum_accounts: RefCell::new(HashSet::new()),
-            storage_accounts,
-            empty_storage_accounts: RefCell::new(HashSet::new()),
+            accounts,
+            keys: KeysCache::new(),
         })
     }
 
-    pub fn solana_account(&self, solana_address: &Pubkey) -> Option<&'a AccountInfo<'a>> {
-        self.solana_accounts.get(solana_address).copied()
+    pub fn operator(&self) -> &Operator<'a> {
+        self.accounts.operator()
     }
 
-    pub fn ethereum_storage(&self, address: Address, index: U256) -> Option<&EthereumStorage<'a>> {
-        let key = (address, index);
-
-        if let Some(account) = self.storage_accounts.get(&key) {
-            return Some(account);
-        }
-
-        let mut empty_accounts = self.empty_storage_accounts.borrow_mut();
-        if empty_accounts.contains(&key) {
-            return None;
-        }
-
-        let storage_address =
-            EthereumStorageAddress::new(self.program_id, &self.solana_address(&address).0, &index);
-        if let Some(&account) = self.solana_accounts.get(&storage_address.pubkey()) {
-            assert!(solana_program::system_program::check_id(account.owner));
-
-            empty_accounts.insert(key);
-            return None;
-        }
-
-        panic!(
-            "Storage account {} {} (solana address {}) must be present in the transaction",
-            address,
-            index,
-            storage_address.pubkey()
-        );
+    pub fn operator_balance(&mut self) -> &mut BalanceAccount<'a> {
+        self.accounts.operator_balance()
     }
 
-    pub fn ethereum_account(&self, address: &Address) -> Option<&EthereumAccount<'a>> {
-        if let Some(account) = self.ethereum_accounts.get(address) {
-            return Some(account);
-        }
-
-        let mut empty_accounts = self.empty_ethereum_accounts.borrow_mut();
-        if empty_accounts.contains(address) {
-            return None;
-        }
-
-        let (solana_address, _bump_seed) = address.find_solana_address(self.program_id);
-        if let Some(account) = self.solana_accounts.get(&solana_address) {
-            assert!(
-                self.is_account_empty(account),
-                "Empty ethereum account {address} must belong to the system program or be uninitialized"
-            );
-
-            empty_accounts.insert(*address);
-            return None;
-        }
-
-        panic!("Ethereum account {address} (solana address {solana_address}) must be present in the transaction");
+    pub fn treasury(&self) -> &Treasury<'a> {
+        self.accounts.treasury()
     }
 
-    pub fn ethereum_account_mut(&mut self, address: &Address) -> &mut EthereumAccount<'a> {
-        self.ethereum_accounts.get_mut(address).unwrap() // mutable accounts always present
+    pub fn db(&self) -> &AccountsDB<'a> {
+        &self.accounts
     }
 
-    pub fn block_accounts(&mut self, block: bool) {
-        for account in &mut self.ethereum_accounts.values_mut() {
-            account.rw_blocked = block;
+    pub fn storage_cell(&self, address: Address, index: U256) -> Result<StorageCell<'a>> {
+        let pubkey = self.keys.storage_cell(&crate::ID, address, index);
+
+        let account = self.accounts.get(&pubkey);
+        let result = StorageCell::from_account(&crate::ID, account.clone());
+
+        if result.is_err() {
+            // Check that account is not in a legacy format
+            // Correct account can ether be owned by System or be valid StorageCell
+            assert!(system_program::check_id(account.owner));
         }
+
+        result
     }
 
-    pub fn check_for_blocked_accounts(&self) -> Result<(), ProgramError> {
-        for ethereum_account in self.ethereum_accounts.values() {
-            ethereum_account.check_blocked()?;
+    pub fn contract_account(&self, address: Address) -> Result<ContractAccount<'a>> {
+        let pubkey = self.keys.contract(&crate::ID, address);
+
+        let account = self.accounts.get(&pubkey);
+        let result = ContractAccount::from_account(&crate::ID, account.clone());
+
+        if result.is_err() {
+            let legacy_tag = crate::account::legacy::TAG_ACCOUNT_CONTRACT_DEPRECATED;
+            assert!(crate::account::validate_tag(&crate::ID, account, legacy_tag).is_err());
         }
 
-        Ok(())
+        result
     }
 
-    pub fn is_account_empty(&self, account: &AccountInfo) -> bool {
-        system_program::check_id(account.owner)
-            || (account.owner == self.program_id()
-                && (account.data_is_empty() || account.data.borrow()[0] == TAG_EMPTY))
+    pub fn balance_account(&self, address: Address, chain_id: u64) -> Result<BalanceAccount<'a>> {
+        let pubkey = self.keys.balance(&crate::ID, address, chain_id);
+
+        let account = self.accounts.get(&pubkey);
+        let result = BalanceAccount::from_account(&crate::ID, account.clone(), Some(address));
+
+        if result.is_err() && (chain_id == DEFAULT_CHAIN_ID) {
+            let contract_pubkey = self.keys.contract(&crate::ID, address);
+            let contract = self.accounts.get(&contract_pubkey);
+
+            let legacy_tag = crate::account::legacy::TAG_ACCOUNT_CONTRACT_DEPRECATED;
+            assert!(crate::account::validate_tag(&crate::ID, contract, legacy_tag).is_err());
+        }
+
+        result
+    }
+
+    pub fn create_balance_account(
+        &self,
+        address: Address,
+        chain_id: u64,
+    ) -> Result<BalanceAccount<'a>> {
+        BalanceAccount::create(address, chain_id, &self.accounts, Some(&self.keys))
     }
 }
