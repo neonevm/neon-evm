@@ -17,8 +17,7 @@ def test_get_storage_at(neon_api_client, operator_keypair, user_account, evm_loa
 
 def test_get_ether_account_data(neon_api_client, user_account):
     result = neon_api_client.get_ether_account_data(user_account.eth_address.hex())['value']
-    assert f"0x{user_account.eth_address.hex()}" == result["address"]
-    assert str(user_account.solana_account_address) == result["solana_address"]
+    assert str(user_account.balance_account_address) == result[0]["solana_address"]
     assert solana_client.get_account_info(user_account.solana_account.public_key).value is not None
 
 

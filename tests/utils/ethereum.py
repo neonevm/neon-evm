@@ -1,35 +1,35 @@
 from typing import Union
 
-from base58 import b58encode
 from sha3 import keccak_256
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from web3.auto import w3
 
-from .constants import ACCOUNT_SEED_VERSION
+from .constants import CHAIN_ID
+
 from .types import Caller, Contract
 from ..eth_tx_utils import pack
-from ..solana_utils import EvmLoader, solana_client, get_transaction_count
+from ..solana_utils import EvmLoader
 
 
 def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
     # Create contract address from (caller_address, nonce)
-    user_nonce = get_transaction_count(solana_client, user.solana_account_address)
+    user_nonce = evm_loader.get_neon_nonce(user.eth_address)
     contract_eth_address = keccak_256(pack([user.eth_address, user_nonce or None])).digest()[-20:]
-    contract_solana_address, contract_nonce = evm_loader.ether2program(contract_eth_address)
-    seed = b58encode(ACCOUNT_SEED_VERSION + contract_eth_address).decode('utf8')
+    contract_solana_address, _ = evm_loader.ether2program(contract_eth_address)
+    contract_neon_address = evm_loader.ether2balance(contract_eth_address)
+    
     print(f"Contract addresses: "
           f"  eth {contract_eth_address.hex()}, "
-          f"  solana {contract_solana_address}"
-          f"  nonce {contract_nonce}"
-          f"  user nonce {user_nonce}"
-          f"  seed {seed}")
-    return Contract(contract_eth_address, PublicKey(contract_solana_address), contract_nonce, seed)
+          f"  solana {contract_solana_address}")
+
+    return Contract(contract_eth_address, PublicKey(contract_solana_address), contract_neon_address)
 
 
-def make_eth_transaction(to_addr: bytes, data: Union[bytes, None], signer: Keypair, from_solana_user: PublicKey,
-                         value: int = 0, chain_id=111, gas=9999999999, access_list=None, type=None):
-    nonce = get_transaction_count(solana_client, from_solana_user)
+def make_eth_transaction(to_addr: bytes, data: Union[bytes, None], caller: Caller,
+                         value: int = 0, chain_id=CHAIN_ID, gas=9999999999, access_list=None, type=None):
+    
+    nonce = EvmLoader(caller.solana_account).get_neon_nonce(caller.eth_address)
     tx = {'to': to_addr, 'value': value, 'gas': gas, 'gasPrice': 0,
           'nonce': nonce}
 
@@ -43,4 +43,4 @@ def make_eth_transaction(to_addr: bytes, data: Union[bytes, None], signer: Keypa
         tx['accessList'] = access_list
     if type is not None:
         tx['type'] = type
-    return w3.eth.account.sign_transaction(tx, signer.secret_key[:32])
+    return w3.eth.account.sign_transaction(tx, caller.solana_account.secret_key[:32])

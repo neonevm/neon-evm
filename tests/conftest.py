@@ -34,7 +34,7 @@ def pytest_configure():
 
 
 @pytest.fixture(scope="session")
-def evm_loader(operator_keypair) -> EvmLoader:
+def evm_loader(operator_keypair: Keypair) -> EvmLoader:
     loader = EvmLoader(operator_keypair)
     return loader
 
@@ -43,17 +43,20 @@ def prepare_operator(key_file):
     with open(key_file, "r") as key:
         secret_key = json.load(key)[:32]
         account = Keypair.from_secret_key(secret_key)
+
     tx = solana_client.request_airdrop(account.public_key, 1000000 * 10 ** 9, commitment=Confirmed)
     wait_confirm_transaction(solana_client, tx.value)
-    caller_ether = eth_keys.PrivateKey(account.secret_key[:32]).public_key.to_canonical_address()
+
+    operator_ether = eth_keys.PrivateKey(account.secret_key[:32]).public_key.to_canonical_address()
+
     evm_loader = EvmLoader(account)
-    evm_loader.ether2program(caller_ether)
-    caller, caller_nonce = evm_loader.ether2program(caller_ether)
-    acc_info = solana_client.get_account_info(PublicKey(caller), commitment=Confirmed)
+    ether_balance_pubkey = evm_loader.ether2balance(operator_ether)
+    acc_info = solana_client.get_account_info(ether_balance_pubkey, commitment=Confirmed)
     if acc_info.value is None:
         token = spl_cli.create_token_account(NEON_TOKEN_MINT_ID, account.public_key, fee_payer=key_file)
         spl_cli.mint(NEON_TOKEN_MINT_ID, token, 5000000, fee_payer=key_file)
-        evm_loader.create_ether_account(caller_ether)
+        evm_loader.create_balance_account(operator_ether)
+
     return account
 
 

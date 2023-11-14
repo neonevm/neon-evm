@@ -14,8 +14,8 @@ class TreasuryPool:
 class Caller:
     solana_account: Keypair
     solana_account_address: PublicKey
+    balance_account_address: PublicKey
     eth_address: bytes
-    nonce: int
     token_address: PublicKey
 
 
@@ -23,5 +23,4 @@ class Caller:
 class Contract:
     eth_address: bytes
     solana_address: PublicKey
-    nonce: int
-    seed: str
+    balance_account_address: PublicKey

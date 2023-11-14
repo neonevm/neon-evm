@@ -1,6 +1,6 @@
 from solana.transaction import Transaction
 
-from .solana_utils import send_transaction, solana_client, get_transaction_count, \
+from .solana_utils import send_transaction, solana_client, \
     send_transaction_step_from_instruction
 from .utils.constants import TAG_FINALIZED_STATE, TAG_STATE
 from .utils.contract import make_contract_call_trx
@@ -21,22 +21,22 @@ class TestCancelTrx:
         trx = send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, storage_account,
                                                      signed_tx,
                                                      [rw_lock_contract.solana_address,
-                                                      user_account.solana_account_address], 1, operator_keypair)
+                                                      rw_lock_contract.balance_account_address,
+                                                      user_account.balance_account_address],
+                                                     1, operator_keypair)
 
         receipt = solana_client.get_transaction(trx.value)
         assert receipt.value.transaction.meta.err is None
         check_holder_account_tag(storage_account, STORAGE_ACCOUNT_INFO_LAYOUT, TAG_STATE)
 
-        user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
+        user_nonce = evm_loader.get_neon_nonce(user_account.eth_address)
         trx = Transaction()
         trx.add(
-            make_Cancel(storage_account, operator_keypair, signed_tx.hash,
-                        [
-                            rw_lock_contract.solana_address,
-                            user_account.solana_account_address,
-                        ]
-                        )
+            make_Cancel(evm_loader, storage_account, operator_keypair, signed_tx.hash,
+                        [rw_lock_contract.solana_address,
+                        rw_lock_contract.balance_account_address,
+                        user_account.balance_account_address])
         )
         send_transaction(solana_client, trx, operator_keypair)
         check_holder_account_tag(storage_account, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        assert user_nonce < get_transaction_count(solana_client, user_account.solana_account_address)
+        assert user_nonce < evm_loader.get_neon_nonce(user_account.eth_address)

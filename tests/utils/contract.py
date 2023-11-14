@@ -7,9 +7,9 @@ from eth_account.datastructures import SignedTransaction
 from eth_utils import abi
 from solana.keypair import Keypair
 
-from .types import Caller, TreasuryPool
+from .types import Caller, Contract, TreasuryPool
 from ..solana_utils import solana_client, \
-    get_transaction_count, EvmLoader, write_transaction_to_holder_account, \
+    EvmLoader, write_transaction_to_holder_account, \
     send_transaction_step_from_account
 from .storage import create_holder
 from .ethereum import create_contract_address, make_eth_transaction
@@ -33,12 +33,13 @@ def make_deployment_transaction(
     if encoded_args is not None:
         data += encoded_args
 
+    nonce = EvmLoader(user.solana_account).get_neon_nonce(user.eth_address)
     tx = {
         'to': None,
         'value': 0,
         'gas': gas,
         'gasPrice': 0,
-        'nonce': get_transaction_count(solana_client, user.solana_account_address),
+        'nonce': nonce,
         'data': data
     }
     if chain_id:
@@ -46,7 +47,7 @@ def make_deployment_transaction(
     if access_list:
         tx['accessList'] = access_list
         tx['type'] = 1
-    print(tx)
+
     return w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
 
@@ -61,8 +62,8 @@ def make_contract_call_trx(user, contract, function_signature, params=None, valu
             elif isinstance(param, str):
                 data += eth_abi.encode(['string'], [param])
 
-    signed_tx = make_eth_transaction(contract.eth_address, data, user.solana_account, user.solana_account_address,
-                                     value=value, chain_id=chain_id, access_list=access_list, type=trx_type)
+    signed_tx = make_eth_transaction(contract.eth_address, data, user, value=value, 
+                                     chain_id=chain_id, access_list=access_list, type=trx_type)
     return signed_tx
 
 
@@ -78,7 +79,7 @@ def deploy_contract(
     print("Deploying contract")
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
-    contract = create_contract_address(user, evm_loader)
+    contract: Contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
     signed_tx = make_deployment_transaction(user, contract_path, encoded_args=encoded_args)
     write_transaction_to_holder_account(signed_tx, holder_acc, operator)
@@ -86,7 +87,9 @@ def deploy_contract(
     contract_deployed = False
     while not contract_deployed:
         receipt = send_transaction_step_from_account(operator, evm_loader, treasury_pool, holder_acc,
-                                                     [contract.solana_address, user.solana_account_address],
+                                                     [contract.solana_address,
+                                                      contract.balance_account_address,
+                                                      user.balance_account_address],
                                                      step_count, operator)
         if receipt.value.transaction.meta.err:
             raise AssertionError(f"Can't deploy contract: {receipt.value.transaction.meta.err}")

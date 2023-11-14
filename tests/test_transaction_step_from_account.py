@@ -12,7 +12,7 @@ from solana.publickey import PublicKey
 from solana.rpc.commitment import Processed, Confirmed
 from solana.rpc.types import TxOpts
 
-from .solana_utils import get_neon_balance, solana_client, neon_cli, execute_transaction_steps_from_account, \
+from .solana_utils import solana_client, neon_cli, execute_transaction_steps_from_account, \
     write_transaction_to_holder_account, create_treasury_pool_address, send_transaction_step_from_account
 from .test_cli import gen_hash_of_block
 from .utils.assert_messages import InstructionAsserts
@@ -42,18 +42,19 @@ class TestTransactionStepFromAccount:
     def test_simple_transfer_transaction(self, operator_keypair, treasury_pool, evm_loader,
                                          sender_with_tokens, session_user, holder_acc):
         amount = 10
-        sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
-        recipient_balance_before = get_neon_balance(solana_client, session_user.solana_account_address)
+        sender_balance_before = evm_loader.get_neon_balance(sender_with_tokens)
+        recipient_balance_before = evm_loader.get_neon_balance(session_user)
 
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, amount)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, amount)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [session_user.solana_account_address,
-                                                       sender_with_tokens.solana_account_address], 0)
+                                                       session_user.balance_account_address,
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address], 0)
 
-        sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
-        recipient_balance_after = get_neon_balance(solana_client, session_user.solana_account_address)
+        sender_balance_after = evm_loader.get_neon_balance(sender_with_tokens)
+        recipient_balance_after = evm_loader.get_neon_balance(session_user)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
@@ -71,10 +72,12 @@ class TestTransactionStepFromAccount:
         with open(contract_path, 'rb') as f:
             contract_code = f.read()
 
-        steps_count = neon_cli().get_steps_count(evm_loader, sender_with_tokens, "deploy", contract_code.hex())
+        steps_count = neon_cli().get_steps_count(evm_loader, sender_with_tokens, None, contract_code.hex())
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [contract.solana_address,
-                                                       sender_with_tokens.solana_account_address],
+                                                       contract.balance_account_address,
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address],
                                                       steps_count)
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
@@ -87,7 +90,8 @@ class TestTransactionStepFromAccount:
 
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [string_setter_contract.solana_address,
-                                                       sender_with_tokens.solana_account_address])
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
@@ -101,8 +105,8 @@ class TestTransactionStepFromAccount:
                                                        evm_loader):
         transfer_amount = random.randint(1, 1000)
 
-        sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
-        contract_balance_before = get_neon_balance(solana_client, string_setter_contract.solana_address)
+        sender_balance_before = evm_loader.get_neon_balance(sender_with_tokens)
+        contract_balance_before = evm_loader.get_neon_balance(string_setter_contract.eth_address)
 
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
 
@@ -112,14 +116,15 @@ class TestTransactionStepFromAccount:
 
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [string_setter_contract.solana_address,
-                                                       sender_with_tokens.solana_account_address]
-                                                      )
+                                                       string_setter_contract.balance_account_address,
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
 
-        sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
-        contract_balance_after = get_neon_balance(solana_client, string_setter_contract.solana_address)
+        sender_balance_after = evm_loader.get_neon_balance(sender_with_tokens)
+        contract_balance_after = evm_loader.get_neon_balance(string_setter_contract.eth_address)
         assert sender_balance_before - transfer_amount == sender_balance_after
         assert contract_balance_before + transfer_amount == contract_balance_after
 
@@ -133,190 +138,182 @@ class TestTransactionStepFromAccount:
         recipient = Keypair.generate()
         recipient_ether = eth_keys.PrivateKey(recipient.secret_key[:32]).public_key.to_canonical_address()
         recipient_solana_address, _ = evm_loader.ether2program(recipient_ether)
+        recipient_balance_address = evm_loader.ether2balance(recipient_ether)
         amount = 10
-        signed_tx = make_eth_transaction(recipient_ether, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, amount)
+        signed_tx = make_eth_transaction(recipient_ether, None, sender_with_tokens, amount)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [PublicKey(recipient_solana_address),
-                                                       sender_with_tokens.solana_account_address], 0)
+                                                       recipient_balance_address,
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address], 0)
 
-        recipient_balance_after = get_neon_balance(solana_client, PublicKey(recipient_solana_address))
+        recipient_balance_after = evm_loader.get_neon_balance(recipient_ether)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
 
         assert recipient_balance_after == amount
 
     def test_incorrect_chain_id(self, operator_keypair, holder_acc, treasury_pool,
                                 sender_with_tokens, session_user, evm_loader):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1, chain_id=1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1, chain_id=1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_CHAIN_ID):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                    [session_user.solana_account_address,
-                                                    sender_with_tokens.solana_account_address], 0)
+                                                    session_user.balance_account_address,
+                                                    sender_with_tokens.solana_account_address,
+                                                    sender_with_tokens.balance_account_address], 0)
 
     def test_incorrect_nonce(self, operator_keypair, treasury_pool, sender_with_tokens, evm_loader, session_user,
                              holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                [session_user.solana_account_address,
-                                                sender_with_tokens.solana_account_address], 0)
+                                                session_user.balance_account_address,
+                                                sender_with_tokens.solana_account_address,
+                                                sender_with_tokens.balance_account_address], 0)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_NONCE):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                    [session_user.solana_account_address,
-                                                    sender_with_tokens.solana_account_address], 0)
+                                                    session_user.balance_account_address,
+                                                    sender_with_tokens.solana_account_address,
+                                                    sender_with_tokens.balance_account_address], 0)
 
     def test_run_finalized_transaction(self, operator_keypair, treasury_pool, sender_with_tokens, evm_loader,
                                        session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                [session_user.solana_account_address,
-                                                sender_with_tokens.solana_account_address], 0)
+                                                session_user.balance_account_address,
+                                                sender_with_tokens.solana_account_address,
+                                                sender_with_tokens.balance_account_address], 0)
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.TRX_ALREADY_FINALIZED):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                    [session_user.solana_account_address,
-                                                    sender_with_tokens.solana_account_address], 0)
+                                                    session_user.balance_account_address,
+                                                    sender_with_tokens.solana_account_address,
+                                                    sender_with_tokens.balance_account_address], 0)
 
     def test_insufficient_funds(self, operator_keypair, treasury_pool, evm_loader, session_user,
                                 holder_acc, sender_with_tokens):
-        user_balance = get_neon_balance(solana_client, session_user.solana_account_address)
+        user_balance = evm_loader.get_neon_balance(session_user)
 
-        signed_tx = make_eth_transaction(sender_with_tokens.eth_address, None, session_user.solana_account,
-                                         session_user.solana_account_address, user_balance + 1)
+        signed_tx = make_eth_transaction(sender_with_tokens.eth_address, None, session_user, user_balance + 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INSUFFICIENT_FUNDS):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                    [session_user.solana_account_address,
-                                                    sender_with_tokens.solana_account_address], 0)
+                                                    session_user.balance_account_address,
+                                                    sender_with_tokens.solana_account_address,
+                                                    sender_with_tokens.balance_account_address], 0)
 
     def test_gas_limit_reached(self, operator_keypair, treasury_pool, session_user, evm_loader, sender_with_tokens,
                                holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 10, gas=1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 10, gas=1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.OUT_OF_GAS):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                    [session_user.solana_account_address,
-                                                    sender_with_tokens.solana_account_address], 0)
+                                                    session_user.balance_account_address,
+                                                    sender_with_tokens.solana_account_address,
+                                                    sender_with_tokens.balance_account_address], 0)
 
     def test_sender_missed_in_remaining_accounts(self, operator_keypair, treasury_pool, session_user,
                                                  sender_with_tokens, evm_loader, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.ADDRESS_MUST_BE_PRESENT):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
-                                                   [session_user.solana_account_address], 0)
+                                                   [session_user.solana_account_address,
+                                                    session_user.balance_account_address], 0)
 
     def test_recipient_missed_in_remaining_accounts(self, operator_keypair, treasury_pool, session_user,
                                                     sender_with_tokens, evm_loader, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.ADDRESS_MUST_BE_PRESENT):
             execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
-                                                   [sender_with_tokens.solana_account_address], 0)
+                                                   [sender_with_tokens.solana_account_address,
+                                                   sender_with_tokens.balance_account_address], 0)
 
     def test_incorrect_treasure_pool(self, operator_keypair, sender_with_tokens, evm_loader, session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
         index = 2
         treasury = TreasuryPool(index, Keypair().generate().public_key, index.to_bytes(4, 'little'))
 
-        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_TREASURE_ACC):
-            execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury, holder_acc,
-                                                   [sender_with_tokens.solana_account_address,
-                                                    session_user.solana_account_address], 0)
+        error = str.format(InstructionAsserts.INVALID_ACCOUNT, treasury.account)
+        with pytest.raises(solana.rpc.core.RPCException, match=error):
+            execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury, holder_acc, [], 0)
 
     def test_incorrect_treasure_index(self, operator_keypair, sender_with_tokens, evm_loader,
                                       session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         index = 2
         treasury = TreasuryPool(index, create_treasury_pool_address(index), (index + 1).to_bytes(4, 'little'))
-        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_TREASURE_ACC):
-            execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury, holder_acc,
-                                                   [sender_with_tokens.solana_account_address,
-                                                    session_user.solana_account_address], 0)
+
+        error = str.format(InstructionAsserts.INVALID_ACCOUNT, treasury.account)
+        with pytest.raises(solana.rpc.core.RPCException, match=error):
+            execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury, holder_acc, [], 0)
 
     def test_incorrect_operator_account(self, operator_keypair, sender_with_tokens, evm_loader, treasury_pool,
                                         session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
         fake_operator = Keypair()
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.ACC_NOT_FOUND):
             execute_transaction_steps_from_account(fake_operator, evm_loader, treasury_pool, holder_acc,
                                                    [sender_with_tokens.solana_account_address,
-                                                    session_user.solana_account_address], 0)
+                                                    sender_with_tokens.balance_account_address,
+                                                    session_user.solana_account_address,
+                                                    session_user.balance_account_address], 0)
 
     def test_operator_is_not_in_white_list(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
                                            session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.NOT_AUTHORIZED_OPERATOR):
             execute_transaction_steps_from_account(sender_with_tokens.solana_account, evm_loader, treasury_pool,
                                                    holder_acc,
                                                    [sender_with_tokens.solana_account_address,
-                                                    session_user.solana_account_address], 0,
+                                                    sender_with_tokens.balance_account_address,
+                                                    session_user.solana_account_address,
+                                                    session_user.balance_account_address], 0,
                                                    signer=sender_with_tokens.solana_account)
 
     def test_incorrect_system_program(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
                                       session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens, 1)
         fake_sys_program_id = Keypair().public_key
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
-        with pytest.raises(solana.rpc.core.RPCException,
-                           match=str.format(InstructionAsserts.NOT_SYSTEM_PROGRAM, fake_sys_program_id)):
+        error = str.format(InstructionAsserts.NOT_SYSTEM_PROGRAM, fake_sys_program_id)
+        with pytest.raises(solana.rpc.core.RPCException, match=error):
             send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
-                                               [sender_with_tokens.solana_account_address,
-                                                session_user.solana_account_address], 1, operator_keypair,
-                                               system_program=fake_sys_program_id)
+                                               [], 1, operator_keypair, system_program=fake_sys_program_id)
 
-    def test_incorrect_neon_program(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
-                                    session_user, holder_acc):
-        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
-                                         sender_with_tokens.solana_account_address, 1)
-        fake_neon_program_id = Keypair().public_key
-        write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
 
-        with pytest.raises(solana.rpc.core.RPCException,
-                           match=str.format(InstructionAsserts.NOT_NEON_PROGRAM, fake_neon_program_id)):
-            send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
-                                               [sender_with_tokens.solana_account_address,
-                                                session_user.solana_account_address], 1, operator_keypair,
-                                               evm_loader_public_key=fake_neon_program_id)
-
-    def test_incorrect_holder_account(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
-                                      session_user):
+    def test_incorrect_holder_account(self, operator_keypair, evm_loader, treasury_pool):
         fake_holder_acc = Keypair.generate().public_key
-        with pytest.raises(solana.rpc.core.RPCException,
-                           match=str.format(InstructionAsserts.NOT_PROGRAM_OWNED, fake_holder_acc)):
-            send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, fake_holder_acc,
-                                               [sender_with_tokens.solana_account_address,
-                                                session_user.solana_account_address], 1, operator_keypair)
+
+        error = str.format(InstructionAsserts.NOT_PROGRAM_OWNED, fake_holder_acc)
+        with pytest.raises(solana.rpc.core.RPCException, match=error):
+            send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, fake_holder_acc, [], 1, operator_keypair)
 
     def test_transaction_with_access_list(self, operator_keypair, holder_acc, treasury_pool,
                                           sender_with_tokens, evm_loader, calculator_contract,
@@ -337,7 +334,8 @@ class TestTransactionStepFromAccount:
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [calculator_caller_contract.solana_address,
                                                        calculator_contract.solana_address,
-                                                       sender_with_tokens.solana_account_address])
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
@@ -352,7 +350,9 @@ class TestTransactionStepFromAccount:
         write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [string_setter_contract.solana_address,
-                                                       sender_with_tokens.solana_account_address])
+                                                       string_setter_contract.balance_account_address,
+                                                       sender_with_tokens.solana_account_address,
+                                                       sender_with_tokens.balance_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
@@ -370,7 +370,8 @@ class TestAccountStepContractCallContractInteractions:
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [rw_lock_caller.solana_address,
                                                        rw_lock_contract.solana_address,
-                                                       session_user.solana_account_address])
+                                                       session_user.solana_account_address,
+                                                       session_user.balance_account_address])
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
@@ -382,7 +383,8 @@ class TestAccountStepContractCallContractInteractions:
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [rw_lock_caller.solana_address,
                                                        rw_lock_contract.solana_address,
-                                                       session_user.solana_account_address], 1000)
+                                                       session_user.solana_account_address,
+                                                       session_user.balance_account_address], 1000)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
@@ -398,7 +400,8 @@ class TestAccountStepContractCallContractInteractions:
         resp = execute_transaction_steps_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
                                                       [rw_lock_caller.solana_address,
                                                        rw_lock_contract.solana_address,
-                                                       session_user.solana_account_address], 1000)
+                                                       session_user.solana_account_address,
+                                                       session_user.balance_account_address], 1000)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x12")
@@ -415,7 +418,9 @@ class TestAccountStepContractCallContractInteractions:
                                     session_user.eth_address.hex(),
                                     rw_lock_caller.eth_address.hex(),
                                     data.hex())
-        additional_accounts = [session_user.solana_account_address, rw_lock_contract.solana_address,
+        additional_accounts = [session_user.solana_account_address, 
+                               session_user.balance_account_address, 
+                               rw_lock_contract.solana_address,
                                rw_lock_caller.solana_address]
         for acc in result['solana_accounts']:
             additional_accounts.append(PublicKey(acc['pubkey']))
@@ -440,7 +445,8 @@ class TestTransactionStepFromAccountParallelRuns:
         write_transaction_to_holder_account(signed_tx, new_holder_acc, operator_keypair)
 
         send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
-                                           [user_account.solana_account_address,
+                                           [user_account.balance_account_address,
+                                            user_account.solana_account_address,
                                             rw_lock_contract.solana_address], 1, operator_keypair)
 
         signed_tx2 = make_contract_call_trx(user_account, string_setter_contract, 'get()')
@@ -450,7 +456,8 @@ class TestTransactionStepFromAccountParallelRuns:
 
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.LOCKED_ACC):
             send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc2,
-                                               [user_account.solana_account_address,
+                                               [user_account.balance_account_address,
+                                                user_account.solana_account_address,
                                                 string_setter_contract.solana_address], 1, operator_keypair)
 
     def test_2_users_call_the_same_contract(self, rw_lock_contract, user_account,
@@ -461,6 +468,7 @@ class TestTransactionStepFromAccountParallelRuns:
 
         send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                            [user_account.solana_account_address,
+                                            user_account.balance_account_address,
                                             rw_lock_contract.solana_address], 1, operator_keypair)
 
         signed_tx2 = make_contract_call_trx(session_user, rw_lock_contract, 'get_text()')
@@ -471,6 +479,7 @@ class TestTransactionStepFromAccountParallelRuns:
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.LOCKED_ACC):
             send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc2,
                                                [session_user.solana_account_address,
+                                                session_user.balance_account_address,
                                                 rw_lock_contract.solana_address], 1, operator_keypair)
 
     def test_two_contracts_call_same_contract(self, rw_lock_contract, user_account,
@@ -489,6 +498,7 @@ class TestTransactionStepFromAccountParallelRuns:
 
         send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                            [user_account.solana_account_address,
+                                            user_account.balance_account_address,
                                             rw_lock_contract.solana_address,
                                             contract1.solana_address], 1, operator_keypair)
 
@@ -498,6 +508,7 @@ class TestTransactionStepFromAccountParallelRuns:
         with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.LOCKED_ACC):
             send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc2,
                                                [session_user.solana_account_address,
+                                                session_user.balance_account_address,
                                                 rw_lock_contract.solana_address,
                                                 contract2.solana_address], 1,
                                                operator_keypair)
@@ -515,6 +526,7 @@ class TestStepFromAccountChangingOperatorsDuringTrxRun:
             make_ExecuteTrxFromAccountDataIterativeOrContinue(
                 operator_keypair, evm_loader, new_holder_acc, treasury_pool.account, treasury_pool.buffer, 1,
                 [user_account.solana_account_address,
+                 user_account.balance_account_address,
                  rw_lock_contract.solana_address]
             )
         )
@@ -522,17 +534,23 @@ class TestStepFromAccountChangingOperatorsDuringTrxRun:
                                        opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
 
         # next operator can't continue trx during OPERATOR_PRIORITY_SLOTS*0.4
-        with pytest.raises(solana.rpc.core.RPCException,
-                           match=rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"):            send_transaction_step_from_account(
-            second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
-            [user_account.solana_account_address,
-             rw_lock_contract.solana_address], 500, second_operator_keypair)
+        error = rf"{InstructionAsserts.INVALID_OPERATOR_KEY}|{InstructionAsserts.INVALID_HOLDER_OWNER}"
+        with pytest.raises(solana.rpc.core.RPCException, match=error):
+            send_transaction_step_from_account(
+                second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
+                [user_account.solana_account_address,
+                user_account.balance_account_address,
+                rw_lock_contract.solana_address],
+                500, second_operator_keypair
+            )
 
         time.sleep(15)
         send_transaction_step_from_account(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                            [user_account.solana_account_address,
+                                            user_account.balance_account_address,
                                             rw_lock_contract.solana_address], 500, second_operator_keypair)
         resp = send_transaction_step_from_account(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                   [user_account.solana_account_address,
+                                                   user_account.balance_account_address,
                                                    rw_lock_contract.solana_address], 1, second_operator_keypair)
         check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")

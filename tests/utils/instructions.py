@@ -5,10 +5,9 @@ from solana.keypair import Keypair
 from solana.publickey import PublicKey
 import solana.system_program as sp
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-
 from .constants import EVM_LOADER, INCINERATOR_ADDRESS
 
-DEFAULT_UNITS = 500 * 1000
+DEFAULT_UNITS = 1_400_000
 DEFAULT_HEAP_FRAME = 256 * 1024
 DEFAULT_ADDITIONAL_FEE = 0
 COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
@@ -76,7 +75,6 @@ def make_ExecuteTrxFromInstruction(
         message: bytes,
         additional_accounts: tp.List[PublicKey],
         system_program=sp.SYS_PROGRAM_ID,
-        evm_loader_public_key=PublicKey(EVM_LOADER)
 ):
     data = bytes.fromhex('1f') + treasury_buffer + message
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
@@ -84,13 +82,12 @@ def make_ExecuteTrxFromInstruction(
     print("Operator: ", operator.public_key)
     print("Treasury: ", treasury_address)
     print("Operator ether: ", operator_ether.hex())
-    print("Operator eth solana: ", evm_loader.ether2program(operator_ether)[0])
+    print("Operator eth solana: ", evm_loader.ether2balance(operator_ether))
     accounts = [
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
         AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-        AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(evm_loader.ether2balance(operator_ether)), is_signer=False, is_writable=True),
         AccountMeta(system_program, is_signer=False, is_writable=True),
-        AccountMeta(evm_loader_public_key, is_signer=False, is_writable=False),
     ]
     for acc in additional_accounts:
         print("Additional acc ", acc)
@@ -112,7 +109,7 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         step_count: int,
         additional_accounts: tp.List[PublicKey],
         sys_program_id=sp.SYS_PROGRAM_ID,
-        neon_evm_program_id=PublicKey(EVM_LOADER), tag=33):
+        tag=33):
     # 33 - TransactionStepFromAccount
     # 34 - TransactionStepFromAccountNoChainId
     d = tag.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
@@ -122,15 +119,13 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
     print("Operator: ", operator.public_key)
     print("Treasury: ", treasury_address)
     print("Operator ether: ", operator_ether.hex())
-    print("Operator eth solana: ", evm_loader.ether2program(operator_ether)[0])
+    print("Operator eth solana: ", evm_loader.ether2balance(operator_ether))
     accounts = [
         AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
         AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-        AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(evm_loader.ether2balance(operator_ether)), is_signer=False, is_writable=True),
         AccountMeta(sys_program_id, is_signer=False, is_writable=True),
-        # Neon EVM account
-        AccountMeta(neon_evm_program_id, is_signer=False, is_writable=False),
     ]
 
     for acc in additional_accounts:
@@ -153,8 +148,7 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         treasury_buffer: bytes,
         step_count: int,
         additional_accounts: tp.List[PublicKey],
-        system_program=sp.SYS_PROGRAM_ID,
-        evm_loader_public_key=PublicKey(EVM_LOADER)):
+        system_program=sp.SYS_PROGRAM_ID):
     d = (32).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
@@ -162,10 +156,8 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
         AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-        AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=evm_loader.ether2balance(operator_ether), is_signer=False, is_writable=True),
         AccountMeta(system_program, is_signer=False, is_writable=True),
-        # Neon EVM account
-        AccountMeta(evm_loader_public_key, is_signer=False, is_writable=False),
     ]
     for acc in additional_accounts:
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True), )
@@ -177,13 +169,14 @@ def make_PartialCallOrContinueFromRawEthereumTX(
     )
 
 
-def make_Cancel(storage_address: PublicKey, operator: Keypair, hash: bytes, additional_accounts: tp.List[PublicKey]):
+def make_Cancel(evm_loader: "EvmLoader", storage_address: PublicKey, operator: Keypair, hash: bytes, additional_accounts: tp.List[PublicKey]):
     d = (35).to_bytes(1, "little") + hash
+    operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
     accounts = [
         AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
-        AccountMeta(pubkey=PublicKey(INCINERATOR_ADDRESS), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=evm_loader.ether2balance(operator_ether), is_signer=False, is_writable=True),
     ]
 
     for acc in additional_accounts:
@@ -198,18 +191,23 @@ def make_Cancel(storage_address: PublicKey, operator: Keypair, hash: bytes, addi
 
 def make_DepositV03(
         ether_address: bytes,
-        solana_account: PublicKey,
+        chain_id: int,
+        balance_account: PublicKey,
+        contract_account: PublicKey,
+        mint: PublicKey,
         source: PublicKey,
         pool: PublicKey,
         token_program: PublicKey,
         operator_pubkey: PublicKey,
 ) -> TransactionInstruction:
-    data = bytes.fromhex('27') + ether_address
+    data = bytes.fromhex('27') + ether_address + chain_id.to_bytes(8, 'little')
 
     accounts = [
+        AccountMeta(pubkey=mint, is_signer=False, is_writable=True),
         AccountMeta(pubkey=source, is_signer=False, is_writable=True),
         AccountMeta(pubkey=pool, is_signer=False, is_writable=True),
-        AccountMeta(pubkey=solana_account, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=balance_account, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=contract_account, is_signer=False, is_writable=True),
         AccountMeta(pubkey=token_program, is_signer=False, is_writable=False),
         AccountMeta(pubkey=operator_pubkey, is_signer=True, is_writable=True),
         AccountMeta(pubkey=sp.SYS_PROGRAM_ID, is_signer=False, is_writable=False),

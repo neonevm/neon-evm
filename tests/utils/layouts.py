@@ -2,9 +2,11 @@ from construct import Bytes, Int8ul, Struct, Int64ul, Int32ul
 
 STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
+    "blocked" / Int8ul,
     "owner" / Bytes(32),
     "hash" / Bytes(32),
     "caller" / Bytes(20),
+    "chain_id" / Int64ul,
     "gas_limit" / Bytes(32),
     "gas_price" / Bytes(32),
     "gas_used" / Bytes(32),
@@ -15,6 +17,7 @@ STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
 
 HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
+    "blocked" / Int8ul,
     "owner" / Bytes(32),
     "hash" / Bytes(32),
     "len" / Int64ul
@@ -23,23 +26,23 @@ HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
 
 FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
+    "blocked" / Int8ul,
     "owner" / Bytes(32),
     "hash" / Bytes(32),
 )
 
 
-ACCOUNT_INFO_LAYOUT = Struct(
+CONTRACT_ACCOUNT_LAYOUT = Struct(
     "type" / Int8ul,
-    "ether" / Bytes(20),
-    "nonce" / Int8ul,
-    "trx_count" / Bytes(8),
-    "balance" / Bytes(32),
+    "blocked" / Int8ul,
+    "chain_id" / Int64ul,
     "generation" / Int32ul,
-    "code_size" / Int32ul,
-    "is_rw_blocked" / Int8ul,
 )
 
-
-CREATE_ACCOUNT_LAYOUT = Struct(
-    "ether" / Bytes(20),
+BALANCE_ACCOUNT_LAYOUT = Struct(
+    "type" / Int8ul,
+    "blocked" / Int8ul,
+    "chain_id" / Int64ul,
+    "trx_count" / Int64ul,
+    "balance" / Bytes(32),
 )

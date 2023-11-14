@@ -6,9 +6,9 @@ from solana.rpc.api import Client
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 
-from .solana_utils import neon_cli, create_treasury_pool_address, get_neon_balance, get_transaction_count
+from .solana_utils import neon_cli, create_treasury_pool_address
 from .solana_utils import solana_client, wait_confirm_transaction, get_solana_balance, send_transaction
-from .utils.constants import SOLANA_URL
+from .utils.constants import CHAIN_ID, SOLANA_URL
 from .utils.contract import deploy_contract
 from .utils.ethereum import make_eth_transaction
 from eth_utils import abi, to_text
@@ -48,7 +48,7 @@ def test_emulate_contract_deploy(user_account, evm_loader):
     result = neon_cli().emulate(
         evm_loader.loader_id,
         user_account.eth_address.hex(),
-        'deploy',
+        None,
         contract_code.hex()
     )
     assert result['exit_status'] == 'succeed', f"The 'exit_status' field is not succeed. Result: {result}"
@@ -105,31 +105,11 @@ def test_init_environment(evm_loader):
 
 
 def test_get_ether_account_data(evm_loader, user_account):
-    result = neon_cli().call(
-        f"get-ether-account-data --evm_loader {evm_loader.loader_id} {user_account.eth_address.hex()}")
+    result = neon_cli().call(f"get-ether-account-data --evm_loader {evm_loader.loader_id} {user_account.eth_address.hex()} {CHAIN_ID}")
 
-    assert f"0x{user_account.eth_address.hex()}" == result["address"]
-    assert str(user_account.solana_account_address) == result["solana_address"]
+    assert str(user_account.balance_account_address) == result[0]["solana_address"]
 
     assert solana_client.get_account_info(user_account.solana_account.public_key).value is not None
-
-
-def test_create_ether_account(evm_loader):
-    acc = gen_hash_of_block(20)
-    result = neon_cli().call(
-        f"create-ether-account --evm_loader {evm_loader.loader_id} {acc}")
-
-    acc_info = solana_client.get_account_info(PublicKey(result['solana_address']), commitment=Confirmed)
-    assert acc_info.value is not None
-
-
-def test_deposit(evm_loader, user_account):
-    amount = random.randint(1, 100000)
-    result = neon_cli().call(
-        f"deposit --evm_loader {evm_loader.loader_id} {amount} {user_account.eth_address.hex()}")
-    balance_after = get_neon_balance(solana_client, user_account.solana_account_address)
-    assert result["transaction"] is not None
-    assert balance_after == amount * 1000000000
 
 
 def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_pool):
@@ -147,8 +127,7 @@ def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair
     eth_transaction = make_eth_transaction(
         rw_lock_contract.eth_address,
         data,
-        user_account.solana_account,
-        user_account.solana_account_address,
+        user_account
     )
     storage_account = create_holder(operator_keypair)
     instruction = eth_transaction.rawTransaction
@@ -159,7 +138,7 @@ def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair
             operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1,
             [
                 rw_lock_contract.solana_address,
-                user_account.solana_account_address,
+                user_account.balance_account_address,
             ]
         )
     )
@@ -167,8 +146,8 @@ def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair
 
     receipt = send_transaction(solana_client, trx, operator_keypair)
     assert receipt.value.transaction.meta.err is None
-    user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
+    user_nonce = evm_loader.get_neon_nonce(user_account.eth_address)
 
     result = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")
     assert result["transaction"] is not None
-    assert user_nonce < get_transaction_count(solana_client, user_account.solana_account_address)
+    assert user_nonce < evm_loader.get_neon_nonce(user_account.eth_address)
