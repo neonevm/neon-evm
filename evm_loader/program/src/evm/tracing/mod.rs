@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use crate::account::EthereumAccount;
-use crate::executor::Action;
 use crate::types::hexbytes::HexBytes;
 use crate::types::Address;
 use ethnum::U256;
@@ -14,17 +12,9 @@ use super::{Context, ExitStatus};
 
 pub mod tracers;
 
-#[derive(Debug, Clone)]
-pub struct EmulationResult {
-    pub exit_status: ExitStatus,
-    pub steps_executed: u64,
-    pub used_gas: u64,
-    pub actions: Vec<Action>,
-}
-
 pub trait EventListener: Send + Sync + Debug {
     fn event(&mut self, event: Event);
-    fn into_traces(self: Box<Self>, emulation_result: EmulationResult) -> Value;
+    fn into_traces(self: Box<Self>) -> Value;
 }
 
 pub type TracerType = Rc<RefCell<Box<dyn EventListener>>>;
@@ -85,16 +75,15 @@ pub struct AccountOverride {
 }
 
 impl AccountOverride {
-    pub fn apply(&self, ether_account: &mut EthereumAccount) {
-        if let Some(nonce) = self.nonce {
-            ether_account.trx_count = nonce;
-        }
-        if let Some(balance) = self.balance {
-            ether_account.balance = balance;
-        }
-        #[allow(clippy::cast_possible_truncation)]
-        if let Some(code) = &self.code {
-            ether_account.code_size = code.len() as u32;
+    #[must_use]
+    pub fn storage(&self, index: U256) -> Option<[u8; 32]> {
+        match (&self.state, &self.state_diff) {
+            (None, None) => None,
+            (Some(_), Some(_)) => {
+                panic!("Account has both `state` and `stateDiff` overrides")
+            }
+            (Some(state), None) => return state.get(&index).map(|value| value.to_be_bytes()),
+            (None, Some(state_diff)) => state_diff.get(&index).map(|v| v.to_be_bytes()),
         }
     }
 }

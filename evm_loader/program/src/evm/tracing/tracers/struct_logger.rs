@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 
 use ethnum::U256;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::evm::opcode_table::OPNAMES;
 use crate::evm::tracing::TraceConfig;
-use crate::evm::tracing::{EmulationResult, Event, EventListener};
+use crate::evm::tracing::{Event, EventListener};
 use crate::types::hexbytes::HexBytes;
 
 /// `StructLoggerResult` groups all structured logs emitted by the EVM
@@ -198,23 +198,10 @@ impl EventListener for StructLogger {
         };
     }
 
-    fn into_traces(self: Box<Self>, emulation_result: EmulationResult) -> Value {
-        let result = StructLoggerResult {
-            failed: !emulation_result
-                .exit_status
-                .is_succeed()
-                .expect("Emulation is not completed"),
-            gas: emulation_result.used_gas,
-            return_value: hex::encode(
-                emulation_result
-                    .exit_status
-                    .into_result()
-                    .unwrap_or_default(),
-            ),
-            struct_logs: self.logs,
-        };
-
-        serde_json::to_value(result).expect("Conversion error")
+    fn into_traces(self: Box<Self>) -> Value {
+        json!({
+            "struct_logs": self.logs
+        })
     }
 }
 

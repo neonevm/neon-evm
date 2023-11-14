@@ -26,7 +26,7 @@ pub async fn execute(config: &Config, context: &Context<'_>) -> NeonResult<Colle
     let signer = context.signer()?;
 
     let pool_count: u32 = neon_params
-        .get("NEON_POOL_COUNT")
+        .get("NEON_TREASURY_POOL_COUNT")
         .and_then(|value| value.parse().ok())
         .ok_or(NeonError::IncorrectProgram(config.evm_loader))?;
 
@@ -108,7 +108,10 @@ pub async fn execute(config: &Config, context: &Context<'_>) -> NeonResult<Colle
     let main_balance_account = context
         .rpc_client
         .get_account(&main_balance_address)
-        .await?;
+        .await?
+        .value
+        .unwrap();
+
     Ok(CollectTreasuryReturn {
         pool_address: main_balance_address.to_string(),
         balance: main_balance_account.lamports,

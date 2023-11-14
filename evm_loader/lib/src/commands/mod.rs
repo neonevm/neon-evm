@@ -13,10 +13,11 @@ use solana_sdk::{
 
 pub mod cancel_trx;
 pub mod collect_treasury;
-pub mod create_ether_account;
-pub mod deposit;
 pub mod emulate;
-pub mod get_ether_account_data;
+pub mod get_balance;
+pub mod get_config;
+pub mod get_contract;
+pub mod get_holder;
 pub mod get_neon_elf;
 pub mod get_storage_at;
 pub mod init_environment;

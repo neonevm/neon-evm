@@ -186,8 +186,8 @@ pub async fn execute(
         Ok(Some(transaction))
     };
 
-    let neon_token_mint = program_parameters.get::<Pubkey>("NEON_TOKEN_MINT")?;
-    let neon_token_mint_decimals = program_parameters.get::<u8>("NEON_TOKEN_MINT_DECIMALS")?;
+    let neon_token_mint: Pubkey = program_parameters.get("NEON_TOKEN_MINT")?;
+    let neon_token_mint_decimals = 9;
     executor
         .check_and_create_object(
             "NEON-token mint",
@@ -209,41 +209,42 @@ pub async fn execute(
 
     //====================== Create 'Deposit' NEON-token balance ======================================================
     let (deposit_authority, _) = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader);
-    let deposit_address = get_associated_token_address(&deposit_authority, &neon_token_mint);
-    executor
-        .check_and_create_object(
-            "NEON Deposit balance",
-            executor
-                .get_account_data_pack::<spl_token::state::Account>(
-                    &spl_token::id(),
-                    &deposit_address,
-                )
-                .await,
-            |account| async move {
-                if account.mint != neon_token_mint || account.owner != deposit_authority {
-                    Err(EnvironmentError::InvalidSplTokenAccount(deposit_address).into())
-                } else {
-                    Ok(None)
-                }
-            },
-            || async {
-                let transaction = executor
+    let chains = super::get_config::read_chains(context.rpc_client, config.evm_loader).await?;
+    for chain in chains {
+        let pool = get_associated_token_address(&deposit_authority, &chain.token);
+
+        executor
+            .check_and_create_object(
+                "Token pool account",
+                executor
+                    .get_account_data_pack::<spl_token::state::Account>(&spl_token::id(), &pool)
+                    .await,
+                |account| async move {
+                    if account.mint != chain.token || account.owner != deposit_authority {
+                        Err(EnvironmentError::InvalidSplTokenAccount(pool).into())
+                    } else {
+                        Ok(None)
+                    }
+                },
+                || async {
+                    let transaction = executor
                     .create_transaction_with_payer_only(&[
                         spl_associated_token_account::instruction::create_associated_token_account(
                             &executor.fee_payer.pubkey(),
                             &deposit_authority,
-                            &neon_token_mint,
+                            &chain.token,
                             &spl_token::id(),
                         ),
                     ])
                     .await?;
-                Ok(Some(transaction))
-            },
-        )
-        .await?;
+                    Ok(Some(transaction))
+                },
+            )
+            .await?;
+    }
 
     //====================== Create main treasury balance =============================================================
-    let treasury_pool_seed = program_parameters.get::<String>("NEON_POOL_SEED")?;
+    let treasury_pool_seed = program_parameters.get::<String>("NEON_TREASURY_POOL_SEED")?;
     if treasury_pool_seed != TREASURY_POOL_SEED {
         error!(
             "Treasury pool seed mismatch {} != {}",
@@ -285,7 +286,7 @@ pub async fn execute(
         .await?;
 
     //====================== Create auxiliary treasury balances =======================================================
-    let treasury_pool_count = program_parameters.get::<u32>("NEON_POOL_COUNT")?;
+    let treasury_pool_count = program_parameters.get::<u32>("NEON_TREASURY_POOL_COUNT")?;
     for i in 0..treasury_pool_count {
         let minimum_balance = context
             .rpc_client
