@@ -6,13 +6,14 @@ use solana_client::{
     client_error::Result as ClientResult,
     client_error::{ClientError, ClientErrorKind},
     rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
-    rpc_response::{Response, RpcResponseContext, RpcResult},
+    rpc_response::{Response, RpcResponseContext, RpcResult, RpcSimulateTransactionResult},
 };
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     hash::Hash,
+    instruction::Instruction,
     pubkey::Pubkey,
     signature::Signature,
     transaction::Transaction,
@@ -67,12 +68,9 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    async fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
-        self.tracer_db
-            .get_account_at(key, self.slot, self.tx_index_in_block)
+    async fn get_account(&self, key: &Pubkey) -> RpcResult<Option<Account>> {
+        self.get_account_with_commitment(key, self.commitment())
             .await
-            .map_err(|e| e!("load account error", key, e))?
-            .ok_or_else(|| e!("account not found", key))
     }
 
     async fn get_account_with_commitment(
@@ -113,7 +111,12 @@ impl Rpc for CallDbClient {
     }
 
     async fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
-        Ok(self.get_account(key).await?.data)
+        let response = self.get_account(key).await?;
+        if let Some(account) = response.value {
+            Ok(account.data)
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     async fn get_block(&self, _slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
@@ -199,6 +202,24 @@ impl Rpc for CallDbClient {
         Err(e!(
             "get_latest_blockhash_with_commitment() not implemented for db_call_client"
         ))
+    }
+
+    fn can_simulate_transaction(&self) -> bool {
+        false
+    }
+
+    async fn simulate_transaction(
+        &self,
+        _signer: Option<Pubkey>,
+        _instructions: &[Instruction],
+    ) -> RpcResult<RpcSimulateTransactionResult> {
+        Err(e!(
+            "simulate_transaction() not implemented for db_call_client"
+        ))
+    }
+
+    async fn identity(&self) -> ClientResult<Pubkey> {
+        Err(e!("identity() not implemented for db_call_client"))
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -1,7 +1,9 @@
 //! Error types
 #![allow(clippy::use_self)]
 
+use std::array::TryFromSliceError;
 use std::net::AddrParseError;
+use std::string::FromUtf8Error;
 
 use log::error;
 use solana_cli::cli::CliError as SolanaCliError;
@@ -10,6 +12,7 @@ use solana_client::tpu_client::TpuSenderError as SolanaTpuSenderError;
 use solana_sdk::program_error::ProgramError as SolanaProgramError;
 use solana_sdk::pubkey::{Pubkey, PubkeyError as SolanaPubkeyError};
 use solana_sdk::signer::SignerError as SolanaSignerError;
+use solana_sdk::transaction::TransactionError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
@@ -97,6 +100,18 @@ pub enum NeonError {
     ClickHouse(ChError),
     #[error("Slot {0} is less than earliest_rooted_slot={1}")]
     EarlySlot(u64, u64),
+    #[error("Json Error. {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[error("BanksClient Error. {0}")]
+    BanksClientError(#[from] Box<solana_program_test::BanksClientError>),
+    #[error("Transaction Error. {0}")]
+    TransactionError(#[from] TransactionError),
+    #[error("Bincode Error. {0}")]
+    BincodeError(#[from] bincode::Error),
+    #[error("FromUtf8 Error. {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+    #[error("TryFromSlice Error. {0}")]
+    TryFromSliceError(#[from] TryFromSliceError),
 }
 
 impl NeonError {
@@ -132,6 +147,12 @@ impl NeonError {
             NeonError::TxParametersParsingError(_) => 250,
             NeonError::ClickHouse(_) => 252,
             NeonError::EarlySlot(_, _) => 253,
+            NeonError::SerdeJson(_) => 254,
+            NeonError::BanksClientError(_) => 255,
+            NeonError::TransactionError(_) => 256,
+            NeonError::BincodeError(_) => 257,
+            NeonError::FromUtf8Error(_) => 258,
+            NeonError::TryFromSliceError(_) => 259,
         }
     }
 }

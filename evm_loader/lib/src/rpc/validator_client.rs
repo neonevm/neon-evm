@@ -3,14 +3,15 @@ use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
     nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
-    rpc_response::RpcResult,
+    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig, RpcTransactionConfig},
+    rpc_response::{RpcResult, RpcSimulateTransactionResult},
 };
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     hash::Hash,
+    instruction::Instruction,
     pubkey::Pubkey,
     signature::Signature,
     transaction::Transaction,
@@ -36,8 +37,9 @@ impl Rpc for RpcClient {
             .await
     }
 
-    async fn get_account(&self, key: &Pubkey) -> ClientResult<Account> {
-        self.get_account(key).await
+    async fn get_account(&self, key: &Pubkey) -> RpcResult<Option<Account>> {
+        self.get_account_with_commitment(key, self.commitment())
+            .await
     }
 
     async fn get_account_with_commitment(
@@ -130,6 +132,38 @@ impl Rpc for RpcClient {
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
         self.get_latest_blockhash_with_commitment(commitment).await
+    }
+
+    fn can_simulate_transaction(&self) -> bool {
+        true
+    }
+
+    async fn simulate_transaction(
+        &self,
+        signer: Option<Pubkey>,
+        instructions: &[Instruction],
+    ) -> RpcResult<RpcSimulateTransactionResult> {
+        let payer_pubkey = if let Some(signer) = signer {
+            signer
+        } else {
+            self.get_identity().await?
+        };
+
+        let tx = Transaction::new_with_payer(instructions, Some(&payer_pubkey));
+
+        self.simulate_transaction_with_config(
+            &tx,
+            RpcSimulateTransactionConfig {
+                sig_verify: false,
+                replace_recent_blockhash: true,
+                ..RpcSimulateTransactionConfig::default()
+            },
+        )
+        .await
+    }
+
+    async fn identity(&self) -> ClientResult<Pubkey> {
+        self.get_identity().await
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -3,12 +3,16 @@ use solana_sdk::{program_error::ProgramError, program_stubs::SyscallStubs, sysva
 
 use crate::{errors::NeonError, rpc::Rpc};
 
-pub struct Stubs {
+pub struct DefaultStubs;
+
+impl SyscallStubs for DefaultStubs {}
+
+pub struct EmulatorStubs {
     rent: Rent,
 }
 
-impl Stubs {
-    pub async fn new(rpc_client: &dyn Rpc) -> Result<Box<Stubs>, NeonError> {
+impl EmulatorStubs {
+    pub async fn new(rpc_client: &dyn Rpc) -> Result<Box<EmulatorStubs>, NeonError> {
         let rent_pubkey = solana_sdk::sysvar::rent::id();
         let data = rpc_client.get_account_data(&rent_pubkey).await?;
         let rent = bincode::deserialize(&data).map_err(|_| ProgramError::InvalidArgument)?;
@@ -17,7 +21,7 @@ impl Stubs {
     }
 }
 
-impl SyscallStubs for Stubs {
+impl SyscallStubs for EmulatorStubs {
     fn sol_get_rent_sysvar(&self, pointer: *mut u8) -> u64 {
         unsafe {
             #[allow(clippy::cast_ptr_alignment)]
@@ -45,4 +49,11 @@ impl SyscallStubs for Stubs {
 
         info!("Program Data: {}", messages.join(" "));
     }
+}
+
+pub async fn setup_emulator_syscall_stubs(rpc_client: &dyn Rpc) -> Result<(), NeonError> {
+    let syscall_stubs = EmulatorStubs::new(rpc_client).await?;
+    solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
+
+    Ok(())
 }
