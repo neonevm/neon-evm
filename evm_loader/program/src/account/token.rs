@@ -19,6 +19,10 @@ impl<'a, T: Pack + IsInitialized> Account<'a, T> {
 
         Ok(Self { info, data })
     }
+
+    pub fn into_data(self) -> T {
+        self.data
+    }
 }
 
 impl<'a, T: Pack + IsInitialized> Deref for Account<'a, T> {

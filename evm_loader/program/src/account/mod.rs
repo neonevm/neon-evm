@@ -1,240 +1,77 @@
-use std::cell::RefMut;
-use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
-
-use crate::error::{Error, Result};
+use crate::{
+    account::legacy::{TAG_ACCOUNT_CONTRACT_DEPRECATED, TAG_STORAGE_CELL_DEPRECATED},
+    error::{Error, Result},
+};
 use solana_program::account_info::AccountInfo;
 use solana_program::pubkey::Pubkey;
-use solana_program::rent::Rent;
-use solana_program::sysvar::Sysvar;
+use std::cell::{Ref, RefMut};
 
 pub use crate::config::ACCOUNT_SEED_VERSION;
 
+pub use ether_balance::BalanceAccount;
+pub use ether_contract::{AllocateResult, ContractAccount};
+pub use ether_storage::{StorageCell, StorageCellAddress};
+pub use holder::Holder;
 pub use incinerator::Incinerator;
 pub use operator::Operator;
+pub use state::StateAccount;
+pub use state_finalized::StateFinalizedAccount;
 pub use treasury::{MainTreasury, Treasury};
 
-pub mod ether_account;
-pub mod ether_contract;
-pub mod ether_storage;
-pub mod holder;
+use self::program::System;
+
+mod ether_balance;
+mod ether_contract;
+mod ether_storage;
+mod holder;
 mod incinerator;
+pub mod legacy;
 mod operator;
 pub mod program;
-pub mod state;
-pub mod sysvar;
+mod state;
+mod state_finalized;
 pub mod token;
 mod treasury;
 
-/*
-Deprecated tags:
-
-const TAG_ACCOUNT_V1: u8 = 1;
-const TAG_ACCOUNT_V2: u8 = 10;
-const TAG_CONTRACT_V1: u8 = 2;
-const TAG_CONTRACT_V2: u8 = 20;
-const TAG_CONTRACT_STORAGE: u8 = 6;
-const TAG_STATE_V1: u8 = 3;
-const TAG_STATE_V2: u8 = 30;
-const TAG_STATE_V3: u8 = 21;
-const TAG_ERC20_ALLOWANCE: u8 = 4;
-const TAG_FINALIZED_STATE: u8 = 5;
-const TAG_HOLDER: u8 = 6;
-*/
-
 pub const TAG_EMPTY: u8 = 0;
-const TAG_ACCOUNT_V3: u8 = 12;
-const TAG_STATE: u8 = 22;
-const TAG_FINALIZED_STATE: u8 = 31;
-const TAG_CONTRACT_STORAGE: u8 = 42;
-const TAG_HOLDER: u8 = 51;
+pub const TAG_STATE: u8 = 23;
+pub const TAG_STATE_FINALIZED: u8 = 32;
+pub const TAG_HOLDER: u8 = 52;
 
-pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
-pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
-pub type State<'a> = AccountData<'a, state::Data>;
-pub type FinalizedState<'a> = AccountData<'a, state::FinalizedData>;
-pub type Holder<'a> = AccountData<'a, holder::Data>;
+pub const TAG_ACCOUNT_BALANCE: u8 = 60;
+pub const TAG_ACCOUNT_CONTRACT: u8 = 70;
+pub const TAG_STORAGE_CELL: u8 = 43;
 
-pub trait Packable {
-    const TAG: u8;
-    const SIZE: usize;
+const ACCOUNT_PREFIX_LEN: usize = 2;
 
-    fn unpack(data: &[u8]) -> Self;
-    fn pack(&self, data: &mut [u8]);
-}
+#[inline]
+fn section<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> Ref<'r, T> {
+    let begin = offset;
+    let end = begin + std::mem::size_of::<T>();
 
-struct AccountParts<'a> {
-    tag: RefMut<'a, u8>,
-    data: RefMut<'a, [u8]>,
-    remaining: RefMut<'a, [u8]>,
-}
+    let data = account.data.borrow();
+    Ref::map(data, |d| {
+        let bytes = &d[begin..end];
 
-#[derive(Debug)]
-pub struct AccountData<'a, T>
-where
-    T: Packable + Debug,
-{
-    dirty: bool,
-    data: T,
-    pub info: &'a AccountInfo<'a>,
-}
-
-fn split_account_data<'a>(info: &'a AccountInfo<'a>, data_len: usize) -> Result<AccountParts> {
-    if info.data_len() < 1 + data_len {
-        return Err(Error::AccountInvalidData(*info.key));
-    }
-
-    let account_data = info.try_borrow_mut_data()?;
-    let (tag, bytes) = RefMut::map_split(account_data, |d| {
-        d.split_first_mut().expect("data is not empty")
-    });
-    let (data, remaining) = RefMut::map_split(bytes, |d| d.split_at_mut(data_len));
-
-    Ok(AccountParts {
-        tag,
-        data,
-        remaining,
+        assert_eq!(std::mem::align_of::<T>(), 1);
+        assert_eq!(std::mem::size_of::<T>(), bytes.len());
+        unsafe { &*(bytes.as_ptr().cast()) }
     })
 }
 
-impl<'a, T> AccountData<'a, T>
-where
-    T: Packable + Debug,
-{
-    pub const SIZE: usize = 1 + T::SIZE;
-    pub const TAG: u8 = T::TAG;
+#[inline]
+fn section_mut<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> RefMut<'r, T> {
+    let begin = offset;
+    let end = begin + std::mem::size_of::<T>();
 
-    pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self> {
-        if info.owner != program_id {
-            return Err(Error::AccountInvalidOwner(*info.key, *program_id));
-        }
+    let data = account.data.borrow_mut();
+    RefMut::map(data, |d| {
+        let bytes = &mut d[begin..end];
 
-        let parts = split_account_data(info, T::SIZE)?;
-        if *parts.tag != T::TAG {
-            return Err(Error::AccountInvalidTag(*info.key, T::TAG));
-        }
-
-        let data = T::unpack(&parts.data);
-
-        Ok(Self {
-            dirty: false,
-            data,
-            info,
-        })
-    }
-
-    pub fn init(program_id: &Pubkey, info: &'a AccountInfo<'a>, data: T) -> Result<Self> {
-        if info.owner != program_id {
-            return Err(Error::AccountInvalidOwner(*info.key, *program_id));
-        }
-
-        if !info.is_writable {
-            return Err(Error::AccountNotWritable(*info.key));
-        }
-
-        let rent = Rent::get()?;
-        if !rent.is_exempt(info.lamports(), info.data_len()) {
-            return Err(Error::AccountNotRentExempt(*info.key));
-        }
-
-        let mut parts = split_account_data(info, T::SIZE)?;
-        if *parts.tag != TAG_EMPTY {
-            return Err(Error::AccountAlreadyInitialized(*info.key));
-        }
-
-        *parts.tag = T::TAG;
-        data.pack(&mut parts.data);
-
-        parts.remaining.fill(0);
-
-        Ok(Self {
-            dirty: false,
-            data,
-            info,
-        })
-    }
-
-    /// # Safety
-    /// *Delete account*. Transfer lamports to the operator.
-    /// All data stored in the account will be lost
-    pub unsafe fn suicide(mut self, operator: &Operator<'a>) {
-        let info = self.info;
-
-        self.dirty = false; // Do not save data into solana account
-        core::mem::drop(self); // Release borrowed account data
-
-        crate::account::delete(info, operator);
-    }
-
-    /// # Safety
-    /// Should be used with care. Can corrupt account data
-    pub unsafe fn replace<U>(mut self, data: U) -> Result<AccountData<'a, U>>
-    where
-        U: Packable + Debug,
-    {
-        debug_print!("replace account data from {:?} to {:?}", &self.data, &data);
-        let info = self.info;
-
-        if !info.is_writable {
-            return Err(Error::AccountNotWritable(*info.key));
-        }
-
-        self.dirty = false; // Do not save data into solana account
-        core::mem::drop(self); // Release borrowed account data
-
-        let mut parts = split_account_data(info, U::SIZE)?;
-
-        *parts.tag = U::TAG;
-        data.pack(&mut parts.data);
-
-        parts.remaining.fill(0);
-
-        Ok(AccountData {
-            dirty: false,
-            data,
-            info,
-        })
-    }
-}
-
-impl<'a, T> Deref for AccountData<'a, T>
-where
-    T: Packable + Debug,
-{
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
-impl<'a, T> DerefMut for AccountData<'a, T>
-where
-    T: Packable + Debug,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.dirty = true;
-        &mut self.data
-    }
-}
-
-impl<'a, T> Drop for AccountData<'a, T>
-where
-    T: Packable + Debug,
-{
-    fn drop(&mut self) {
-        if !self.dirty {
-            return;
-        }
-
-        debug_print!("Save into solana account {:?}", self.data);
-        assert!(self.info.is_writable);
-
-        let mut parts =
-            split_account_data(self.info, T::SIZE).expect("Account have incorrect size");
-
-        self.data.pack(&mut parts.data);
-    }
+        assert_eq!(std::mem::align_of::<T>(), 1);
+        assert_eq!(std::mem::size_of::<T>(), bytes.len());
+        unsafe { &mut *(bytes.as_mut_ptr().cast()) }
+    })
 }
 
 pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8> {
@@ -243,11 +80,70 @@ pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8> {
     }
 
     let data = info.try_borrow_data()?;
-    if data.is_empty() {
+    if data.len() < ACCOUNT_PREFIX_LEN {
         return Err(Error::AccountInvalidData(*info.key));
     }
 
     Ok(data[0])
+}
+
+pub fn set_tag(program_id: &Pubkey, info: &AccountInfo, tag: u8) -> Result<()> {
+    assert_eq!(info.owner, program_id);
+
+    let mut data = info.try_borrow_mut_data()?;
+    assert!(data.len() >= ACCOUNT_PREFIX_LEN);
+
+    data[0] = tag;
+
+    Ok(())
+}
+
+pub fn validate_tag(program_id: &Pubkey, info: &AccountInfo, tag: u8) -> Result<()> {
+    let account_tag = crate::account::tag(program_id, info)?;
+
+    if account_tag == tag {
+        Ok(())
+    } else {
+        Err(Error::AccountInvalidTag(*info.key, tag))
+    }
+}
+
+pub fn is_blocked(program_id: &Pubkey, info: &AccountInfo) -> Result<bool> {
+    if info.owner != program_id {
+        return Err(Error::AccountInvalidOwner(*info.key, *program_id));
+    }
+
+    let data = info.try_borrow_data()?;
+    if data.len() < ACCOUNT_PREFIX_LEN {
+        return Err(Error::AccountInvalidData(*info.key));
+    }
+
+    Ok(data[1] == 1)
+}
+
+#[inline]
+fn set_block(program_id: &Pubkey, info: &AccountInfo, block: bool) -> Result<()> {
+    assert_eq!(info.owner, program_id);
+
+    let mut data = info.try_borrow_mut_data()?;
+    assert!(data.len() >= ACCOUNT_PREFIX_LEN);
+    assert!(data[0] != TAG_ACCOUNT_CONTRACT_DEPRECATED && data[0] != TAG_STORAGE_CELL_DEPRECATED);
+
+    if block && (data[1] != 0) {
+        return Err(Error::AccountBlocked(*info.key));
+    }
+
+    data[1] = block.into();
+
+    Ok(())
+}
+
+pub fn block(program_id: &Pubkey, info: &AccountInfo) -> Result<()> {
+    set_block(program_id, info, true)
+}
+
+pub fn unblock(program_id: &Pubkey, info: &AccountInfo) -> Result<()> {
+    set_block(program_id, info, false)
 }
 
 /// # Safety
@@ -260,4 +156,101 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) {
 
     let mut data = account.data.borrow_mut();
     data.fill(0);
+}
+
+pub struct AccountsDB<'a> {
+    sorted_accounts: Vec<AccountInfo<'a>>,
+    operator: Operator<'a>,
+    operator_balance: Option<BalanceAccount<'a>>,
+    system: Option<System<'a>>,
+    treasury: Option<Treasury<'a>>,
+}
+
+impl<'a> AccountsDB<'a> {
+    #[must_use]
+    pub fn new(
+        accounts: &[AccountInfo<'a>],
+        operator: Operator<'a>,
+        operator_balance: Option<BalanceAccount<'a>>,
+        system: Option<System<'a>>,
+        treasury: Option<Treasury<'a>>,
+    ) -> Self {
+        let mut sorted_accounts = accounts.to_vec();
+        sorted_accounts.sort_unstable_by_key(|a| a.key);
+        sorted_accounts.dedup_by_key(|a| a.key);
+
+        Self {
+            sorted_accounts,
+            operator,
+            operator_balance,
+            system,
+            treasury,
+        }
+    }
+
+    #[must_use]
+    pub fn accounts_len(&self) -> usize {
+        self.sorted_accounts.len()
+    }
+
+    #[must_use]
+    pub fn system(&self) -> &System<'a> {
+        if let Some(system) = &self.system {
+            return system;
+        }
+
+        panic!("System Account must be present in the transaction");
+    }
+
+    #[must_use]
+    pub fn treasury(&self) -> &Treasury<'a> {
+        if let Some(treasury) = &self.treasury {
+            return treasury;
+        }
+
+        panic!("Treasury Account must be present in the transaction");
+    }
+
+    #[must_use]
+    pub fn operator(&self) -> &Operator<'a> {
+        &self.operator
+    }
+
+    #[must_use]
+    pub fn operator_balance(&mut self) -> &mut BalanceAccount<'a> {
+        if let Some(operator_balance) = &mut self.operator_balance {
+            return operator_balance;
+        }
+
+        panic!("Operator Balance Account must be present in the transaction");
+    }
+
+    #[must_use]
+    pub fn operator_key(&self) -> Pubkey {
+        *self.operator.key
+    }
+
+    #[must_use]
+    pub fn operator_info(&self) -> &AccountInfo<'a> {
+        &self.operator
+    }
+
+    #[must_use]
+    pub fn get(&self, pubkey: &Pubkey) -> &AccountInfo<'a> {
+        let Ok(index) = self.sorted_accounts.binary_search_by_key(&pubkey, |a| a.key) else {
+            panic!("address {pubkey} must be present in the transaction");
+        };
+
+        // We just got an 'index' from the binary_search over this vector.
+        unsafe { self.sorted_accounts.get_unchecked(index) }
+    }
+}
+
+impl<'a, 'r> IntoIterator for &'r AccountsDB<'a> {
+    type Item = &'r AccountInfo<'a>;
+    type IntoIter = std::slice::Iter<'r, AccountInfo<'a>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.sorted_accounts.iter()
+    }
 }

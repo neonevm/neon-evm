@@ -3,6 +3,7 @@ use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
 use std::ops::Deref;
 
+#[derive(Clone)]
 pub struct Operator<'a> {
     pub info: &'a AccountInfo<'a>,
 }
