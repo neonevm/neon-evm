@@ -89,7 +89,7 @@ pub trait Rpc {
         instructions: &[Instruction],
     ) -> RpcResult<RpcSimulateTransactionResult>;
 
-    async fn identity(&self) -> ClientResult<Pubkey>;
+    async fn get_account_with_sol(&self) -> ClientResult<Pubkey>;
 
     fn as_any(&self) -> &dyn Any;
 }

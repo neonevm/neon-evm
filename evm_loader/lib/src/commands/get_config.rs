@@ -123,7 +123,7 @@ impl<'r> ConfigSimulator<'r> {
         program_id: Pubkey,
     ) -> NeonResult<ConfigSimulator<'r>> {
         let simulator = if rpc_client.can_simulate_transaction() {
-            let identity = rpc_client.identity().await?;
+            let identity = rpc_client.get_account_with_sol().await?;
             Self::Rpc(identity, rpc_client)
         } else {
             let program_data = read_program_data_from_account(rpc_client, program_id).await?;

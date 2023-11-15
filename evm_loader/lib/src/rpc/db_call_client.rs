@@ -218,8 +218,10 @@ impl Rpc for CallDbClient {
         ))
     }
 
-    async fn identity(&self) -> ClientResult<Pubkey> {
-        Err(e!("identity() not implemented for db_call_client"))
+    async fn get_account_with_sol(&self) -> ClientResult<Pubkey> {
+        Err(e!(
+            "get_account_with_sol() not implemented for db_call_client"
+        ))
     }
 
     fn as_any(&self) -> &dyn Any {

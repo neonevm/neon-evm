@@ -3,7 +3,10 @@ use async_trait::async_trait;
 use solana_client::{
     client_error::Result as ClientResult,
     nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig, RpcTransactionConfig},
+    rpc_config::{
+        RpcLargestAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
+        RpcTransactionConfig,
+    },
     rpc_response::{RpcResult, RpcSimulateTransactionResult},
 };
 use solana_sdk::{
@@ -19,7 +22,7 @@ use solana_sdk::{
 use solana_transaction_status::{
     EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
 };
-use std::any::Any;
+use std::{any::Any, str::FromStr};
 
 #[async_trait(?Send)]
 impl Rpc for RpcClient {
@@ -146,7 +149,7 @@ impl Rpc for RpcClient {
         let payer_pubkey = if let Some(signer) = signer {
             signer
         } else {
-            self.get_identity().await?
+            self.get_account_with_sol().await?
         };
 
         let tx = Transaction::new_with_payer(instructions, Some(&payer_pubkey));
@@ -162,8 +165,16 @@ impl Rpc for RpcClient {
         .await
     }
 
-    async fn identity(&self) -> ClientResult<Pubkey> {
-        self.get_identity().await
+    async fn get_account_with_sol(&self) -> ClientResult<Pubkey> {
+        let r = self
+            .get_largest_accounts_with_config(RpcLargestAccountsConfig {
+                commitment: Some(self.commitment()),
+                filter: None,
+            })
+            .await?;
+
+        let pubkey = Pubkey::from_str(&r.value[0].address).unwrap();
+        Ok(pubkey)
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::instruction::Instruction;
-use solana_program::program::invoke_signed_unchecked;
+use solana_program::program::{invoke_signed_unchecked, invoke_unchecked};
 use solana_program::rent::Rent;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
@@ -155,7 +155,12 @@ impl<'a> ProgramAccountStorage<'a> {
                         accounts,
                         data,
                     };
-                    invoke_signed_unchecked(&instruction, &accounts_info, &[&seeds])?;
+
+                    if !seeds.is_empty() {
+                        invoke_signed_unchecked(&instruction, &accounts_info, &[&seeds])?;
+                    } else {
+                        invoke_unchecked(&instruction, &accounts_info)?;
+                    }
                 }
             }
         }
