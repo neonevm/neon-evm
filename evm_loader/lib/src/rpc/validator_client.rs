@@ -57,7 +57,13 @@ impl Rpc for RpcClient {
         &self,
         pubkeys: &[Pubkey],
     ) -> ClientResult<Vec<Option<Account>>> {
-        self.get_multiple_accounts(pubkeys).await
+        let mut result: Vec<Option<Account>> = Vec::new();
+        for chunk in pubkeys.chunks(100) {
+            let mut accounts = self.get_multiple_accounts(chunk).await?;
+            result.append(&mut accounts);
+        }
+
+        Ok(result)
     }
 
     async fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>> {
