@@ -96,11 +96,11 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
         neon_elf_param!(NEON_CHAIN_ID, #neon_chain_id_str);
         neon_elf_param!(NEON_TOKEN_MINT, #neon_token_mint);
 
-        pub static AUTHORIZED_OPERATOR_LIST: [::solana_program::pubkey::Pubkey; #operators_len] = [
+        pub const AUTHORIZED_OPERATOR_LIST: [::solana_program::pubkey::Pubkey; #operators_len] = [
             #(::solana_program::pubkey::Pubkey::new_from_array([#((#operators),)*]),)*
         ];
 
-        pub static CHAIN_ID_LIST: [(u64, &str, ::solana_program::pubkey::Pubkey); #chains_len] = [
+        pub const CHAIN_ID_LIST: [(u64, &str, ::solana_program::pubkey::Pubkey); #chains_len] = [
             #( (#chain_ids, #chain_names, ::solana_program::pubkey::Pubkey::new_from_array([#(#chain_tokens),*])) ),*
         ];
     }
@@ -144,7 +144,7 @@ pub fn common_config_parser(tokens: TokenStream) -> TokenStream {
     quote! {
         #(#tokens)*
 
-        pub static PARAMETERS: [(&str, &str); #variables_len] = [
+        pub const PARAMETERS: [(&str, &str); #variables_len] = [
             #( (#variable_names, #variable_values) ),*
         ];
     }

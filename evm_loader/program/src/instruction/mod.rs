@@ -6,67 +6,170 @@ use solana_program::program_error::ProgramError;
 /// `EvmInstruction` serialized in instruction data
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EvmInstruction {
-    /// Deposits NEON tokens to an Ether account (V3).
+    /// Deposits spl-tokens to an Ether account.
     /// Requires previously executed SPL-Token.Approve which
     /// delegates the deposit amount to the NEON destination account.
     ///
-    /// Accounts expected by this instruction:
-    ///
-    ///   0. `[writable]` NEON token source account.
-    ///   1. `[writable]` NEON token pool (destination) account.
-    ///   2. `[writable]` Ether account to store balance of NEONs.
-    ///   3. `[]` SPL Token program id.
-    ///   4. `[writeable,signer]` Funding account (must be a system account).
-    ///   5. `[]` System program.
-    DepositV03,
+    /// Accounts:
+    ///  `[]` spl-token mint account.
+    ///  `[WRITE]` spl-token source account.
+    ///  `[WRITE]` spl-token pool (destination) account.
+    ///  `[WRITE]` NeonEVM user balance account
+    ///  `[WRITE]` NeonEVM user contract account
+    ///  `[]` SPL Token program id.
+    ///  `[writeable,signer]` Funding account (must be a system account).
+    ///  `[]` System program.
+    /// Instruction data:
+    ///  0..20  - destination address
+    ///  20..28 - chain id in little endian
+    Deposit,
 
     /// Collect lamports from treasury pool accounts to main pool balance
-    ///   0. `[WRITE]` Main treasury balance: PDA["treasury_pool"]
-    ///   1. `[WRITE]` Auxiliary treasury balance: PDA["treasury_pool", index.to_le_bytes()]
-    ///   2. `[]` System program
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Main treasury balance: PDA["treasury_pool"]
+    ///  `[WRITE]` Auxiliary treasury balance: PDA["treasury_pool", index.to_le_bytes()]
+    ///  `[]` System program
+    /// Instruction data:
+    ///  0..4 - treasury index in little endian
     CollectTreasure,
 
     /// Create Holder Account
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Holder Account
+    ///  `[SIGNER]` Holder Account Owner
+    /// Instruction data:
+    ///  0..8          - seed length in little endian
+    ///  8..8+seed_len - seed in utf-8
     HolderCreate,
 
     /// Delete Holder Account
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Holder Account
+    ///  `[WRITE,SIGNER]` Holder Account Owner
+    /// Instruction data:
+    ///   None
     HolderDelete,
 
     /// Write Transaction into Holder Account
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Holder Account
+    ///  `[SIGNER]` Holder Account Owner
+    /// Instruction data:
+    ///  0..32  - transaction hash
+    ///  32..40 - offset in Holder in little endian
+    ///  40..   - transaction data
     HolderWrite,
 
     /// Execute Transaction from Instruction in single iteration
+    ///
+    /// Accounts:
+    ///  `[WRITE,SIGNER]` Operator
+    ///  `[WRITE]` Treasury
+    ///  `[WRITE]` Operator Balance
+    ///  `[]` System program
+    ///  `[WRITE?]` Other accounts
+    /// Instruction data:
+    ///  0..4 - treasury index in little endian
+    ///  4..  - transaction data
     TransactionExecuteFromInstruction,
 
     /// Execute Transaction from Account in single iteration
+    ///
+    /// Accounts:
+    ///  `[]` Holder
+    ///  `[WRITE,SIGNER]` Operator
+    ///  `[WRITE]` Treasury
+    ///  `[WRITE]` Operator Balance
+    ///  `[]` System program
+    ///  `[WRITE?]` Other accounts
+    /// Instruction data:
+    ///  0..4 - treasury index in little endian
     TransactionExecuteFromAccount,
 
     /// Execute Iterative Transaction from Instruction
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Holder/State
+    ///  `[WRITE,SIGNER]` Operator
+    ///  `[WRITE]` Treasury
+    ///  `[WRITE]` Operator Balance
+    ///  `[]` System program
+    ///  `[WRITE]`  Other accounts
+    /// Instruction data:
+    ///  0..4 - treasury index in little endian
+    ///  4..8 - step count in little endian
+    ///  8..  - transaction data
     TransactionStepFromInstruction,
 
     /// Execute Iterative Transaction from Account
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Holder/State
+    ///  `[WRITE,SIGNER]` Operator
+    ///  `[WRITE]` Treasury
+    ///  `[WRITE]` Operator Balance
+    ///  `[]` System program
+    ///  `[WRITE]`  Other accounts
+    /// Instruction data:
+    ///  0..4 - treasury index in little endian
+    ///  4..8 - step count in little endian
     TransactionStepFromAccount,
 
     /// Execute Iterative Transaction without ChainId from Account
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Holder/State
+    ///  `[WRITE,SIGNER]` Operator
+    ///  `[WRITE]` Treasury
+    ///  `[WRITE]` Operator Balance
+    ///  `[]` System program
+    ///  `[WRITE]`  Other accounts
+    /// Instruction data:
+    ///  0..4 - treasury index in little endian
+    ///  4..8 - step count in little endian
     TransactionStepFromAccountNoChainId,
 
     /// Cancel Transaction
+    ///
+    /// Accounts:
+    ///  `[WRITE]` State
+    ///  `[SIGNER]` Operator
+    ///  `[WRITE]` Operator Balance
+    /// Instruction data:
+    ///   0..32 - transaction hash
     Cancel,
 
     /// CreateMainTreasury
-    ///   0. `[WRITE]` Main treasury balance: PDA["treasury_pool"]
-    ///   1. `[]` Program data (to get program upgrade-authority)
-    ///   2. `[SIGNER]` Owner for account (upgrade program authority)
-    ///   3. `[]` SPL token program id
-    ///   4. `[]` System program
-    ///   5. `[]` wSOL mint
-    ///   6. `[WRITE,SIGNER]` Payer
+    ///
+    /// Accounts:
+    ///  `[WRITE]` Main treasury balance: PDA["treasury_pool"]
+    ///  `[]` Program data (to get program upgrade-authority)
+    ///  `[SIGNER]` Owner for account (upgrade program authority)
+    ///  `[]` SPL token program id
+    ///  `[]` System program
+    ///  `[]` wSOL mint
+    ///  `[WRITE,SIGNER]` Payer
+    /// Instruction data:
+    ///  None
     CreateMainTreasury,
 
     /// Block additional accounts
     AccountBlockAdd,
 
-    /// Create User Balance account
+    /// Create a User Balance account
+    ///
+    /// Accounts:
+    ///  `[WRITE,SIGNER]` Operator
+    ///  `[]` System program
+    ///  `[WRITE]` NeonEVM user balance account
+    ///  `[WRITE]` NeonEVM user contract account
+    /// Instruction data:
+    ///  0..20  - address
+    ///  20..28 - chain id in little endian
     AccountCreateBalance,
 
     ConfigGetChainCount,
@@ -86,21 +189,21 @@ impl EvmInstruction {
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `tag`
     pub const fn parse(tag: &u8) -> Result<Self, ProgramError> {
         Ok(match tag {
-            0x1e => Self::CollectTreasure,                     // 30
-            0x1f => Self::TransactionExecuteFromInstruction,   // 31
-            0x20 => Self::TransactionStepFromInstruction,      // 32
-            0x21 => Self::TransactionStepFromAccount,          // 33
-            0x22 => Self::TransactionStepFromAccountNoChainId, // 34
-            0x23 => Self::Cancel,                              // 35
-            0x24 => Self::HolderCreate,                        // 36
-            0x25 => Self::HolderDelete,                        // 37
-            0x26 => Self::HolderWrite,                         // 38
-            0x27 => Self::DepositV03,                          // 39
-            0x29 => Self::CreateMainTreasury,                  // 41
-            0x2A => Self::TransactionExecuteFromAccount,       // 42
-            0x2B => Self::AccountBlockAdd,                     // 43
-            // 0x2C => Self::TestAccountUpdateNonce,              // 44
-            0x2D => Self::AccountCreateBalance, // 45
+            0x1e => Self::CollectTreasure,    // 30
+            0x24 => Self::HolderCreate,       // 36
+            0x25 => Self::HolderDelete,       // 37
+            0x26 => Self::HolderWrite,        // 38
+            0x29 => Self::CreateMainTreasury, // 41
+            0x2B => Self::AccountBlockAdd,    // 43
+
+            0x30 => Self::AccountCreateBalance,              // 48
+            0x31 => Self::Deposit,                           // 49
+            0x32 => Self::TransactionExecuteFromInstruction, // 50
+            0x33 => Self::TransactionExecuteFromAccount,     // 51
+            0x34 => Self::TransactionStepFromInstruction,    // 52
+            0x35 => Self::TransactionStepFromAccount,        // 53
+            0x36 => Self::TransactionStepFromAccountNoChainId, // 54
+            0x37 => Self::Cancel,                            // 55
 
             0xA0 => Self::ConfigGetChainCount, // 160
             0xA1 => Self::ConfigGetChainInfo,

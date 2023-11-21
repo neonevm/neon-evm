@@ -54,7 +54,7 @@ pub async fn execute(
     }
 
     let cancel_with_nonce_instruction =
-        Instruction::new_with_bincode(evm_loader, &(0x23_u8, storage.trx_hash()), accounts_meta);
+        Instruction::new_with_bincode(evm_loader, &(0x37_u8, storage.trx_hash()), accounts_meta);
 
     let instructions = vec![cancel_with_nonce_instruction];
 

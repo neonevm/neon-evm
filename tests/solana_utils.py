@@ -312,7 +312,7 @@ class EvmLoader:
         contract_pubkey = PublicKey(self.ether2program(ether)[0])
         print('createBalanceAccount: {} => {}'.format(ether, account_pubkey))
 
-        data = bytes.fromhex('2D') + self.ether2bytes(ether) + CHAIN_ID.to_bytes(8, 'little')
+        data = bytes([0x30]) + self.ether2bytes(ether) + CHAIN_ID.to_bytes(8, 'little')
         trx = Transaction()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
@@ -588,7 +588,7 @@ def execute_transaction_steps_from_instruction(operator: Keypair, evm_loader: Ev
 def send_transaction_step_from_account(operator: Keypair, evm_loader: EvmLoader, treasury, storage_account,
                                        additional_accounts, steps_count, signer: Keypair,
                                        system_program=sp.SYS_PROGRAM_ID,
-                                       tag=33) -> GetTransactionResp:
+                                       tag=0x35) -> GetTransactionResp:
     trx = TransactionWithComputeBudget(operator)
     trx.add(
         make_ExecuteTrxFromAccountDataIterativeOrContinue(
@@ -621,12 +621,12 @@ def execute_transaction_steps_from_account_no_chain_id(operator: Keypair, evm_lo
     signer = operator if signer is None else signer
 
     send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1, signer,
-                                       tag=34)
+                                       tag=0x36)
     if steps_count > 0:
         steps_left = steps_count
         while steps_left > 0:
             send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts,
-                                               EVM_STEPS, signer, tag=34)
+                                               EVM_STEPS, signer, tag=0x36)
             steps_left = steps_left - EVM_STEPS
     return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
-                                              signer, tag=34)
+                                              signer, tag=0x36)

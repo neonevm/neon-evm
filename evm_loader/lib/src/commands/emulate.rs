@@ -1,4 +1,5 @@
 use evm_loader::account::ContractAccount;
+use evm_loader::error::build_revert_message;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
@@ -31,6 +32,21 @@ pub struct EmulateResponse {
     pub used_gas: u64,
     pub iterations: u64,
     pub solana_accounts: Vec<SolanaAccount>,
+}
+
+impl EmulateResponse {
+    pub fn revert<E: ToString>(e: E) -> Self {
+        let revert_message = build_revert_message(&e.to_string());
+        let exit_status = ExitStatus::Revert(revert_message);
+        Self {
+            exit_status: exit_status.to_string(),
+            result: exit_status.into_result().unwrap_or_default(),
+            steps_executed: 0,
+            used_gas: 0,
+            iterations: 0,
+            solana_accounts: vec![],
+        }
+    }
 }
 
 pub async fn execute(
@@ -79,7 +95,10 @@ async fn emulate_trx(
 
     let (exit_status, actions, steps_executed) = {
         let mut backend = ExecutorState::new(storage);
-        let mut evm = Machine::new(tx, origin, &mut backend, tracer).await?;
+        let mut evm = match Machine::new(tx, origin, &mut backend, tracer).await {
+            Ok(evm) => evm,
+            Err(e) => return Ok(EmulateResponse::revert(e)),
+        };
 
         let (result, steps_executed) = evm.execute(step_limit, &mut backend).await?;
         if result == ExitStatus::StepLimit {
@@ -109,7 +128,7 @@ async fn emulate_trx(
     let solana_accounts = storage.accounts.borrow().values().cloned().collect();
 
     Ok(EmulateResponse {
-        exit_status: exit_status.status().to_string(),
+        exit_status: exit_status.to_string(),
         steps_executed,
         used_gas,
         solana_accounts,

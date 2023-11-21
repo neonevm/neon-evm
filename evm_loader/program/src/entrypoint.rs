@@ -80,7 +80,7 @@ fn process_instruction<'a>(
         EvmInstruction::HolderWrite => {
             instruction::account_holder_write::process(program_id, accounts, instruction)
         }
-        EvmInstruction::DepositV03 => {
+        EvmInstruction::Deposit => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }
         EvmInstruction::Cancel => {

@@ -48,7 +48,7 @@ class TransactionWithComputeBudget(Transaction):
 def write_holder_layout(hash: bytes, offset: int, data: bytes):
     assert (len(hash) == 32)
     return (
-            bytes.fromhex("26")
+            bytes([0x26])
             + hash
             + offset.to_bytes(8, byteorder="little")
             + data
@@ -76,7 +76,7 @@ def make_ExecuteTrxFromInstruction(
         additional_accounts: tp.List[PublicKey],
         system_program=sp.SYS_PROGRAM_ID,
 ):
-    data = bytes.fromhex('1f') + treasury_buffer + message
+    data = bytes([0x32]) + treasury_buffer + message
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
     print("make_ExecuteTrxFromInstruction accounts")
     print("Operator: ", operator.public_key)
@@ -109,10 +109,10 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         step_count: int,
         additional_accounts: tp.List[PublicKey],
         sys_program_id=sp.SYS_PROGRAM_ID,
-        tag=33):
-    # 33 - TransactionStepFromAccount
-    # 34 - TransactionStepFromAccountNoChainId
-    d = tag.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
+        tag=0x35):
+    # 0x35 - TransactionStepFromAccount
+    # 0x36 - TransactionStepFromAccountNoChainId
+    data = tag.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
     print("make_ExecuteTrxFromAccountDataIterativeOrContinue accounts")
     print("Holder: ", holder_address)
@@ -134,7 +134,7 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
 
     return TransactionInstruction(
         program_id=PublicKey(EVM_LOADER),
-        data=d,
+        data=data,
         keys=accounts
     )
 
@@ -149,7 +149,7 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         step_count: int,
         additional_accounts: tp.List[PublicKey],
         system_program=sp.SYS_PROGRAM_ID):
-    d = (32).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
+    data = bytes([0x34]) + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
     accounts = [
@@ -164,13 +164,13 @@ def make_PartialCallOrContinueFromRawEthereumTX(
 
     return TransactionInstruction(
         program_id=PublicKey(EVM_LOADER),
-        data=d,
+        data=data,
         keys=accounts
     )
 
 
 def make_Cancel(evm_loader: "EvmLoader", storage_address: PublicKey, operator: Keypair, hash: bytes, additional_accounts: tp.List[PublicKey]):
-    d = (35).to_bytes(1, "little") + hash
+    data = bytes([0x37]) + hash
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
     accounts = [
@@ -184,7 +184,7 @@ def make_Cancel(evm_loader: "EvmLoader", storage_address: PublicKey, operator: K
 
     return TransactionInstruction(
         program_id=PublicKey(EVM_LOADER),
-        data=d,
+        data=data,
         keys=accounts
     )
 
@@ -200,7 +200,7 @@ def make_DepositV03(
         token_program: PublicKey,
         operator_pubkey: PublicKey,
 ) -> TransactionInstruction:
-    data = bytes.fromhex('27') + ether_address + chain_id.to_bytes(8, 'little')
+    data = bytes([0x31]) + ether_address + chain_id.to_bytes(8, 'little')
 
     accounts = [
         AccountMeta(pubkey=mint, is_signer=False, is_writable=True),

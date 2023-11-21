@@ -2,8 +2,8 @@ use arrayref::array_ref;
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 use crate::account::{program, AccountsDB, BalanceAccount, Operator};
-use crate::config::DEFAULT_CHAIN_ID;
-use crate::error::Result;
+use crate::config::{CHAIN_ID_LIST, DEFAULT_CHAIN_ID};
+use crate::error::{Error, Result};
 use crate::types::Address;
 
 pub fn process<'a>(
@@ -24,7 +24,9 @@ pub fn process<'a>(
     let chain_id = array_ref![instruction, 20, 8];
     let chain_id = u64::from_le_bytes(*chain_id);
 
-    // TODO: validate chain_id?
+    CHAIN_ID_LIST
+        .binary_search_by_key(&chain_id, |c| c.0)
+        .map_err(|_| Error::InvalidChainId(chain_id))?;
 
     solana_program::msg!("Address: {}, ChainID: {}", address, chain_id);
 
