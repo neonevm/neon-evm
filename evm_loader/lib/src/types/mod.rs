@@ -181,3 +181,68 @@ pub struct GetHolderRequest {
     pub pubkey: Pubkey,
     pub slot: Option<u64>,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::types::tracer_ch_common::RevisionMap;
+
+    #[test]
+    fn test_build_ranges_empty() {
+        let results = Vec::new();
+        let exp = Vec::new();
+        let res = RevisionMap::build_ranges(results);
+        assert_eq!(res, exp);
+    }
+
+    #[test]
+    fn test_build_ranges_single_element() {
+        let results = vec![(1u64, String::from("Rev1"))];
+        let exp = vec![(1u64, 2u64, String::from("Rev1"))];
+        let res = RevisionMap::build_ranges(results);
+        assert_eq!(res, exp);
+    }
+
+    #[test]
+    fn test_build_ranges_multiple_elements_different_revision() {
+        let results = vec![
+            (222222222u64, String::from("Rev1")),
+            (333333333u64, String::from("Rev2")),
+            (444444444u64, String::from("Rev3")),
+        ];
+
+        let exp = vec![
+            (222222222u64, 333333333u64, String::from("Rev1")),
+            (333333334u64, 444444444u64, String::from("Rev2")),
+            (444444445u64, 444444445u64, String::from("Rev3")),
+        ];
+        let res = RevisionMap::build_ranges(results);
+
+        assert_eq!(res, exp);
+    }
+
+    #[test]
+    fn test_rangemap() {
+        let ranges = vec![
+            (123456780, 123456788, String::from("Rev1")),
+            (123456789, 123456793, String::from("Rev2")),
+            (123456794, 123456799, String::from("Rev3")),
+        ];
+        let map = RevisionMap::new(ranges);
+
+        assert_eq!(map.get(123456779), None); // Below the bottom bound of the first range
+
+        assert_eq!(map.get(123456780), Some(String::from("Rev1"))); // The bottom bound of the first range
+        assert_eq!(map.get(123456785), Some(String::from("Rev1"))); // Within the first range
+        assert_eq!(map.get(123456788), Some(String::from("Rev1"))); // The top bound of the first range
+
+        assert_eq!(map.get(123456793), Some(String::from("Rev2"))); // The bottom bound of the second range
+        assert_eq!(map.get(123456790), Some(String::from("Rev2"))); // Within the second range
+        assert_eq!(map.get(123456793), Some(String::from("Rev2"))); // The top bound of the second range
+
+        assert_eq!(map.get(123456799), Some(String::from("Rev3"))); // The bottom bound of the third range
+        assert_eq!(map.get(123456795), Some(String::from("Rev3"))); // Within the third range
+        assert_eq!(map.get(123456799), Some(String::from("Rev3"))); // The top bound of the third range
+
+        assert_eq!(map.get(123456800), None); // Beyond the top end of the last range
+    }
+}

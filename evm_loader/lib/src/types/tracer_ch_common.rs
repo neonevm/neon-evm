@@ -3,6 +3,8 @@ use std::fmt;
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey};
+use std::collections::BTreeMap;
+use std::time::Instant;
 use thiserror::Error;
 
 pub const ROOT_BLOCK_DELAY: u8 = 100;
@@ -50,6 +52,13 @@ impl SlotParent {
     pub fn is_rooted(&self) -> bool {
         self.status == SlotStatus::Rooted as u8
     }
+}
+
+// NEON_REVISION row
+#[derive(Row, Deserialize)]
+pub struct RevisionRow {
+    pub slot: u64,
+    pub data: Vec<u8>,
 }
 
 #[derive(Row, serde::Deserialize, Clone)]
@@ -128,4 +137,62 @@ pub struct EthSyncing {
     pub starting_block: u64,
     pub current_block: u64,
     pub highest_block: u64,
+}
+
+pub struct RevisionMap {
+    map: BTreeMap<u64, String>,
+    pub last_update: Instant,
+}
+
+impl RevisionMap {
+    pub fn new(neon_revision_ranges: Vec<(u64, u64, String)>) -> Self {
+        let mut map = BTreeMap::new();
+
+        for (start, end, value) in neon_revision_ranges {
+            map.insert(start, value.clone());
+            map.insert(end, value);
+        }
+
+        let last_update = std::time::Instant::now();
+
+        RevisionMap { map, last_update }
+    }
+
+    // When deploying a program for the first time it is now only available in the next slot (the slot after the one the deployment transaction landed in).
+    // When undeploying / closing a program the change is visible immediately and the very next instruction even within the transaction can not access it anymore.
+    // When redeploying the program becomes temporarily closed immediately and will reopen with the new version in the next slot.
+    pub fn build_ranges(input: Vec<(u64, String)>) -> Vec<(u64, u64, String)> {
+        let mut ranges = Vec::new();
+
+        for i in 0..input.len() {
+            let (start, rev) = input[i].clone();
+            let end = if i < input.len() - 1 {
+                input[i + 1].0 - 1
+            } else {
+                start
+            };
+
+            match i {
+                0 => ranges.push((start, end + 1, rev.clone())),
+                _ if i == input.len() - 1 => ranges.push((start + 1, end + 1, rev.clone())),
+                _ => ranges.push((start + 1, end + 1, rev.clone())),
+            }
+        }
+        ranges
+    }
+
+    pub fn get(&self, slot: u64) -> Option<String> {
+        // Check if slot is less than the starting range or
+        // greater than the ending range
+        let (start, _) = self.map.iter().next()?;
+        let (end, _) = self.map.iter().last()?;
+
+        if slot < *start || slot > *end {
+            return None;
+        }
+
+        let value = self.map.range(..=slot).rev().next();
+
+        value.map(|(_, v)| v.clone())
+    }
 }

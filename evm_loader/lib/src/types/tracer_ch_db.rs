@@ -1,10 +1,10 @@
 use crate::{
     commands::get_neon_elf::get_elf_parameter,
-    types::tracer_ch_common::{AccountRow, ChError, SlotParent, ROOT_BLOCK_DELAY},
+    types::tracer_ch_common::{AccountRow, ChError, RevisionRow, SlotParent, ROOT_BLOCK_DELAY},
 };
 
 use super::{
-    tracer_ch_common::{ChResult, EthSyncStatus, EthSyncing, SlotParentRooted},
+    tracer_ch_common::{ChResult, EthSyncStatus, EthSyncing, RevisionMap, SlotParentRooted},
     ChDbConfig,
 };
 
@@ -584,6 +584,39 @@ impl ClickHouseDb {
                 Err(ChError::Db(err))
             }
         }
+    }
+
+    pub async fn get_neon_revisions(&self, pubkey: &Pubkey) -> ChResult<RevisionMap> {
+        let query = r#"SELECT slot, data
+        FROM events.update_account_distributed
+        WHERE
+            pubkey = ?
+        ORDER BY
+            slot ASC,
+            write_version ASC"#;
+
+        let pubkey_str = format!("{:?}", pubkey.to_bytes());
+        let rows: Vec<RevisionRow> = self
+            .client
+            .query(query)
+            .bind(pubkey_str)
+            .fetch_all()
+            .await?;
+
+        let mut results: Vec<(u64, String)> = Vec::new();
+
+        for row in rows {
+            let neon_revision = get_elf_parameter(&row.data, "NEON_REVISION").map_err(|e| {
+                ChError::Db(clickhouse::error::Error::Custom(format!(
+                    "Failed to get NEON_REVISION, error: {:?}",
+                    e
+                )))
+            })?;
+            results.push((row.slot, neon_revision));
+        }
+        let ranges = RevisionMap::build_ranges(results);
+
+        Ok(RevisionMap::new(ranges))
     }
 
     pub async fn get_slot_by_blockhash(&self, blockhash: &str) -> ChResult<u64> {
