@@ -34,20 +34,16 @@ function createAccount() {
     fi
     ACCOUNT=$(solana address -k "${ID_FILE}")
     echo "$(date "+%F %X.%3N") I ${FILENAME}:${LINENO} $$ ${COMPONENT}:CreateTestAcc {} New account ${ACCOUNT}"
-    # if ! solana account "${ACCOUNT}"; then
-      echo "$(date "+%F %X.%3N") I ${FILENAME}:${LINENO} $$ ${COMPONENT}:CreateTestAcc {} airdropping..."
-      solana airdrop 5000 "${ACCOUNT}"
-      # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
-      BALANCE=$(solana balance "${ACCOUNT}" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
-      while [ "${BALANCE}" -lt 10 ]; do
-        solana airdrop 1 "${ACCOUNT}"
-        sleep 1
-        BALANCE=$(solana balance "${ACCOUNT}" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
-      done
 
-      TOKEN_ACCOUNT=$(spl-token create-account ${NEON_TOKEN_MINT} --owner ${ACCOUNT} --fee-payer ${ID_FILE} | grep -Po 'Creating account \K[^\n]*' || true)
-      spl-token mint ${NEON_TOKEN_MINT} 5000 --owner evm_loader-keypair.json --fee-payer ${ID_FILE} -- ${TOKEN_ACCOUNT}
-    # fi
+    echo "$(date "+%F %X.%3N") I ${FILENAME}:${LINENO} $$ ${COMPONENT}:CreateTestAcc {} airdropping..."
+    solana airdrop 5000 "${ACCOUNT}"
+    # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
+    BALANCE=$(solana balance "${ACCOUNT}" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
+    while [ "${BALANCE}" -lt 10 ]; do
+      solana airdrop 1 "${ACCOUNT}"
+      sleep 1
+      BALANCE=$(solana balance "${ACCOUNT}" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
+    done
 }
 
 NUM_ACCOUNTS=${1}
