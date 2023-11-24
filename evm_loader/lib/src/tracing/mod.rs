@@ -1,49 +1,10 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::rc::Rc;
-
-use crate::types::hexbytes::HexBytes;
-use crate::types::Address;
 use ethnum::U256;
+use evm_loader::types::hexbytes::HexBytes;
+use evm_loader::types::Address;
 use serde_json::Value;
-
-use super::{Context, ExitStatus};
+use std::collections::HashMap;
 
 pub mod tracers;
-
-pub trait EventListener: Send + Sync + Debug {
-    fn event(&mut self, event: Event);
-    fn into_traces(self: Box<Self>) -> Value;
-}
-
-pub type TracerType = Rc<RefCell<Box<dyn EventListener>>>;
-pub type TracerTypeOpt = Option<TracerType>;
-
-/// Trace event
-pub enum Event {
-    BeginVM {
-        context: Context,
-        code: Vec<u8>,
-    },
-    EndVM {
-        status: ExitStatus,
-    },
-    BeginStep {
-        opcode: u8,
-        pc: usize,
-        stack: Vec<[u8; 32]>,
-        memory: Vec<u8>,
-    },
-    EndStep {
-        gas_used: u64,
-        return_data: Option<Vec<u8>>,
-    },
-    StorageAccess {
-        index: U256,
-        value: [u8; 32],
-    },
-}
 
 /// See <https://github.com/ethereum/go-ethereum/blob/master/internal/ethapi/api.go#L993>
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -118,13 +79,4 @@ pub struct TraceCallConfig {
     pub trace_config: TraceConfig,
     pub block_overrides: Option<BlockOverrides>,
     pub state_overrides: Option<AccountOverrides>,
-}
-
-impl From<TraceConfig> for TraceCallConfig {
-    fn from(trace_config: TraceConfig) -> Self {
-        Self {
-            trace_config,
-            ..Self::default()
-        }
-    }
 }

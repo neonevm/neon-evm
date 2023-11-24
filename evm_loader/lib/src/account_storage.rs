@@ -14,7 +14,6 @@ use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 
 use crate::{rpc::Rpc, NeonError};
 use ethnum::U256;
-use evm_loader::evm::tracing::{AccountOverride, AccountOverrides, BlockOverrides};
 use evm_loader::{
     account::{BalanceAccount, ContractAccount, StorageCell, StorageCellAddress},
     account_storage::AccountStorage,
@@ -27,6 +26,7 @@ use solana_client::client_error;
 use solana_sdk::{account::Account, account_info::AccountInfo, pubkey, pubkey::Pubkey};
 
 use crate::commands::get_config::ChainInfo;
+use crate::tracing::{AccountOverride, AccountOverrides, BlockOverrides};
 use serde_with::{serde_as, DisplayFromStr};
 
 const FAKE_OPERATOR: Pubkey = pubkey!("neonoperator1111111111111111111111111111111");

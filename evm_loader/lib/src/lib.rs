@@ -7,6 +7,7 @@ pub mod context;
 pub mod errors;
 pub mod rpc;
 pub mod syscall_stubs;
+pub mod tracing;
 pub mod types;
 
 pub use config::Config;

@@ -11,7 +11,7 @@ use serde_with::skip_serializing_none;
 use solana_sdk::pubkey::Pubkey;
 pub use tracer_ch_db::ClickHouseDb as TracerDb;
 
-use evm_loader::evm::tracing::TraceCallConfig;
+use crate::tracing::TraceCallConfig;
 
 use ethnum::U256;
 use serde::{Deserialize, Serialize};

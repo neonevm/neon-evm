@@ -3,8 +3,7 @@ use std::rc::Rc;
 use serde_json::Value;
 use solana_sdk::pubkey::Pubkey;
 
-use evm_loader::evm::tracing::tracers::new_tracer;
-
+use crate::tracing::tracers::new_tracer;
 use crate::types::EmulateRequest;
 use crate::{errors::NeonError, rpc::Rpc};
 

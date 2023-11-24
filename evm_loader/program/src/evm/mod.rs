@@ -25,7 +25,7 @@ mod buffer;
 pub mod database;
 mod memory;
 mod opcode;
-mod opcode_table;
+pub mod opcode_table;
 mod precompile;
 mod stack;
 #[cfg(not(target_os = "solana"))]
