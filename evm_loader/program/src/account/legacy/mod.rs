@@ -219,3 +219,15 @@ pub fn update_legacy_accounts(accounts: &AccountsDB) -> Result<u64> {
 
     Ok(lamports_collected)
 }
+
+#[must_use]
+pub fn is_legacy_tag(tag: u8) -> bool {
+    matches!(
+        tag,
+        TAG_ACCOUNT_CONTRACT_DEPRECATED
+            | TAG_STORAGE_CELL_DEPRECATED
+            | TAG_HOLDER_DEPRECATED
+            | TAG_STATE_FINALIZED_DEPRECATED
+            | TAG_STATE_DEPRECATED
+    )
+}

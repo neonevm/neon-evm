@@ -79,6 +79,9 @@ pub enum Error {
     #[error("Account {0} - already initialized")]
     AccountAlreadyInitialized(Pubkey),
 
+    #[error("Account {0} - in legacy format")]
+    AccountLegacy(Pubkey),
+
     #[error("Operator is not authorized")]
     UnauthorizedOperator,
 

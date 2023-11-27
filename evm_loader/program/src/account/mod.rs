@@ -1,7 +1,4 @@
-use crate::{
-    account::legacy::{TAG_ACCOUNT_CONTRACT_DEPRECATED, TAG_STORAGE_CELL_DEPRECATED},
-    error::{Error, Result},
-};
+use crate::error::{Error, Result};
 use solana_program::account_info::AccountInfo;
 use solana_program::pubkey::Pubkey;
 use std::cell::{Ref, RefMut};
@@ -118,6 +115,10 @@ pub fn is_blocked(program_id: &Pubkey, info: &AccountInfo) -> Result<bool> {
         return Err(Error::AccountInvalidData(*info.key));
     }
 
+    if legacy::is_legacy_tag(data[0]) {
+        return Err(Error::AccountLegacy(*info.key));
+    }
+
     Ok(data[1] == 1)
 }
 
@@ -126,8 +127,13 @@ fn set_block(program_id: &Pubkey, info: &AccountInfo, block: bool) -> Result<()>
     assert_eq!(info.owner, program_id);
 
     let mut data = info.try_borrow_mut_data()?;
-    assert!(data.len() >= ACCOUNT_PREFIX_LEN);
-    assert!(data[0] != TAG_ACCOUNT_CONTRACT_DEPRECATED && data[0] != TAG_STORAGE_CELL_DEPRECATED);
+    if data.len() < ACCOUNT_PREFIX_LEN {
+        return Err(Error::AccountInvalidData(*info.key));
+    }
+
+    if legacy::is_legacy_tag(data[0]) {
+        return Err(Error::AccountLegacy(*info.key));
+    }
 
     if block && (data[1] != 0) {
         return Err(Error::AccountBlocked(*info.key));
