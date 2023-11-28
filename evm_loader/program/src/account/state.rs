@@ -358,7 +358,7 @@ impl<'a> StateAccount<'a> {
 
     pub fn refund_unused_gas(&mut self, origin: &mut BalanceAccount) -> Result<()> {
         assert!(origin.chain_id() == self.trx_chain_id());
-        assert!(origin.address == Some(self.trx_origin()));
+        assert!(origin.address() == self.trx_origin());
 
         let unused_gas = self.gas_available();
         self.consume_gas(unused_gas, origin)

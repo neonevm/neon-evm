@@ -17,14 +17,13 @@ use super::{AccountsDB, ACCOUNT_PREFIX_LEN, ACCOUNT_SEED_VERSION, TAG_ACCOUNT_BA
 
 #[repr(C, packed)]
 pub struct Header {
-    // address: Address,
+    pub address: Address,
     pub chain_id: u64,
     pub trx_count: u64,
     pub balance: U256,
 }
 
 pub struct BalanceAccount<'a> {
-    pub address: Option<Address>,
     account: AccountInfo<'a>,
 }
 
@@ -36,14 +35,10 @@ impl<'a> BalanceAccount<'a> {
         ACCOUNT_PREFIX_LEN + size_of::<Header>()
     }
 
-    pub fn from_account(
-        program_id: &Pubkey,
-        account: AccountInfo<'a>,
-        address: Option<Address>,
-    ) -> Result<Self> {
+    pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
         super::validate_tag(program_id, &account, TAG_ACCOUNT_BALANCE)?;
 
-        Ok(Self { address, account })
+        Ok(Self { account })
     }
 
     pub fn create(
@@ -60,7 +55,11 @@ impl<'a> BalanceAccount<'a> {
         // Already created. Return immidiately
         let account = accounts.get(&pubkey).clone();
         if !system_program::check_id(account.owner) {
-            return Self::from_account(&crate::ID, account, Some(address));
+            let balance_account = Self::from_account(&crate::ID, account)?;
+            assert_eq!(balance_account.address(), address);
+            assert_eq!(balance_account.chain_id(), chain_id);
+
+            return Ok(balance_account);
         }
 
         if chain_id == DEFAULT_CHAIN_ID {
@@ -97,12 +96,10 @@ impl<'a> BalanceAccount<'a> {
         )?;
 
         super::set_tag(&crate::ID, &account, TAG_ACCOUNT_BALANCE)?;
-        let mut balance_account = Self {
-            address: Some(address),
-            account,
-        };
+        let mut balance_account = Self { account };
         {
             let mut header = balance_account.header_mut();
+            header.address = address;
             header.chain_id = chain_id;
             header.trx_count = 0;
             header.balance = U256::ZERO;
@@ -127,6 +124,11 @@ impl<'a> BalanceAccount<'a> {
     }
 
     #[must_use]
+    pub fn address(&self) -> Address {
+        self.header().address
+    }
+
+    #[must_use]
     pub fn chain_id(&self) -> u64 {
         self.header().chain_id
     }
@@ -148,13 +150,12 @@ impl<'a> BalanceAccount<'a> {
     }
 
     pub fn increment_nonce_by(&mut self, value: u64) -> Result<()> {
-        let address = self.address.unwrap_or_default();
-
         let mut header = self.header_mut();
+
         header.trx_count = header
             .trx_count
             .checked_add(value)
-            .ok_or_else(|| Error::NonceOverflow(address))?;
+            .ok_or_else(|| Error::NonceOverflow(header.address))?;
 
         Ok(())
     }
@@ -176,14 +177,16 @@ impl<'a> BalanceAccount<'a> {
     }
 
     pub fn burn(&mut self, value: U256) -> Result<()> {
-        let address = self.address.unwrap_or_default();
-
         let mut header = self.header_mut();
 
         header.balance = header
             .balance
             .checked_sub(value)
-            .ok_or(Error::InsufficientBalance(address, header.chain_id, value))?;
+            .ok_or(Error::InsufficientBalance(
+                header.address,
+                header.chain_id,
+                value,
+            ))?;
 
         Ok(())
     }

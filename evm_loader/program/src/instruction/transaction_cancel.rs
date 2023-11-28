@@ -12,20 +12,20 @@ pub fn process<'a>(
 ) -> Result<()> {
     solana_program::msg!("Instruction: Cancel Transaction");
 
-    let storage_info = accounts[0].clone();
-    let operator = Operator::from_account(&accounts[1])?;
-    let balance = BalanceAccount::from_account(program_id, accounts[2].clone(), None)?;
-
-    let accounts_database = AccountsDB::new(&accounts[3..], operator, Some(balance), None, None);
-
-    let storage = StateAccount::restore(program_id, storage_info, &accounts_database, true)?;
-
     let transaction_hash = array_ref![instruction, 0, 32];
 
+    let storage_info = accounts[0].clone();
+    let operator = Operator::from_account(&accounts[1])?;
+    let operator_balance = BalanceAccount::from_account(program_id, accounts[2].clone())?;
+
     solana_program::log::sol_log_data(&[b"HASH", transaction_hash]);
+    solana_program::log::sol_log_data(&[b"MINER", operator_balance.address().as_bytes()]);
+
+    let accounts_db = AccountsDB::new(&accounts[3..], operator, Some(operator_balance), None, None);
+    let storage = StateAccount::restore(program_id, storage_info, &accounts_db, true)?;
 
     validate(&storage, transaction_hash)?;
-    execute(program_id, accounts_database, storage)
+    execute(program_id, accounts_db, storage)
 }
 
 fn validate(storage: &StateAccount, transaction_hash: &[u8; 32]) -> Result<()> {
@@ -60,7 +60,7 @@ fn execute<'a>(
 
     {
         let origin_info = accounts.get(&origin_pubkey).clone();
-        let mut account = BalanceAccount::from_account(program_id, origin_info, Some(origin))?;
+        let mut account = BalanceAccount::from_account(program_id, origin_info)?;
         account.increment_nonce()?;
 
         storage.refund_unused_gas(&mut account)?;

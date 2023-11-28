@@ -27,8 +27,10 @@ pub fn process<'a>(
 
     let operator = Operator::from_account(&accounts[1])?;
     let treasury = Treasury::from_account(program_id, treasury_index, &accounts[2])?;
-    let operator_balance = BalanceAccount::from_account(program_id, accounts[3].clone(), None)?;
+    let operator_balance = BalanceAccount::from_account(program_id, accounts[3].clone())?;
     let system = program::System::from_account(&accounts[4])?;
+
+    let miner_address = operator_balance.address();
 
     let accounts_db = AccountsDB::new(
         &accounts[5..],
@@ -51,6 +53,7 @@ pub fn process<'a>(
             let origin = trx.recover_caller_address()?;
 
             solana_program::log::sol_log_data(&[b"HASH", &trx.hash()]);
+            solana_program::log::sol_log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(U256::ZERO, accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();
@@ -65,7 +68,9 @@ pub fn process<'a>(
         }
         TAG_STATE => {
             let storage = StateAccount::restore(program_id, storage_info, &accounts_db, false)?;
+
             solana_program::log::sol_log_data(&[b"HASH", &storage.trx_hash()]);
+            solana_program::log::sol_log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(storage.gas_used(), accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();

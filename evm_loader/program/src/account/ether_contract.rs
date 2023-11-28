@@ -25,6 +25,7 @@ pub enum AllocateResult {
 
 #[repr(C, packed)]
 pub struct Header {
+    pub address: Address,
     pub chain_id: u64,
     pub generation: u32,
 }
@@ -122,6 +123,7 @@ impl<'a> ContractAccount<'a> {
         let mut contract = Self::from_account(&crate::ID, account)?;
         {
             let mut header = contract.header_mut();
+            header.address = address;
             header.chain_id = chain_id;
             header.generation = generation;
         }
@@ -184,6 +186,11 @@ impl<'a> ContractAccount<'a> {
     #[must_use]
     pub fn code_len(&self) -> usize {
         self.account.data_len().saturating_sub(CODE_OFFSET)
+    }
+
+    #[must_use]
+    pub fn address(&self) -> Address {
+        self.header().address
     }
 
     #[must_use]

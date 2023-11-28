@@ -38,7 +38,7 @@ impl<'a> ProgramAccountStorage<'a> {
         let (pubkey, _) = origin.find_balance_address(&crate::ID, chain_id);
 
         let source = self.accounts.get(&pubkey).clone();
-        let mut source = BalanceAccount::from_account(&crate::ID, source, Some(origin))?;
+        let mut source = BalanceAccount::from_account(&crate::ID, source)?;
 
         let target = self.accounts.operator_balance();
 

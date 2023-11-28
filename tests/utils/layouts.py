@@ -35,6 +35,7 @@ FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
 CONTRACT_ACCOUNT_LAYOUT = Struct(
     "type" / Int8ul,
     "blocked" / Int8ul,
+    "address" / Bytes(20),
     "chain_id" / Int64ul,
     "generation" / Int32ul,
 )
@@ -42,6 +43,7 @@ CONTRACT_ACCOUNT_LAYOUT = Struct(
 BALANCE_ACCOUNT_LAYOUT = Struct(
     "type" / Int8ul,
     "blocked" / Int8ul,
+    "address" / Bytes(20),
     "chain_id" / Int64ul,
     "trx_count" / Int64ul,
     "balance" / Bytes(32),

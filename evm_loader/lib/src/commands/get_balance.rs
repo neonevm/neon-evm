@@ -49,7 +49,7 @@ fn read_account(
     let solana_address = address.find_pubkey(program_id);
 
     let account_info = account_info(&solana_address, &mut account);
-    let balance_account = BalanceAccount::from_account(program_id, account_info, None)?;
+    let balance_account = BalanceAccount::from_account(program_id, account_info)?;
 
     Ok(GetBalanceResponse {
         solana_address,

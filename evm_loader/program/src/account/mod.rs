@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::types::Address;
 use solana_program::account_info::AccountInfo;
 use solana_program::pubkey::Pubkey;
 use std::cell::{Ref, RefMut};
@@ -226,6 +227,15 @@ impl<'a> AccountsDB<'a> {
     pub fn operator_balance(&mut self) -> &mut BalanceAccount<'a> {
         if let Some(operator_balance) = &mut self.operator_balance {
             return operator_balance;
+        }
+
+        panic!("Operator Balance Account must be present in the transaction");
+    }
+
+    #[must_use]
+    pub fn operator_balance_address(&self) -> Address {
+        if let Some(operator_balance) = &self.operator_balance {
+            return operator_balance.address();
         }
 
         panic!("Operator Balance Account must be present in the transaction");

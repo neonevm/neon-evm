@@ -399,7 +399,7 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
 
         if let Some(account_data) = &mut account {
             let info = account_info(&pubkey, account_data);
-            if let Ok(a) = BalanceAccount::from_account(self.program_id(), info, Some(address)) {
+            if let Ok(a) = BalanceAccount::from_account(self.program_id(), info) {
                 return action(a);
             }
         }

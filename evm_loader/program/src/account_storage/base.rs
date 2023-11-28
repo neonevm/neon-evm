@@ -70,7 +70,7 @@ impl<'a> ProgramAccountStorage<'a> {
         let pubkey = self.keys.balance(&crate::ID, address, chain_id);
 
         let account = self.accounts.get(&pubkey);
-        let result = BalanceAccount::from_account(&crate::ID, account.clone(), Some(address));
+        let result = BalanceAccount::from_account(&crate::ID, account.clone());
 
         if result.is_err() && (chain_id == DEFAULT_CHAIN_ID) {
             let contract_pubkey = self.keys.contract(&crate::ID, address);
