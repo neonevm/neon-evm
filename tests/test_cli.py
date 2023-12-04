@@ -7,7 +7,7 @@ from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 
 from .solana_utils import neon_cli, create_treasury_pool_address
-from .solana_utils import solana_client, wait_confirm_transaction, get_solana_balance, send_transaction
+from .solana_utils import solana_client, get_solana_balance, send_transaction
 from .utils.constants import CHAIN_ID, SOLANA_URL
 from .utils.contract import deploy_contract
 from .utils.ethereum import make_eth_transaction
@@ -92,7 +92,7 @@ def test_collect_treasury(evm_loader):
 
     amount = random.randint(1, 1000)
     trx = solana_client.request_airdrop(treasury_pool_address, amount)
-    wait_confirm_transaction(solana_client, trx.value)
+    solana_client.confirm_transaction(trx.value, commitment=Confirmed)
     result = neon_cli().call(command_args)
 
     balance_after = get_solana_balance(PublicKey(main_pool_address))
@@ -120,7 +120,7 @@ def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_poo
     assert result == expected_storage
 
 
-def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool):
+def test_cancel_trx(evm_loader, user_account, rw_lock_contract, default_operator_keypair, treasury_pool):
     func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
     data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
 
@@ -129,13 +129,13 @@ def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair
         data,
         user_account
     )
-    storage_account = create_holder(operator_keypair)
+    storage_account = create_holder(default_operator_keypair)
     instruction = eth_transaction.rawTransaction
-    trx = TransactionWithComputeBudget(operator_keypair)
+    trx = TransactionWithComputeBudget(default_operator_keypair)
     trx.add(
         make_PartialCallOrContinueFromRawEthereumTX(
-            instruction,
-            operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1,
+            0, 1, instruction,
+            default_operator_keypair, evm_loader, storage_account, treasury_pool,
             [
                 rw_lock_contract.solana_address,
                 user_account.balance_account_address,
@@ -144,7 +144,7 @@ def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair
     )
     solana_client = Client(SOLANA_URL)
 
-    receipt = send_transaction(solana_client, trx, operator_keypair)
+    receipt = send_transaction(solana_client, trx, default_operator_keypair)
     assert receipt.value.transaction.meta.err is None
     user_nonce = evm_loader.get_neon_nonce(user_account.eth_address)
 

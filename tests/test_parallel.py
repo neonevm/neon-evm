@@ -14,7 +14,7 @@ from .utils.layouts import CONTRACT_ACCOUNT_LAYOUT
 from .utils.storage import create_holder
 from .utils.types import Caller, TreasuryPool
 
-EVM_STEPS_COUNT = 0xFFFFFFFF_FFFFFFFF
+EVM_STEPS_COUNT = 0xFFFFFFFF
 ONE_TOKEN = 10 ** 9
 BIG_CONTRACT_FILENAME = "BigContract.binary"
 MAX_PERMITTED_DATA_INCREASE = 10240
@@ -67,7 +67,8 @@ class ParallelTransactionsTest(TestCase):
                                                                      self.user_account.balance_account_address,
                                                                      self.user_account.solana_account_address],
                                                                     EVM_STEPS_COUNT,
-                                                                    self.operator_keypair)
+                                                                    self.operator_keypair,
+                                                                    index=i)
 
             assert not ParallelTransactionsTest.check_iteration_deployed(deployment_receipt)
 

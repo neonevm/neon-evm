@@ -11,7 +11,7 @@ from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 
 from .solana_utils import EvmLoader, create_treasury_pool_address, make_new_user, \
-    deposit_neon, solana_client, spl_cli, wait_confirm_transaction, get_solana_balance
+    deposit_neon, solana_client, get_solana_balance, wait_for_account_to_exists
 from .utils.constants import NEON_TOKEN_MINT_ID
 from .utils.contract import deploy_contract
 from .utils.storage import create_holder
@@ -27,7 +27,7 @@ def pytest_addoption(parser):
 
 
 def pytest_configure():
-    if "RUST_LOG" in os.environ:
+    if "CI" in os.environ:
         pytest.CONTRACTS_PATH = pathlib.Path("/opt/solidity")
     else:
         pytest.CONTRACTS_PATH = pathlib.Path(__file__).parent / "contracts"
@@ -44,8 +44,11 @@ def prepare_operator(key_file):
         secret_key = json.load(key)[:32]
         account = Keypair.from_secret_key(secret_key)
 
-    tx = solana_client.request_airdrop(account.public_key, 1000000 * 10 ** 9, commitment=Confirmed)
-    wait_confirm_transaction(solana_client, tx.value)
+    solana_client.request_airdrop(account.public_key, 1000 * 10 ** 9, commitment=Confirmed)
+    wait_for_account_to_exists(solana_client, account.public_key)
+
+    a = solana_client.get_account_info(account.public_key, commitment=Confirmed)
+    print(f"{a}")
 
     operator_ether = eth_keys.PrivateKey(account.secret_key[:32]).public_key.to_canonical_address()
 
@@ -53,12 +56,18 @@ def prepare_operator(key_file):
     ether_balance_pubkey = evm_loader.ether2balance(operator_ether)
     acc_info = solana_client.get_account_info(ether_balance_pubkey, commitment=Confirmed)
     if acc_info.value is None:
-        token = spl_cli.create_token_account(NEON_TOKEN_MINT_ID, account.public_key, fee_payer=key_file)
-        spl_cli.mint(NEON_TOKEN_MINT_ID, token, 5000000, fee_payer=key_file)
         evm_loader.create_balance_account(operator_ether)
 
     return account
 
+@pytest.fixture(scope="session")
+def default_operator_keypair() -> Keypair:
+    """
+    Initialized solana keypair with balance. Get private keys from ci/operator-keypairs/id.json
+    """
+    key_path = pathlib.Path(__file__).parent.parent / "operator-keypairs"
+    key_file = key_path / "id.json"
+    return prepare_operator(key_file)
 
 @pytest.fixture(scope="session")
 def operator_keypair(worker_id) -> Keypair:

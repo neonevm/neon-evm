@@ -4,8 +4,8 @@ services:
   solana:
     image: ${EVM_LOADER_IMAGE}
     environment:
-      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
-      - SOLANA_URL=http://solana:8899
+      - SOLANA_URL=http://127.0.0.1:8899
+      - CI=true
     hostname: solana
     ports:
        - "8899"
@@ -16,14 +16,15 @@ services:
         soft: 1048576
         hard: 1048576
     entrypoint:
-      /opt/solana/bin/solana-run-neon.sh
+      /opt/solana-run-neon.sh
     networks:
       - net
 
   dk-neon-api:
     restart: unless-stopped
     hostname: neon_api
-    command: /opt/neon-api -H 0.0.0.0:8085
+    entrypoint:
+      /opt/neon-api -H 0.0.0.0:8085
     environment:
       RUST_BACKTRACE: 1
       RUST_LOG: debug

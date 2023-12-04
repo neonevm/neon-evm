@@ -524,7 +524,8 @@ class TestStepFromAccountChangingOperatorsDuringTrxRun:
         trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_ExecuteTrxFromAccountDataIterativeOrContinue(
-                operator_keypair, evm_loader, new_holder_acc, treasury_pool.account, treasury_pool.buffer, 1,
+                0, 1,
+                operator_keypair, evm_loader, new_holder_acc, treasury_pool,
                 [user_account.solana_account_address,
                  user_account.balance_account_address,
                  rw_lock_contract.solana_address]

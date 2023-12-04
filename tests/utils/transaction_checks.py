@@ -24,5 +24,5 @@ def check_transaction_logs_have_text(trx_hash, text):
 def check_holder_account_tag(storage_account, layout, expected_tag):
     account_data = solana_client.get_account_info(storage_account, commitment=Confirmed).value.data
     parsed_data = layout.parse(account_data)
-    assert parsed_data.tag == expected_tag, f"Account data {account_data} doesn't contain tag {expected_tag}"
+    assert parsed_data.tag == expected_tag, f"Account tag {account_data[0]} != expected {expected_tag}"
 

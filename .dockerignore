@@ -17,6 +17,7 @@ evm_loader/rust-evm/gasometer/target
 evm_loader/rust-evm/runtime/target
 evm_loader/rust-evm/src/target
 evm_loader/target
+test-ledger
 
 .idea
 venv

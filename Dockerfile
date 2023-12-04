@@ -6,12 +6,13 @@ WORKDIR /opt
 ARG SOLANA_BPF_VERSION
 RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_BPF_VERSION}"/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/sbf/scripts/install.sh
-ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=${PATH}:/root/.local/share/solana/install/active_release/bin
 
 
 # Build evm_loader
 FROM builder AS evm-loader-builder
-COPY . /opt/neon-evm/
+COPY .git /opt/neon-evm/.git
+COPY evm_loader /opt/neon-evm/evm_loader
 WORKDIR /opt/neon-evm/evm_loader
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
@@ -27,61 +28,38 @@ RUN cargo fmt --check && \
     cargo build-bpf --features ci --dump
 
 # Build Solidity contracts
-FROM ethereum/solc:0.8.0 AS solc
-FROM ubuntu:20.04 AS contracts
-RUN apt-get update && \
-    DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
-    rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
+FROM ethereum/solc:stable-alpine AS contracts
 COPY tests/contracts/*.sol /opt/
 COPY solidity/*.sol /opt/
-#COPY evm_loader/tests/test_solidity_precompiles.json /opt/
-COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
-RUN solc --optimize --optimize-runs 200 --output-dir . --bin *.sol && \
+RUN /usr/local/bin/solc --optimize --optimize-runs 200 --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
         ls -l
 
-# Define solana-image that contains utility
-FROM ${SOLANA_IMAGE} AS solana
+# Add neon_test_invoke_program to the genesis
+FROM neonlabsorg/neon_test_invoke_program:develop AS neon_test_invoke_program
 
-# Build target image
-FROM ubuntu:20.04 AS base
-WORKDIR /opt
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
-    rm -rf /var/lib/apt/lists/*
+# Define solana-image that contains utility
+FROM builder AS base
+RUN apt-get update
+RUN apt-get -y install curl python3 python3-pip
 
 COPY tests/requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 
-#COPY /evm_loader/solidity/ /opt/contracts/contracts/
-WORKDIR /opt
-
-COPY --from=solana \
-     /usr/bin/solana \
-     /usr/bin/solana-validator \
-     /usr/bin/solana-keygen \
-     /usr/bin/solana-faucet \
-     /usr/bin/solana-genesis \
-     /usr/bin/solana-run.sh \
-     /usr/bin/fetch-spl.sh \
-     /usr/bin/spl* \
-     /opt/solana/bin/
-
-RUN /opt/solana/bin/solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s /opt/solana/bin/metaplex.so --url mainnet-beta
-
-COPY evm_loader/solana-run-neon.sh \
-     /opt/solana/bin/
+RUN solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s /opt/metaplex.so --url mainnet-beta
 
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader-dump.txt /opt/
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-cli /opt/
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-api /opt/
-COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
-COPY --from=contracts /usr/bin/solc /usr/bin/solc
+COPY --from=neon_test_invoke_program /opt/neon_test_invoke_program.so /opt/
+COPY --from=neon_test_invoke_program /opt/neon_test_invoke_program-keypair.json /opt/
+
 COPY ci/wait-for-solana.sh \
     ci/wait-for-neon.sh \
+    ci/solana-run-neon.sh \
     ci/deploy-evm.sh \
     ci/deploy-test.sh \
     ci/create-test-accounts.sh \
@@ -95,4 +73,6 @@ COPY ci/operator-keypairs/id2.json /root/.config/solana/id2.json
 COPY ci/keys/ /opt/keys
 
 #ENV CONTRACTS_DIR=/opt/solidity/
-ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
+ENV PATH=${PATH}:/opt
+
+ENTRYPOINT [ "/opt/solana-run-neon.sh" ]
