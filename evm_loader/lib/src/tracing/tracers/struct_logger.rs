@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use ethnum::U256;
 use evm_loader::evm::ExitStatus;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::tracing::TraceConfig;
 use evm_loader::evm::opcode_table::OPNAMES;
@@ -206,17 +206,15 @@ impl EventListener for StructLogger {
 
     fn into_traces(self: Box<Self>) -> Value {
         let exit_status = self.exit_status.expect("Emulation is not completed");
-        json!({
-            "struct_logs": self.logs,
-            "failed": exit_status
+        let result = StructLoggerResult {
+            gas: 0,
+            failed: !exit_status
                 .is_succeed()
                 .expect("Emulation is not completed"),
-            "return_value": hex::encode(
-                exit_status
-                    .into_result()
-                    .unwrap_or_default(),
-            )
-        })
+            return_value: hex::encode(exit_status.into_result().unwrap_or_default()),
+            struct_logs: self.logs,
+        };
+        serde_json::to_value(result).expect("serialization should not fail")
     }
 }
 

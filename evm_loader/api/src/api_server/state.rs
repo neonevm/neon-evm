@@ -12,7 +12,7 @@ pub struct State {
 impl State {
     pub fn new(config: Config) -> Self {
         Self {
-            tracer_db: TracerDb::new(&config),
+            tracer_db: TracerDb::new(config.db_config.as_ref().expect("db-config not found")),
             rpc_client: config.build_clone_solana_rpc_client(),
             config,
         }

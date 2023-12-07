@@ -5,19 +5,22 @@ use actix_web::post;
 use actix_web::web::Json;
 use actix_web::{http::StatusCode, Responder};
 use std::convert::Into;
+use tracing::info;
 
 use crate::commands::get_storage_at as GetStorageAtCommand;
 
 use super::process_result;
 
-#[tracing::instrument(skip(state, request_id), fields(id = request_id.as_str()))]
+#[tracing::instrument(skip_all, fields(id = request_id.as_str()))]
 #[post("/storage")]
 pub async fn get_storage_at(
     state: NeonApiState,
     request_id: RequestId,
-    Json(req_params): Json<GetStorageAtRequest>,
+    Json(get_storage_at_request): Json<GetStorageAtRequest>,
 ) -> impl Responder {
-    let rpc = match state.build_rpc(req_params.slot, None).await {
+    info!("get_storage_at_request={:?}", get_storage_at_request);
+
+    let rpc = match state.build_rpc(get_storage_at_request.slot, None).await {
         Ok(rpc) => rpc,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
@@ -26,8 +29,8 @@ pub async fn get_storage_at(
         &GetStorageAtCommand::execute(
             &rpc,
             &state.config.evm_loader,
-            req_params.contract,
-            req_params.index,
+            get_storage_at_request.contract,
+            get_storage_at_request.index,
         )
         .await
         .map_err(Into::into),

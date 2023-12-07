@@ -162,7 +162,14 @@ async fn build_rpc(options: &ArgMatches<'_>, config: &Config) -> Result<RpcEnum,
         .map(|slot_str| slot_str.parse().expect("slot parse error"));
 
     Ok(if let Some(slot) = slot {
-        RpcEnum::CallDbClient(CallDbClient::new(TracerDb::new(config), slot, None).await?)
+        RpcEnum::CallDbClient(
+            CallDbClient::new(
+                TracerDb::new(config.db_config.as_ref().expect("db-config not found")),
+                slot,
+                None,
+            )
+            .await?,
+        )
     } else {
         RpcEnum::CloneRpcClient(config.build_clone_solana_rpc_client())
     })

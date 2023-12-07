@@ -9,7 +9,7 @@ use crate::commands::get_config as GetConfigCommand;
 
 use super::process_result;
 
-#[tracing::instrument(skip(state, request_id), fields(id = request_id.as_str()))]
+#[tracing::instrument(skip_all, fields(id = request_id.as_str()))]
 #[routes]
 #[post("/config")]
 #[get("/config")]

@@ -1,11 +1,11 @@
 use crate::{
     commands::get_neon_elf::get_elf_parameter,
     types::tracer_ch_common::{AccountRow, ChError, RevisionRow, SlotParent, ROOT_BLOCK_DELAY},
-    Config,
 };
 
 use super::tracer_ch_common::{ChResult, EthSyncStatus, EthSyncing, RevisionMap, SlotParentRooted};
 
+use crate::types::ChDbConfig;
 use clickhouse::Client;
 use log::{debug, error, info};
 use rand::Rng;
@@ -28,9 +28,7 @@ pub struct ClickHouseDb {
 }
 
 impl ClickHouseDb {
-    pub fn new(config: &Config) -> Self {
-        let config = config.db_config.as_ref().expect("db-config not found");
-
+    pub fn new(config: &ChDbConfig) -> Self {
         let url_id = rand::thread_rng().gen_range(0..config.clickhouse_url.len());
         let url = config.clickhouse_url.get(url_id).unwrap();
 
