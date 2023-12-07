@@ -6,6 +6,7 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{account_storage::account_info, rpc::Rpc, types::BalanceAddress, NeonResult};
 
+use crate::rpc::RpcEnum;
 use serde_with::{serde_as, DisplayFromStr};
 
 use super::get_config::ChainInfo;
@@ -91,14 +92,14 @@ fn is_legacy_chain_id(id: u64, chains: &[ChainInfo]) -> bool {
 }
 
 pub async fn execute(
-    rpc_client: &dyn Rpc,
+    rpc: &RpcEnum,
     program_id: &Pubkey,
     address: &[BalanceAddress],
 ) -> NeonResult<Vec<GetBalanceResponse>> {
-    let chain_ids = super::get_config::read_chains(rpc_client, *program_id).await?;
+    let chain_ids = super::get_config::read_chains(rpc, *program_id).await?;
 
     let pubkeys: Vec<_> = address.iter().map(|a| a.find_pubkey(program_id)).collect();
-    let accounts = rpc_client.get_multiple_accounts(&pubkeys).await?;
+    let accounts = rpc.get_multiple_accounts(&pubkeys).await?;
 
     let mut result = Vec::with_capacity(accounts.len());
     for (key, account) in address.iter().zip(accounts) {
@@ -106,7 +107,7 @@ pub async fn execute(
             read_account(program_id, key, account)?
         } else if is_legacy_chain_id(key.chain_id, &chain_ids) {
             let contract_pubkey = key.find_contract_pubkey(program_id);
-            if let Some(contract_account) = rpc_client.get_account(&contract_pubkey).await?.value {
+            if let Some(contract_account) = rpc.get_account(&contract_pubkey).await?.value {
                 read_legacy_account(program_id, key, contract_account)?
             } else {
                 GetBalanceResponse::empty(program_id, key)

@@ -1,11 +1,13 @@
 use std::{env, str::FromStr};
 
+use crate::rpc::CloneRpcClient;
 use crate::{types::ChDbConfig, NeonError};
 use serde::{Deserialize, Serialize};
 use solana_clap_utils::{
     input_validators::normalize_to_url_if_moniker, keypair::keypair_from_path,
 };
 use solana_cli_config::Config as SolanaConfig;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair};
 
 #[derive(Debug)]
@@ -19,11 +21,15 @@ pub struct Config {
     pub keypair_path: String,
 }
 
-// impl Debug for Config {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "evm_loader={:?}", self.evm_loader)
-//     }
-// }
+impl Config {
+    pub fn build_solana_rpc_client(&self) -> RpcClient {
+        RpcClient::new_with_commitment(self.json_rpc_url.clone(), self.commitment)
+    }
+
+    pub fn build_clone_solana_rpc_client(&self) -> CloneRpcClient {
+        CloneRpcClient::new(self.build_solana_rpc_client())
+    }
+}
 
 /// # Errors
 pub fn create_from_api_config(api_config: &APIOptions) -> Result<Config, NeonError> {

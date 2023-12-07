@@ -2,6 +2,7 @@ use evm_loader::account::StateAccount;
 use log::info;
 
 use serde::{Deserialize, Serialize};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -9,9 +10,7 @@ use solana_sdk::{
     signer::Signer,
 };
 
-use crate::{
-    account_storage::account_info, commands::send_transaction, rpc::Rpc, NeonError, NeonResult,
-};
+use crate::{account_storage::account_info, commands::send_transaction, NeonResult};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CancelTrxReturn {
@@ -19,14 +18,12 @@ pub struct CancelTrxReturn {
 }
 
 pub async fn execute(
-    rpc_client: &dyn Rpc,
+    rpc_client: &RpcClient,
     signer: &dyn Signer,
     evm_loader: Pubkey,
     storage_account: &Pubkey,
 ) -> NeonResult<CancelTrxReturn> {
-    let Some(mut acc) = rpc_client.get_account(storage_account).await?.value else {
-        return Err(NeonError::AccountNotFound(*storage_account))
-    };
+    let mut acc = rpc_client.get_account(storage_account).await?;
     let storage_info = account_info(storage_account, &mut acc);
     let storage = StateAccount::from_account(&evm_loader, storage_info)?;
 

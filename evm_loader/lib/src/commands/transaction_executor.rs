@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::future::Future;
 
 use serde::{Deserialize, Serialize};
+use solana_client::nonblocking::rpc_client::RpcClient;
 
 use {
-    crate::{errors::NeonError, rpc},
+    crate::errors::NeonError,
     log::{debug, error, info, warn},
     solana_sdk::{
         account::Account,
@@ -46,7 +47,7 @@ impl Stats {
     }
 }
 pub struct TransactionExecutor<'a, 'b> {
-    pub client: &'a dyn rpc::Rpc,
+    pub client: &'a RpcClient,
     pub send_trx: bool,
     pub signatures: RefCell<Vec<Signature>>,
     pub stats: RefCell<Stats>,
@@ -54,7 +55,7 @@ pub struct TransactionExecutor<'a, 'b> {
 }
 
 impl<'a, 'b> TransactionExecutor<'a, 'b> {
-    pub fn new(client: &'a dyn rpc::Rpc, fee_payer: &'b dyn Signer, send_trx: bool) -> Self {
+    pub fn new(client: &'a RpcClient, fee_payer: &'b dyn Signer, send_trx: bool) -> Self {
         Self {
             client,
             send_trx,

@@ -1,6 +1,6 @@
 use crate::api_server::handlers::process_error;
 use crate::commands::get_holder as GetHolderCommand;
-use crate::{api_context, types::GetHolderRequest, NeonApiState};
+use crate::{types::GetHolderRequest, NeonApiState};
 use actix_request_identifier::RequestId;
 use actix_web::post;
 use actix_web::web::Json;
@@ -16,18 +16,14 @@ pub async fn get_holder_account_data(
     request_id: RequestId,
     Json(req_params): Json<GetHolderRequest>,
 ) -> impl Responder {
-    let rpc_client = match api_context::build_rpc_client(&state, req_params.slot, None).await {
-        Ok(rpc_client) => rpc_client,
+    let rpc = match state.build_rpc(req_params.slot, None).await {
+        Ok(rpc) => rpc,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
     process_result(
-        &GetHolderCommand::execute(
-            rpc_client.as_ref(),
-            &state.config.evm_loader,
-            req_params.pubkey,
-        )
-        .await
-        .map_err(Into::into),
+        &GetHolderCommand::execute(&rpc, &state.config.evm_loader, req_params.pubkey)
+            .await
+            .map_err(Into::into),
     )
 }

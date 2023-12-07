@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use solana_sdk::pubkey::Pubkey;
 
+use crate::rpc::RpcEnum;
 use crate::syscall_stubs::setup_emulator_syscall_stubs;
 use crate::types::{EmulateRequest, TxParams};
 use crate::{
     account_storage::{EmulatorAccountStorage, SolanaAccount},
     errors::NeonError,
-    rpc::Rpc,
     NeonResult,
 };
 use evm_loader::evm::tracing::TracerType;
@@ -50,7 +50,7 @@ impl EmulateResponse {
 }
 
 pub async fn execute(
-    rpc_client: &dyn Rpc,
+    rpc: &RpcEnum,
     program_id: Pubkey,
     config: EmulateRequest,
     tracer: Option<TracerType>,
@@ -65,7 +65,7 @@ pub async fn execute(
         .and_then(|t| t.state_overrides.clone());
 
     let mut storage = EmulatorAccountStorage::with_accounts(
-        rpc_client,
+        rpc,
         program_id,
         &config.accounts,
         config.chains,
@@ -76,7 +76,7 @@ pub async fn execute(
 
     let step_limit = config.step_limit.unwrap_or(100000);
 
-    setup_emulator_syscall_stubs(rpc_client).await?;
+    setup_emulator_syscall_stubs(rpc).await?;
     emulate_trx(config.tx, &mut storage, step_limit, tracer).await
 }
 

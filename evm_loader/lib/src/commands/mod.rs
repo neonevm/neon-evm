@@ -1,4 +1,4 @@
-use crate::rpc::Rpc;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::{
     client_error::Result as SolanaClientResult, rpc_config::RpcSendTransactionConfig,
 };
@@ -25,7 +25,7 @@ pub mod trace;
 mod transaction_executor;
 
 pub async fn send_transaction(
-    rpc_client: &dyn Rpc,
+    rpc_client: &RpcClient,
     signer: &dyn Signer,
     instructions: &[Instruction],
 ) -> SolanaClientResult<Signature> {

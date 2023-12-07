@@ -12,59 +12,160 @@ use neon_lib::{
         cancel_trx, collect_treasury, emulate, get_balance, get_config, get_contract, get_holder,
         get_neon_elf, get_storage_at, init_environment, trace,
     },
-    errors, rpc,
     types::{BalanceAddress, EmulateRequest},
+    Config,
 };
 
 use clap::ArgMatches;
-pub use config::Config;
 use std::io::Read;
 
 use ethnum::U256;
 use log::debug;
 use serde_json::json;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of};
-use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::time::Instant;
 
-pub use neon_lib::context::*;
-use neon_lib::rpc::CallDbClient;
-
 use crate::build_info::get_build_info;
-use crate::errors::NeonError;
 use evm_loader::types::Address;
+use neon_lib::errors::NeonError;
+use neon_lib::rpc::{CallDbClient, RpcEnum};
 use neon_lib::types::TracerDb;
+use solana_clap_utils::keypair::signer_from_path;
+use solana_sdk::signature::Signer;
 
 type NeonCliResult = Result<serde_json::Value, NeonError>;
 
-async fn run<'a>(options: &'a ArgMatches<'a>) -> NeonCliResult {
+#[allow(clippy::too_many_lines)]
+async fn run(options: &ArgMatches<'_>) -> NeonCliResult {
+    let config = &config::create(options)?;
+
+    match options.subcommand() {
+        ("emulate", Some(_)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let request = read_tx_from_stdin()?;
+            emulate::execute(&rpc, config.evm_loader, request, None)
+                .await
+                .map(|result| json!(result))
+        }
+        ("trace", Some(_)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let request = read_tx_from_stdin()?;
+            trace::trace_transaction(&rpc, config.evm_loader, request)
+                .await
+                .map(|trace| json!(trace))
+        }
+        ("get-ether-account-data", Some(params)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let address = address_of(params, "ether").unwrap();
+            let chain_id = value_of(params, "chain_id").unwrap();
+
+            let account = BalanceAddress { address, chain_id };
+            let accounts = std::slice::from_ref(&account);
+
+            get_balance::execute(&rpc, &config.evm_loader, accounts)
+                .await
+                .map(|result| json!(result))
+        }
+        ("get-contract-account-data", Some(params)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let account = address_of(params, "address").unwrap();
+            let accounts = std::slice::from_ref(&account);
+
+            get_contract::execute(&rpc, &config.evm_loader, accounts)
+                .await
+                .map(|result| json!(result))
+        }
+        ("get-holder-account-data", Some(params)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let account = pubkey_of(params, "account").unwrap();
+
+            get_holder::execute(&rpc, &config.evm_loader, account)
+                .await
+                .map(|result| json!(result))
+        }
+        ("cancel-trx", Some(params)) => {
+            let rpc_client = config.build_solana_rpc_client();
+            let signer = build_signer(config)?;
+
+            let storage_account =
+                pubkey_of(params, "storage_account").expect("storage_account parse error");
+            cancel_trx::execute(&rpc_client, &*signer, config.evm_loader, &storage_account)
+                .await
+                .map(|result| json!(result))
+        }
+        ("neon-elf-params", Some(params)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let program_location = params.value_of("program_location");
+            get_neon_elf::execute(config, &rpc, program_location)
+                .await
+                .map(|result| json!(result))
+        }
+        ("collect-treasury", Some(_)) => {
+            let rpc_client = config.build_clone_solana_rpc_client();
+            let signer = build_signer(config)?;
+
+            collect_treasury::execute(config, &rpc_client, &*signer)
+                .await
+                .map(|result| json!(result))
+        }
+        ("init-environment", Some(params)) => {
+            let rpc_client = config.build_clone_solana_rpc_client();
+            let signer = build_signer(config)?;
+
+            let file = params.value_of("file");
+            let send_trx = params.is_present("send-trx");
+            let force = params.is_present("force");
+            let keys_dir = params.value_of("keys-dir");
+
+            init_environment::execute(
+                config,
+                &rpc_client,
+                &*signer,
+                send_trx,
+                force,
+                keys_dir,
+                file,
+            )
+            .await
+            .map(|result| json!(result))
+        }
+        ("get-storage-at", Some(params)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
+            let index = u256_of(params, "index").expect("index parse error");
+
+            get_storage_at::execute(&rpc, &config.evm_loader, contract_id, index)
+                .await
+                .map(|hash| json!(hex::encode(hash.0)))
+        }
+        ("config", Some(_)) => {
+            let rpc = build_rpc(options, config).await?;
+
+            get_config::execute(&rpc, config.evm_loader)
+                .await
+                .map(|result| json!(result))
+        }
+        _ => unreachable!(),
+    }
+}
+
+async fn build_rpc(options: &ArgMatches<'_>, config: &Config) -> Result<RpcEnum, NeonError> {
     let slot: Option<u64> = options
         .value_of("slot")
         .map(|slot_str| slot_str.parse().expect("slot parse error"));
 
-    let config = config::create(options)?;
-
-    let (cmd, params) = options.subcommand();
-
-    let rpc_client: Box<dyn rpc::Rpc> = if let Some(slot) = slot {
-        Box::new(
-            CallDbClient::new(
-                TracerDb::new(config.db_config.as_ref().expect("db-config not found")),
-                slot,
-                None,
-            )
-            .await?,
-        )
+    Ok(if let Some(slot) = slot {
+        RpcEnum::CallDbClient(CallDbClient::new(TracerDb::new(config), slot, None).await?)
     } else {
-        Box::new(RpcClient::new_with_commitment(
-            config.json_rpc_url.clone(),
-            config.commitment,
-        ))
-    };
-
-    let context = Context::new(&*rpc_client, &config);
-
-    execute(cmd, params, &config, &context).await
+        RpcEnum::CloneRpcClient(config.build_clone_solana_rpc_client())
+    })
 }
 
 fn print_result(result: &NeonCliResult) {
@@ -74,12 +175,12 @@ fn print_result(result: &NeonCliResult) {
     };
 
     let result = match result {
-        Ok(value) => serde_json::json!({
+        Ok(value) => json!({
             "result": "success",
             "value": value,
             "logs": logs
         }),
-        Err(e) => serde_json::json!({
+        Err(e) => json!({
             "result": "error",
             "error": e.to_string(),
             "logs": logs
@@ -113,96 +214,6 @@ async fn main() {
     };
 }
 
-#[allow(clippy::too_many_lines)]
-async fn execute<'a>(
-    cmd: &str,
-    params: Option<&'a ArgMatches<'a>>,
-    config: &'a Config,
-    context: &'a Context<'_>,
-) -> NeonCliResult {
-    match (cmd, params) {
-        ("emulate", Some(_)) => {
-            let request = read_tx_from_stdin()?;
-            emulate::execute(context.rpc_client, config.evm_loader, request, None)
-                .await
-                .map(|result| json!(result))
-        }
-        ("trace", Some(_)) => {
-            let request = read_tx_from_stdin()?;
-            trace::trace_transaction(context.rpc_client, config.evm_loader, request)
-                .await
-                .map(|trace| json!(trace))
-        }
-        ("get-ether-account-data", Some(params)) => {
-            let address = address_of(params, "ether").unwrap();
-            let chain_id = value_of(params, "chain_id").unwrap();
-
-            let account = BalanceAddress { address, chain_id };
-            let accounts = std::slice::from_ref(&account);
-
-            get_balance::execute(context.rpc_client, &config.evm_loader, accounts)
-                .await
-                .map(|result| json!(result))
-        }
-        ("get-contract-account-data", Some(params)) => {
-            let account = address_of(params, "address").unwrap();
-            let accounts = std::slice::from_ref(&account);
-
-            get_contract::execute(context.rpc_client, &config.evm_loader, accounts)
-                .await
-                .map(|result| json!(result))
-        }
-        ("get-holder-account-data", Some(params)) => {
-            let account = pubkey_of(params, "account").unwrap();
-
-            get_holder::execute(context.rpc_client, &config.evm_loader, account)
-                .await
-                .map(|result| json!(result))
-        }
-        ("cancel-trx", Some(params)) => {
-            let storage_account =
-                pubkey_of(params, "storage_account").expect("storage_account parse error");
-            cancel_trx::execute(
-                context.rpc_client,
-                context.signer()?.as_ref(),
-                config.evm_loader,
-                &storage_account,
-            )
-            .await
-            .map(|result| json!(result))
-        }
-        ("neon-elf-params", Some(params)) => {
-            let program_location = params.value_of("program_location");
-            get_neon_elf::execute(config, context, program_location)
-                .await
-                .map(|result| json!(result))
-        }
-        ("collect-treasury", Some(_)) => collect_treasury::execute(config, context)
-            .await
-            .map(|result| json!(result)),
-        ("init-environment", Some(params)) => {
-            let file = params.value_of("file");
-            let send_trx = params.is_present("send-trx");
-            let force = params.is_present("force");
-            let keys_dir = params.value_of("keys-dir");
-            init_environment::execute(config, context, send_trx, force, keys_dir, file)
-                .await
-                .map(|result| json!(result))
-        }
-        ("get-storage-at", Some(params)) => {
-            let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
-            let index = u256_of(params, "index").expect("index parse error");
-            get_storage_at::execute(context.rpc_client, &config.evm_loader, contract_id, index)
-                .await
-                .map(|hash| json!(hex::encode(hash.0)))
-        }
-        ("config", Some(_)) => get_config::execute(context.rpc_client, config.evm_loader)
-            .await
-            .map(|result| json!(result)),
-        _ => unreachable!(),
-    }
-}
-
 fn read_tx_from_stdin() -> Result<EmulateRequest, NeonError> {
     let mut stdin_buffer = String::new();
     std::io::stdin().read_to_string(&mut stdin_buffer)?;
@@ -224,4 +235,19 @@ fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
 
         U256::from_str_prefixed(value).unwrap()
     })
+}
+
+/// # Errors
+fn build_signer(config: &Config) -> Result<Box<dyn Signer>, NeonError> {
+    let mut wallet_manager = None;
+
+    let signer = signer_from_path(
+        &ArgMatches::default(),
+        &config.keypair_path,
+        "keypair",
+        &mut wallet_manager,
+    )
+    .map_err(|_| NeonError::KeypairNotSpecified)?;
+
+    Ok(signer)
 }

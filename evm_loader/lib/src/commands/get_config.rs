@@ -18,7 +18,9 @@ use solana_sdk::{
 
 use crate::{rpc::Rpc, NeonError, NeonResult};
 
+use crate::rpc::{CallDbClient, RpcEnum, SolanaRpc};
 use serde_with::{serde_as, DisplayFromStr};
+use solana_client::nonblocking::rpc_client::RpcClient;
 
 #[derive(Debug, Serialize)]
 pub enum Status {
@@ -50,10 +52,10 @@ pub struct GetConfigResponse {
 static PROGRAM_TEST: OnceCell<Mutex<ProgramTestContext>> = OnceCell::const_new();
 
 async fn read_program_data_from_account(
-    rpc_client: &dyn Rpc,
+    rpc: &CallDbClient,
     program_id: Pubkey,
 ) -> NeonResult<Vec<u8>> {
-    let Some(account) = rpc_client.get_account(&program_id).await?.value else {
+    let Some(account) = rpc.get_account(&program_id).await?.value else {
         return Err(NeonError::AccountNotFound(program_id));
     };
 
@@ -69,7 +71,7 @@ async fn read_program_data_from_account(
         programdata_address,
     }) = account.state()
     {
-        let Some(programdata_account) = rpc_client.get_account(&programdata_address).await?.value else {
+        let Some(programdata_account) = rpc.get_account(&programdata_address).await?.value else {
             return Err(NeonError::AssociatedPdaNotFound(programdata_address, program_id));
         };
 
@@ -113,26 +115,26 @@ async fn lock_program_test(
 }
 
 enum ConfigSimulator<'r> {
-    Rpc(Pubkey, &'r dyn Rpc),
+    Rpc(Pubkey, &'r RpcClient),
     ProgramTest(MutexGuard<'static, ProgramTestContext>),
 }
 
 impl<'r> ConfigSimulator<'r> {
-    pub async fn new(
-        rpc_client: &'r dyn Rpc,
-        program_id: Pubkey,
-    ) -> NeonResult<ConfigSimulator<'r>> {
-        let simulator = if rpc_client.can_simulate_transaction() {
-            let identity = rpc_client.get_account_with_sol().await?;
-            Self::Rpc(identity, rpc_client)
-        } else {
-            let program_data = read_program_data_from_account(rpc_client, program_id).await?;
-            let mut program_test = lock_program_test(program_id, program_data).await;
-            program_test.get_new_latest_blockhash().await?;
+    pub async fn new(rpc: &'r RpcEnum, program_id: Pubkey) -> NeonResult<ConfigSimulator<'r>> {
+        let simulator = match rpc {
+            RpcEnum::CloneRpcClient(clone_rpc_client) => Self::Rpc(
+                clone_rpc_client.get_account_with_sol().await?,
+                clone_rpc_client,
+            ),
+            RpcEnum::CallDbClient(call_db_client) => {
+                let program_data =
+                    read_program_data_from_account(call_db_client, program_id).await?;
+                let mut program_test = lock_program_test(program_id, program_data).await;
+                program_test.get_new_latest_blockhash().await?;
 
-            Self::ProgramTest(program_test)
+                Self::ProgramTest(program_test)
+            }
         };
-
         Ok(simulator)
     }
 
@@ -151,7 +153,7 @@ impl<'r> ConfigSimulator<'r> {
         let logs = match self {
             ConfigSimulator::Rpc(signer, rpc) => {
                 let result = rpc
-                    .simulate_transaction(
+                    .simulate_transaction_with_instructions(
                         Some(*signer),
                         &[Instruction::new_with_bytes(program_id, &input, vec![])],
                     )
@@ -266,8 +268,8 @@ async fn get_properties(
     Ok(result)
 }
 
-pub async fn execute(rpc_client: &dyn Rpc, program_id: Pubkey) -> NeonResult<GetConfigResponse> {
-    let mut simulator = ConfigSimulator::new(rpc_client, program_id).await?;
+pub async fn execute(rpc: &RpcEnum, program_id: Pubkey) -> NeonResult<GetConfigResponse> {
+    let mut simulator = ConfigSimulator::new(rpc, program_id).await?;
 
     let (version, revision) = get_version(&mut simulator, program_id).await?;
 
@@ -281,8 +283,8 @@ pub async fn execute(rpc_client: &dyn Rpc, program_id: Pubkey) -> NeonResult<Get
     })
 }
 
-pub async fn read_chains(rpc_client: &dyn Rpc, program_id: Pubkey) -> NeonResult<Vec<ChainInfo>> {
-    let mut simulator = ConfigSimulator::new(rpc_client, program_id).await?;
+pub async fn read_chains(rpc: &RpcEnum, program_id: Pubkey) -> NeonResult<Vec<ChainInfo>> {
+    let mut simulator = ConfigSimulator::new(rpc, program_id).await?;
 
     let chains = get_chains(&mut simulator, program_id).await?;
     Ok(chains)

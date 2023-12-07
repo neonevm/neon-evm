@@ -4,7 +4,7 @@ use std::convert::Into;
 
 use crate::api_server::handlers::process_error;
 use crate::commands::trace::trace_transaction;
-use crate::{api_context, types::EmulateApiRequest, NeonApiState};
+use crate::{types::EmulateApiRequest, NeonApiState};
 
 use super::process_result;
 
@@ -18,18 +18,14 @@ pub async fn trace(
     let slot = trace_request.slot;
     let index = trace_request.tx_index_in_block;
 
-    let rpc_client = match api_context::build_rpc_client(&state, slot, index).await {
-        Ok(rpc_client) => rpc_client,
+    let rpc = match state.build_rpc(slot, index).await {
+        Ok(rpc) => rpc,
         Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
     };
 
     process_result(
-        &trace_transaction(
-            rpc_client.as_ref(),
-            state.config.evm_loader,
-            trace_request.body,
-        )
-        .await
-        .map_err(Into::into),
+        &trace_transaction(&rpc, state.config.evm_loader, trace_request.body)
+            .await
+            .map_err(Into::into),
     )
 }

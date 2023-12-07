@@ -26,6 +26,7 @@ use solana_client::client_error;
 use solana_sdk::{account::Account, account_info::AccountInfo, pubkey, pubkey::Pubkey};
 
 use crate::commands::get_config::ChainInfo;
+use crate::rpc::RpcEnum;
 use crate::tracing::{AccountOverride, AccountOverrides, BlockOverrides};
 use serde_with::{serde_as, DisplayFromStr};
 
@@ -46,7 +47,7 @@ pub struct SolanaAccount {
 pub struct EmulatorAccountStorage<'rpc> {
     pub accounts: RefCell<HashMap<Pubkey, SolanaAccount>>,
     pub gas: u64,
-    rpc_client: &'rpc dyn Rpc,
+    rpc: &'rpc RpcEnum,
     program_id: Pubkey,
     chains: Vec<ChainInfo>,
     block_number: u64,
@@ -56,7 +57,7 @@ pub struct EmulatorAccountStorage<'rpc> {
 
 impl<'rpc> EmulatorAccountStorage<'rpc> {
     pub async fn new(
-        rpc_client: &'rpc dyn Rpc,
+        rpc: &'rpc RpcEnum,
         program_id: Pubkey,
         chains: Option<Vec<ChainInfo>>,
         block_overrides: Option<BlockOverrides>,
@@ -65,17 +66,17 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
         trace!("backend::new");
 
         let block_number = match block_overrides.as_ref().and_then(|o| o.number) {
-            None => rpc_client.get_slot().await?,
+            None => rpc.get_slot().await?,
             Some(number) => number,
         };
 
         let block_timestamp = match block_overrides.as_ref().and_then(|o| o.time) {
-            None => rpc_client.get_block_time(block_number).await?,
+            None => rpc.get_block_time(block_number).await?,
             Some(time) => time,
         };
 
         let chains = match chains {
-            None => crate::commands::get_config::read_chains(rpc_client, program_id).await?,
+            None => crate::commands::get_config::read_chains(rpc, program_id).await?,
             Some(chains) => chains,
         };
 
@@ -84,7 +85,7 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
             program_id,
             chains,
             gas: 0,
-            rpc_client,
+            rpc,
             block_number,
             block_timestamp,
             state_overrides,
@@ -92,21 +93,14 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
     }
 
     pub async fn with_accounts(
-        rpc_client: &'rpc dyn Rpc,
+        rpc: &'rpc RpcEnum,
         program_id: Pubkey,
         accounts: &[Pubkey],
         chains: Option<Vec<ChainInfo>>,
         block_overrides: Option<BlockOverrides>,
         state_overrides: Option<AccountOverrides>,
     ) -> Result<EmulatorAccountStorage<'rpc>, NeonError> {
-        let storage = Self::new(
-            rpc_client,
-            program_id,
-            chains,
-            block_overrides,
-            state_overrides,
-        )
-        .await?;
+        let storage = Self::new(rpc, program_id, chains, block_overrides, state_overrides).await?;
 
         storage.download_accounts(accounts).await?;
 
@@ -114,7 +108,7 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
     }
 
     async fn download_accounts(&self, pubkeys: &[Pubkey]) -> Result<(), NeonError> {
-        let accounts = self.rpc_client.get_multiple_accounts(pubkeys).await?;
+        let accounts = self.rpc.get_multiple_accounts(pubkeys).await?;
 
         let mut cache = self.accounts.borrow_mut();
 
@@ -146,7 +140,7 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
             return Ok(account.data.clone());
         }
 
-        let response = self.rpc_client.get_account(&pubkey).await?;
+        let response = self.rpc.get_account(&pubkey).await?;
         let account = response.value;
 
         self.accounts.borrow_mut().insert(
