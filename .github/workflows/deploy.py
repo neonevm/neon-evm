@@ -31,8 +31,8 @@ DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = os.environ.get("IMAGE_NAME")
 RUN_LINK_REPO = os.environ.get("RUN_LINK_REPO")
-SOLANA_NODE_VERSION = 'v1.16.18'
-SOLANA_BPF_VERSION = 'v1.16.18'
+SOLANA_NODE_VERSION = 'v1.16.23'
+SOLANA_BPF_VERSION = 'v1.16.23'
 
 VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
