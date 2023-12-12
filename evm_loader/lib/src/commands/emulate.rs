@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::rpc::RpcEnum;
+use crate::commands::get_config::BuildConfigSimulator;
+use crate::rpc::Rpc;
 use crate::syscall_stubs::setup_emulator_syscall_stubs;
 use crate::types::{EmulateRequest, TxParams};
 use crate::{
@@ -50,16 +51,16 @@ impl EmulateResponse {
 }
 
 pub async fn execute(
-    rpc: &RpcEnum,
+    rpc: &(impl Rpc + BuildConfigSimulator),
     program_id: Pubkey,
-    config: EmulateRequest,
+    emulate_request: EmulateRequest,
     tracer: Option<TracerType>,
 ) -> NeonResult<EmulateResponse> {
-    let block_overrides = config
+    let block_overrides = emulate_request
         .trace_config
         .as_ref()
         .and_then(|t| t.block_overrides.clone());
-    let state_overrides = config
+    let state_overrides = emulate_request
         .trace_config
         .as_ref()
         .and_then(|t| t.state_overrides.clone());
@@ -67,22 +68,22 @@ pub async fn execute(
     let mut storage = EmulatorAccountStorage::with_accounts(
         rpc,
         program_id,
-        &config.accounts,
-        config.chains,
+        &emulate_request.accounts,
+        emulate_request.chains,
         block_overrides,
         state_overrides,
     )
     .await?;
 
-    let step_limit = config.step_limit.unwrap_or(100000);
+    let step_limit = emulate_request.step_limit.unwrap_or(100000);
 
     setup_emulator_syscall_stubs(rpc).await?;
-    emulate_trx(config.tx, &mut storage, step_limit, tracer).await
+    emulate_trx(emulate_request.tx, &mut storage, step_limit, tracer).await
 }
 
 async fn emulate_trx(
     tx_params: TxParams,
-    storage: &mut EmulatorAccountStorage<'_>,
+    storage: &mut EmulatorAccountStorage<'_, impl Rpc>,
     step_limit: u64,
     tracer: Option<TracerType>,
 ) -> NeonResult<EmulateResponse> {

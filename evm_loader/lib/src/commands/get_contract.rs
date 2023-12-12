@@ -7,10 +7,9 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{account_storage::account_info, rpc::Rpc, NeonResult};
 
-use crate::rpc::RpcEnum;
 use serde_with::{hex::Hex, serde_as, DisplayFromStr};
 
-use super::get_config::ChainInfo;
+use super::get_config::{BuildConfigSimulator, ChainInfo};
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,7 +74,7 @@ fn read_account(
 }
 
 pub async fn execute(
-    rpc: &RpcEnum,
+    rpc: &(impl Rpc + BuildConfigSimulator),
     program_id: &Pubkey,
     accounts: &[Address],
 ) -> NeonResult<Vec<GetContractResponse>> {

@@ -1,7 +1,6 @@
 use log::info;
 use solana_sdk::{program_error::ProgramError, program_stubs::SyscallStubs, sysvar::rent::Rent};
 
-use crate::rpc::RpcEnum;
 use crate::{errors::NeonError, rpc::Rpc};
 
 pub struct DefaultStubs;
@@ -13,7 +12,7 @@ pub struct EmulatorStubs {
 }
 
 impl EmulatorStubs {
-    pub async fn new(rpc: &RpcEnum) -> Result<Box<EmulatorStubs>, NeonError> {
+    pub async fn new(rpc: &impl Rpc) -> Result<Box<EmulatorStubs>, NeonError> {
         let rent_pubkey = solana_sdk::sysvar::rent::id();
         let data = rpc
             .get_account(&rent_pubkey)
@@ -57,7 +56,7 @@ impl SyscallStubs for EmulatorStubs {
     }
 }
 
-pub async fn setup_emulator_syscall_stubs(rpc: &RpcEnum) -> Result<(), NeonError> {
+pub async fn setup_emulator_syscall_stubs(rpc: &impl Rpc) -> Result<(), NeonError> {
     let syscall_stubs = EmulatorStubs::new(rpc).await?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 

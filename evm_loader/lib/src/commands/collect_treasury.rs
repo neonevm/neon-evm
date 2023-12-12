@@ -26,7 +26,7 @@ pub async fn execute(
     rpc_client: &CloneRpcClient,
     signer: &dyn Signer,
 ) -> NeonResult<CollectTreasuryReturn> {
-    let neon_params = read_elf_parameters_from_account(config, &rpc_client.clone().into()).await?;
+    let neon_params = read_elf_parameters_from_account(config, rpc_client).await?;
 
     let pool_count: u32 = neon_params
         .get("NEON_TREASURY_POOL_COUNT")

@@ -25,8 +25,7 @@ use serde::{Deserialize, Serialize};
 use solana_client::client_error;
 use solana_sdk::{account::Account, account_info::AccountInfo, pubkey, pubkey::Pubkey};
 
-use crate::commands::get_config::ChainInfo;
-use crate::rpc::RpcEnum;
+use crate::commands::get_config::{BuildConfigSimulator, ChainInfo};
 use crate::tracing::{AccountOverride, AccountOverrides, BlockOverrides};
 use serde_with::{serde_as, DisplayFromStr};
 
@@ -44,10 +43,10 @@ pub struct SolanaAccount {
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub struct EmulatorAccountStorage<'rpc> {
+pub struct EmulatorAccountStorage<'rpc, T: Rpc> {
     pub accounts: RefCell<HashMap<Pubkey, SolanaAccount>>,
     pub gas: u64,
-    rpc: &'rpc RpcEnum,
+    rpc: &'rpc T,
     program_id: Pubkey,
     chains: Vec<ChainInfo>,
     block_number: u64,
@@ -55,14 +54,14 @@ pub struct EmulatorAccountStorage<'rpc> {
     state_overrides: Option<AccountOverrides>,
 }
 
-impl<'rpc> EmulatorAccountStorage<'rpc> {
+impl<'rpc, T: Rpc + BuildConfigSimulator> EmulatorAccountStorage<'rpc, T> {
     pub async fn new(
-        rpc: &'rpc RpcEnum,
+        rpc: &'rpc T,
         program_id: Pubkey,
         chains: Option<Vec<ChainInfo>>,
         block_overrides: Option<BlockOverrides>,
         state_overrides: Option<AccountOverrides>,
-    ) -> Result<EmulatorAccountStorage<'rpc>, NeonError> {
+    ) -> Result<EmulatorAccountStorage<T>, NeonError> {
         trace!("backend::new");
 
         let block_number = match block_overrides.as_ref().and_then(|o| o.number) {
@@ -93,20 +92,22 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
     }
 
     pub async fn with_accounts(
-        rpc: &'rpc RpcEnum,
+        rpc: &'rpc T,
         program_id: Pubkey,
         accounts: &[Pubkey],
         chains: Option<Vec<ChainInfo>>,
         block_overrides: Option<BlockOverrides>,
         state_overrides: Option<AccountOverrides>,
-    ) -> Result<EmulatorAccountStorage<'rpc>, NeonError> {
+    ) -> Result<EmulatorAccountStorage<'rpc, T>, NeonError> {
         let storage = Self::new(rpc, program_id, chains, block_overrides, state_overrides).await?;
 
         storage.download_accounts(accounts).await?;
 
         Ok(storage)
     }
+}
 
+impl<T: Rpc> EmulatorAccountStorage<'_, T> {
     async fn download_accounts(&self, pubkeys: &[Pubkey]) -> Result<(), NeonError> {
         let accounts = self.rpc.get_multiple_accounts(pubkeys).await?;
 
@@ -503,8 +504,8 @@ impl<'rpc> EmulatorAccountStorage<'rpc> {
     }
 }
 
-#[async_trait(? Send)]
-impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
+#[async_trait(?Send)]
+impl<T: Rpc> AccountStorage for EmulatorAccountStorage<'_, T> {
     fn program_id(&self) -> &Pubkey {
         debug!("program_id");
         &self.program_id

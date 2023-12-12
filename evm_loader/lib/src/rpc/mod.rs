@@ -5,6 +5,7 @@ pub use db_call_client::CallDbClient;
 pub use validator_client::CloneRpcClient;
 pub use validator_client::SolanaRpc;
 
+use crate::commands::get_config::{BuildConfigSimulator, ConfigSimulator};
 use crate::{NeonError, NeonResult};
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
@@ -34,7 +35,7 @@ pub trait Rpc {
     async fn get_slot(&self) -> ClientResult<Slot>;
 }
 
-#[enum_dispatch(Rpc)]
+#[enum_dispatch(BuildConfigSimulator, Rpc)]
 pub enum RpcEnum {
     CloneRpcClient,
     CallDbClient,

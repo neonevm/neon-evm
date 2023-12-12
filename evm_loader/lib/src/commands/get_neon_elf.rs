@@ -7,7 +7,7 @@ use solana_sdk::{
 };
 use std::{collections::HashMap, convert::TryFrom, fs::File, io::Read};
 
-use crate::rpc::{Rpc, RpcEnum};
+use crate::rpc::Rpc;
 use crate::{errors::NeonError, Config, NeonResult};
 
 pub type GetNeonElfReturn = HashMap<String, String>;
@@ -17,7 +17,7 @@ pub struct CachedElfParams {
 }
 
 impl CachedElfParams {
-    pub async fn new(config: &Config, rpc: &RpcEnum) -> Self {
+    pub async fn new(config: &Config, rpc: &impl Rpc) -> Self {
         Self {
             elf_params: read_elf_parameters_from_account(config, rpc)
                 .await
@@ -144,7 +144,7 @@ pub fn get_elf_parameter(data: &[u8], elf_parameter: &str) -> Result<String> {
 
 pub async fn read_elf_parameters_from_account(
     config: &Config,
-    rpc: &RpcEnum,
+    rpc: &impl Rpc,
 ) -> Result<GetNeonElfReturn, NeonError> {
     let (_, program_data) = read_program_data_from_account(config, rpc, &config.evm_loader).await?;
     Ok(read_elf_parameters(config, &program_data))
@@ -152,7 +152,7 @@ pub async fn read_elf_parameters_from_account(
 
 pub async fn read_program_data_from_account(
     config: &Config,
-    rpc: &RpcEnum,
+    rpc: &impl Rpc,
     evm_loader: &Pubkey,
 ) -> Result<(Option<Pubkey>, Vec<u8>), NeonError> {
     let account = rpc
@@ -224,14 +224,14 @@ fn read_program_params_from_file(
 
 async fn read_program_params_from_account(
     config: &Config,
-    rpc: &RpcEnum,
+    rpc: &impl Rpc,
 ) -> NeonResult<GetNeonElfReturn> {
     read_elf_parameters_from_account(config, rpc).await
 }
 
 pub async fn execute(
     config: &Config,
-    rpc: &RpcEnum,
+    rpc: &impl Rpc,
     program_location: Option<&str>,
 ) -> NeonResult<GetNeonElfReturn> {
     if let Some(program_location) = program_location {

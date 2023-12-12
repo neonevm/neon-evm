@@ -6,10 +6,9 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{account_storage::account_info, rpc::Rpc, types::BalanceAddress, NeonResult};
 
-use crate::rpc::RpcEnum;
 use serde_with::{serde_as, DisplayFromStr};
 
-use super::get_config::ChainInfo;
+use super::get_config::{BuildConfigSimulator, ChainInfo};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum BalanceStatus {
@@ -92,7 +91,7 @@ fn is_legacy_chain_id(id: u64, chains: &[ChainInfo]) -> bool {
 }
 
 pub async fn execute(
-    rpc: &RpcEnum,
+    rpc: &(impl Rpc + BuildConfigSimulator),
     program_id: &Pubkey,
     address: &[BalanceAddress],
 ) -> NeonResult<Vec<GetBalanceResponse>> {
