@@ -657,7 +657,7 @@ impl<T: Rpc> AccountStorage for EmulatorAccountStorage<'_, T> {
 
         let code_override = self.account_override(address, |a| a.code.clone());
         if let Some(code_override) = code_override {
-            return Buffer::from_vec(code_override.into());
+            return Buffer::from_vec(code_override.0);
         }
 
         let code = self

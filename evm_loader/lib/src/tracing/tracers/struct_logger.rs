@@ -4,11 +4,11 @@ use ethnum::U256;
 use evm_loader::evm::ExitStatus;
 use serde::Serialize;
 use serde_json::Value;
+use web3::types::Bytes;
 
 use crate::tracing::TraceConfig;
 use evm_loader::evm::opcode_table::OPNAMES;
 use evm_loader::evm::tracing::{Event, EventListener};
-use evm_loader::types::hexbytes::HexBytes;
 
 /// `StructLoggerResult` groups all structured logs emitted by the EVM
 /// while replaying a transaction in debug mode as well as transaction
@@ -49,7 +49,7 @@ pub struct StructLog {
     #[serde(skip_serializing_if = "Option::is_none")]
     stack: Option<Vec<U256>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    return_data: Option<HexBytes>,
+    return_data: Option<Bytes>,
     /// Snapshot of the current memory sate
     #[serde(skip_serializing_if = "Option::is_none")]
     memory: Option<Vec<String>>, // chunks of 32 bytes

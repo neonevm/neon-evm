@@ -1,8 +1,8 @@
 use ethnum::U256;
-use evm_loader::types::hexbytes::HexBytes;
 use evm_loader::types::Address;
 use serde_json::Value;
 use std::collections::HashMap;
+use web3::types::Bytes;
 
 pub mod tracers;
 
@@ -29,7 +29,7 @@ pub struct BlockOverrides {
 #[serde(rename_all = "camelCase")]
 pub struct AccountOverride {
     pub nonce: Option<u64>,
-    pub code: Option<HexBytes>,
+    pub code: Option<Bytes>,
     pub balance: Option<U256>,
     pub state: Option<HashMap<U256, U256>>,
     pub state_diff: Option<HashMap<U256, U256>>,
