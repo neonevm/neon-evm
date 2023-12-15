@@ -1156,7 +1156,7 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        let is_caller_eof = has_eof_magic(&backend.code(&context.caller)?);
+        let is_caller_eof = has_eof_magic(&backend.code(&context.caller).await?);
 
         if !is_caller_eof && has_eof_magic(&init_code) {
             return Err(Error::EOFLegacyCode);

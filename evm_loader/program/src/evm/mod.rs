@@ -480,10 +480,11 @@ impl<B: Database> Machine<B> {
 
     #[must_use]
     pub fn get_code(&self) -> &Buffer {
-        match &self.container {
-            Some(container) => &container.code[self.code_section],
-            None => &self.execution_code,
-        }
+        self.container
+            .as_ref()
+            .map_or(&self.execution_code, |container| {
+                &container.code[self.code_section]
+            })
     }
 
     fn fork(
