@@ -31,12 +31,16 @@ DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = os.environ.get("IMAGE_NAME")
 RUN_LINK_REPO = os.environ.get("RUN_LINK_REPO")
+DOCKERHUB_ORG_NAME = os.environ.get("DOCKERHUB_ORG_NAME")
 SOLANA_NODE_VERSION = 'v1.16.23'
 SOLANA_BPF_VERSION = 'v1.16.23'
 
 VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
+NEON_TEST_IMAGE_NAME = f"{DOCKERHUB_ORG_NAME.lower()}/neon_tests"
 
+PROXY_ENDPOINT = os.environ.get("PROXY_ENDPOINT")
+NEON_TESTS_ENDPOINT = os.environ.get("NEON_TESTS_ENDPOINT")
 
 @click.group()
 def cli():
@@ -100,17 +104,27 @@ def run_subprocess(command):
 
 @cli.command(name="run_tests")
 @click.option('--github_sha')
-def run_tests(github_sha):
-    image_name = f"{IMAGE_NAME}:{github_sha}"
-    os.environ["EVM_LOADER_IMAGE"] = image_name
+@click.option('--neon_test_branch')
+def run_tests(github_sha, neon_test_branch):
+    os.environ["EVM_LOADER_IMAGE"] = f"{IMAGE_NAME}:{github_sha}"
+
+    if neon_test_branch in GithubClient.get_branches_list(NEON_TESTS_ENDPOINT) \
+            and neon_test_branch not in ('master', 'develop'):
+        neon_test_image_tag = neon_test_branch
+    else:
+        neon_test_image_tag = 'latest'
+    os.environ["NEON_TESTS_IMAGE"] = f"{NEON_TEST_IMAGE_NAME}:{neon_test_image_tag}"
+
     project_name = f"neon-evm-{github_sha}"
     stop_containers(project_name)
 
+    run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml pull")
     run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml up -d")
-    container_name = get_solana_container_name(project_name)
+    test_container_name = get_container_name(project_name, "tests")
+
     click.echo("Start tests")
     exec_id = docker_client.exec_create(
-        container=container_name, cmd="/opt/deploy-test.sh")
+        container=test_container_name, cmd="python3 clickfile.py run evm --numprocesses 6")
     logs = docker_client.exec_start(exec_id['Id'], stream=True)
 
     tests_are_failed = False
@@ -122,9 +136,6 @@ def run_tests(github_sha):
         if 'ERROR ' in current_line or 'FAILED ' in current_line:
             tests_are_failed = True
             print("Tests are failed")
-    if "[100%]" not in all_logs:
-        tests_are_failed = True
-        print("Part of tests are skipped")
 
     exec_status = docker_client.exec_inspect(exec_id['Id'])["ExitCode"]
 
@@ -136,12 +147,12 @@ def run_tests(github_sha):
         sys.exit(1)
 
 
-def get_solana_container_name(project_name):
+def get_container_name(project_name, service_name):
     data = subprocess.run(
         f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml ps",
         shell=True, capture_output=True, text=True).stdout
     click.echo(data)
-    pattern = rf'{project_name}_solana_[1-9]+'
+    pattern = rf'{project_name}_{service_name}_[1-9]+'
 
     match = re.search(pattern, data)
     return match.group(0)
@@ -178,7 +189,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
 
     github = GithubClient(token)
 
-    if head_ref_branch in github.get_proxy_branches():
+    if head_ref_branch in github.get_branches_list(PROXY_ENDPOINT):
         proxy_branch = head_ref_branch
     elif re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch):
         proxy_branch = base_ref_branch

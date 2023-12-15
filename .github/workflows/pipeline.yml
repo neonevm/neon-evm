@@ -15,6 +15,8 @@ env:
   DHUBP: ${{secrets.DHUBP}}
   IMAGE_NAME: ${{vars.IMAGE_NAME}}
   PROXY_ENDPOINT: ${{vars.PROXY_ENDPOINT}}
+  NEON_TESTS_ENDPOINT: ${{vars.NEON_TESTS_ENDPOINT}}
+  DOCKERHUB_ORG_NAME: ${{vars.DOCKERHUB_ORG_NAME}}
   RUN_LINK_REPO: ${{vars.RUN_LINK_REPO}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
@@ -46,10 +48,34 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Define base branch if the action is tag creation
+        id: tag_creation
+        if: startsWith(github.ref , 'refs/tags/')
+        run: |
+          base_branch=`echo ${{ github.ref_name }} | sed 's/\.[0-9]*$/\.x/'`
+          echo "base_branch=$base_branch" >> $GITHUB_OUTPUT
+          echo "base_branch=$base_branch"
+      - name: Define neon test branch
+        id: neon_test_branch
+        run: |
+          if [[ "${{ github.ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then # version branch
+            tag=${GITHUB_REF/refs\/heads\//}
+
+          elif [[ "${{ steps.tag_creation.outputs.base_branch }}" != "" ]]; then # tag creation
+            tag=${{ steps.tag_creation.outputs.base_branch }}
+
+          elif [[ "${{ github.head_ref }}" != "" ]]; then # pr to feature or version branch
+            tag=${{ github.head_ref }}
+          else
+            tag='develop'
+          fi
+          echo "value=${tag}"
+          echo "value=${tag}" >> $GITHUB_OUTPUT
       - name: Run tests
         run: |
           python3 ./.github/workflows/deploy.py run_tests \
-          --github_sha=${GITHUB_SHA}
+          --github_sha=${GITHUB_SHA} \
+          --neon_test_branch=${{ steps.neon_test_branch.outputs.value }}
   trigger-proxy-tests:
     runs-on: trigger-runner
     needs:

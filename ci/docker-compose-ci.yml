@@ -20,7 +20,7 @@ services:
     networks:
       - net
 
-  dk-neon-api:
+  neon-core-api:
     restart: unless-stopped
     hostname: neon_api
     entrypoint:
@@ -40,6 +40,18 @@ services:
     image: ${EVM_LOADER_IMAGE}
     ports:
     - "8085"
+    expose:
+    - "8085"
+    networks:
+      - net
+
+  tests:
+    image: ${NEON_TESTS_IMAGE}
+    environment:
+      - SOLANA_URL=http://solana:8899
+      - NEON_CORE_API_URL=http://neon_api:8085/api
+    hostname: tests
+    command: sleep infinity
     networks:
       - net
 
