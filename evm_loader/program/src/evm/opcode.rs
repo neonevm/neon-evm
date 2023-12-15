@@ -899,7 +899,7 @@ impl<B: Database> Machine<B> {
     /// move pc past op and operand (+3), add relative offset, subtract 1 to
     /// account for interpreter loop.
     #[maybe_async]
-    pub fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
+    pub async fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let offset = code.get_i16_or_default(self.pc + 1);
         Ok(Action::Jump(
@@ -908,18 +908,18 @@ impl<B: Database> Machine<B> {
     }
 
     #[maybe_async]
-    pub fn opcode_rjumpi(&mut self, backend: &mut B) -> Result<Action> {
+    pub async fn opcode_rjumpi(&mut self, backend: &mut B) -> Result<Action> {
         let condition = self.stack.pop_u256()?;
         if condition == U256::ZERO {
             // Not branching, just skip over immediate argument.
             Ok(Action::Jump(self.pc + 3))
         } else {
-            self.opcode_rjump(backend)
+            self.opcode_rjump(backend).await
         }
     }
 
     #[maybe_async]
-    pub fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
+    pub async fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
         let idx = self.stack.pop_u256()?;
         let code = self.get_code();
         let count = code.get_or_default(self.pc + 1) as usize;
@@ -1047,7 +1047,8 @@ impl<B: Database> Machine<B> {
         Ok(Action::Continue)
     }
 
-    pub fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         let idx = code.get_u16_or_default(self.pc + 1);
         let typ = &self
@@ -1070,7 +1071,8 @@ impl<B: Database> Machine<B> {
         Ok(Action::CodeSection(idx as usize, 0))
     }
 
-    pub fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
+    #[maybe_async]
+    pub async fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
         let ret_ctx = self.return_stack.pop().ok_or(Error::EmptyStack)?;
 
         // If returning from top frame, exit cleanly.
@@ -1501,7 +1503,7 @@ impl<B: Database> Machine<B> {
 
     /// Deprecated instruction
     #[maybe_async]
-    pub fn opcode_deprecated(&mut self, _backend: &mut B) -> Result<Action> {
+    pub async fn opcode_deprecated(&mut self, _backend: &mut B) -> Result<Action> {
         let code = self.get_code();
         Err(Error::DeprecatedOpcode(
             self.context.contract,

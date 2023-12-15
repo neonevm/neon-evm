@@ -745,51 +745,10 @@ macro_rules! opcode_table {
                 opcodes
             };
 
-            const EOF_OPCODES: [OpCode<B>; 256] = {
-                let mut opcodes: [OpCode<B>; 256] = [Self::opcode_unknown; 256];
-
-                let mut i: usize = 0;
-                while i < 256 {
-                    opcodes[i] = Self::OPCODES[i];
-                    i += 1;
-                }
-
-                // EOF opcodes
-                opcodes[RJUMP as usize] = Self::opcode_rjump;
-                opcodes[RJUMPI as usize] = Self::opcode_rjumpi;
-                opcodes[RJUMPV as usize] = Self::opcode_rjumpv;
-                opcodes[CALLF as usize] = Self::opcode_callf;
-                opcodes[RETF as usize] = Self::opcode_retf;
-
-                let mut i = 0;
-                while i < Container::DEPRECATED_OPCODES.len() {
-                    opcodes[Container::DEPRECATED_OPCODES[i] as usize] = Self::opcode_deprecated;
-                    i += 1;
-                }
-
-                opcodes
-            };
-
-            pub fn execute_eof_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
-                // SAFETY: OPCODES.len() == 256, opcode <= 255
-                let opcode_fn = unsafe { Self::EOF_OPCODES.get_unchecked(opcode as usize) };
-                opcode_fn(self, backend)
-            }
-
             pub fn execute_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
                 // SAFETY: OPCODES.len() == 256, opcode <= 255
                 let opcode_fn = unsafe { Self::OPCODES.get_unchecked(opcode as usize) };
                 opcode_fn(self, backend)
-            }
-        }
-
-        #[cfg(not(target_os = "solana"))]
-        impl<B: Database> Machine<B> {
-            pub async fn execute_eof_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
-                match opcode {
-                    $($opcode => $op(self, backend).await,)*
-                    _ => Self::opcode_unknown(self, backend).await,
-                }
             }
         }
 
@@ -813,6 +772,58 @@ macro_rules! opcode_table {
         };
     }
 }
+
+macro_rules! eof_opcode_table {
+    ($( $opcode:literal, $opname:literal, $op:path;)*) => {
+        #[cfg(target_os = "solana")]
+        impl<B: Database> Machine<B> {
+            const EOF_OPCODES: [OpCode<B>; 256] = {
+                let mut opcodes: [OpCode<B>; 256] = [Self::opcode_unknown; 256];
+
+                let mut i: usize = 0;
+                while i < 256 {
+                    opcodes[i] = Self::OPCODES[i];
+                    i += 1;
+                }
+
+                // EOF opcodes
+                $(opcodes[$opcode as usize] = $op;)*
+
+                opcodes
+            };
+
+            pub fn execute_eof_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
+                // SAFETY: OPCODES.len() == 256, opcode <= 255
+                let opcode_fn = unsafe { Self::EOF_OPCODES.get_unchecked(opcode as usize) };
+                opcode_fn(self, backend)
+            }
+        }
+
+        #[cfg(not(target_os = "solana"))]
+        impl<B: Database> Machine<B> {
+            pub async fn execute_eof_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
+                match opcode {
+                    $($opcode => $op(self, backend).await,)*
+                    _ => self.execute_opcode(backend, opcode).await,
+                }
+            }
+        }
+    }
+}
+
+eof_opcode_table![
+    0x5C, "RJUMP", Self::opcode_rjump;
+    0x5D, "RJUMPI", Self::opcode_rjumpi;
+    0x5E, "RJUMPV", Self::opcode_rjumpv;
+    0xB0, "CALLF", Self::opcode_callf;
+    0xB1, "RETF", Self::opcode_retf;
+
+    0xF2, "CALLCODE", Self::opcode_deprecated;
+    0xFF, "SELFDESTRUCT", Self::opcode_deprecated;
+    0x56, "JUMP", Self::opcode_deprecated;
+    0x57, "JUMPI", Self::opcode_deprecated;
+    0x58, "PC", Self::opcode_deprecated;
+];
 
 opcode_table![
         0x00, "STOP", Self::opcode_stop;
