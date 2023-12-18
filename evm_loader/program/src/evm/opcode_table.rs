@@ -808,6 +808,15 @@ macro_rules! eof_opcode_table {
                 }
             }
         }
+
+        #[cfg(not(target_os = "solana"))]
+        pub const EOF_OPNAMES: [&str; 256] = {
+            let mut opnames: [&str; 256] = ["<invalid>"; 256];
+
+            $(opnames[$opcode as usize] = $opname;)*
+
+            opnames
+        };
     }
 }
 
