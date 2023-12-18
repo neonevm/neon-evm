@@ -26,8 +26,8 @@ pub fn validate(
     trx: &Transaction,
     _caller_address: &Address,
 ) -> Result<()> {
-    if trx.chain_id != Some(CHAIN_ID.into()) {
-        return Err(Error::InvalidChainId(trx.chain_id.unwrap_or(U256::ZERO)));
+    if trx.chain_id() != Some(CHAIN_ID.into()) {
+        return Err(Error::InvalidChainId(trx.chain_id().unwrap_or(U256::ZERO)));
     }
 
     account_storage.check_for_blocked_accounts()?;
@@ -39,7 +39,7 @@ pub fn execute<'a>(
     accounts: Accounts<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     mut gasometer: Gasometer,
-    trx: Transaction,
+    trx: &mut Transaction,
     caller_address: Address,
 ) -> Result<()> {
     accounts.system_program.transfer(
@@ -48,8 +48,8 @@ pub fn execute<'a>(
         crate::config::PAYMENT_TO_TREASURE,
     )?;
 
-    let gas_limit = trx.gas_limit;
-    let gas_price = trx.gas_price;
+    let gas_limit = trx.gas_limit();
+    let gas_price = trx.gas_price();
 
     let (exit_reason, apply_state) = {
         let mut backend = ExecutorState::new(account_storage);

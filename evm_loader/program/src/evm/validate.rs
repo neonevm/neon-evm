@@ -139,10 +139,7 @@ impl Container {
         if code.len() < imm + 2 {
             return Err(Error::UnexpectedEndOfFile);
         }
-        let analysis = match analysis_option {
-            Some(a) => a,
-            None => Bitvec::eof_code_bitmap(code),
-        };
+        let analysis = analysis_option.map_or_else(|| Bitvec::eof_code_bitmap(code), |a| a);
         let offset = code.get_i16_or_default(imm);
         let dest = (from as isize + offset as isize) as usize;
         if dest >= length {

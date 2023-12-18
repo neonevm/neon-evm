@@ -1,10 +1,12 @@
-use solana_program::program_memory::{sol_memcpy, sol_memset};
 use std::alloc::{GlobalAlloc, Layout};
 use std::ops::Range;
 
-use super::utils::checked_next_multiple_of_32;
-use super::{tracing_event, Buffer};
+use solana_program::program_memory::{sol_memcpy, sol_memset};
+
 use crate::error::Error;
+
+use super::utils::checked_next_multiple_of_32;
+use super::Buffer;
 
 const MAX_MEMORY_SIZE: usize = 64 * 1024;
 const MEMORY_CAPACITY: usize = 1024;
@@ -59,7 +61,7 @@ impl Memory {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(not(target_os = "solana"))]
     pub fn to_vec(&self) -> Vec<u8> {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.size) };
         slice.to_vec()
@@ -140,11 +142,6 @@ impl Memory {
     }
 
     pub fn write_32(&mut self, offset: usize, value: &[u8; 32]) -> Result<(), Error> {
-        tracing_event!(super::tracing::Event::MemorySet {
-            offset,
-            data: value.to_vec()
-        });
-
         self.realloc(offset, 32)?;
 
         unsafe {
@@ -156,11 +153,6 @@ impl Memory {
     }
 
     pub fn write_byte(&mut self, offset: usize, value: u8) -> Result<(), Error> {
-        tracing_event!(super::tracing::Event::MemorySet {
-            offset,
-            data: vec![value]
-        });
-
         self.realloc(offset, 1)?;
 
         unsafe {
@@ -191,36 +183,16 @@ impl Memory {
 
         match source_offset {
             source_offset if source_offset >= source.len() => {
-                tracing_event!(super::tracing::Event::MemorySet {
-                    offset,
-                    data: vec![0; length]
-                });
-
                 sol_memset(data, 0, length);
             }
             source_offset if (source_offset + length) > source.len() => {
                 let source = &source[source_offset..];
-
-                tracing_event!(super::tracing::Event::MemorySet {
-                    offset,
-                    data: {
-                        let mut buffer = vec![0_u8; length];
-                        buffer[..source.len()].copy_from_slice(source);
-                        buffer
-                    }
-                });
 
                 data[..source.len()].copy_from_slice(source);
                 data[source.len()..].fill(0_u8);
             }
             source_offset => {
                 let source = &source[source_offset..source_offset + length];
-
-                tracing_event!(super::tracing::Event::MemorySet {
-                    offset,
-                    data: source.to_vec()
-                });
-
                 sol_memcpy(data, source, length);
             }
         }

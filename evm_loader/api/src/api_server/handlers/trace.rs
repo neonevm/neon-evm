@@ -1,24 +1,36 @@
-use axum::{http::StatusCode, Json};
+use actix_request_identifier::RequestId;
+use actix_web::{http::StatusCode, post, web::Json, Responder};
 use std::convert::Into;
 
+use crate::api_server::handlers::process_error;
 use crate::commands::trace::trace_transaction;
-use crate::{context, types::request_models::TraceRequestModel, NeonApiState};
+use crate::{
+    api_context, context::Context, types::request_models::TraceRequestModel, NeonApiState,
+};
 
-use super::{parse_emulation_params, process_error, process_result};
+use super::{parse_emulation_params, process_result};
 
+#[tracing::instrument(skip(state, request_id), fields(id = request_id.as_str()))]
+#[post("/trace")]
 pub async fn trace(
-    axum::extract::State(state): axum::extract::State<NeonApiState>,
+    state: NeonApiState,
+    request_id: RequestId,
     Json(trace_request): Json<TraceRequestModel>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> impl Responder {
     let tx = trace_request.emulate_request.tx_params.into();
 
-    let rpc_client =
-        match context::build_rpc_client(&state.config, trace_request.emulate_request.slot) {
-            Ok(rpc_client) => rpc_client,
-            Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
-        };
+    let rpc_client = match api_context::build_rpc_client(
+        &state,
+        trace_request.emulate_request.slot,
+        trace_request.emulate_request.tx_index_in_block,
+    )
+    .await
+    {
+        Ok(rpc_client) => rpc_client,
+        Err(e) => return process_error(StatusCode::BAD_REQUEST, &e),
+    };
 
-    let context = context::create(rpc_client, state.config.clone());
+    let context = Context::new(&*rpc_client, &state.config);
 
     let (token, chain, steps, accounts, solana_accounts) = parse_emulation_params(
         &state.config,
@@ -29,7 +41,7 @@ pub async fn trace(
 
     process_result(
         &trace_transaction(
-            context.rpc_client.as_ref(),
+            context.rpc_client,
             state.config.evm_loader,
             tx,
             token,

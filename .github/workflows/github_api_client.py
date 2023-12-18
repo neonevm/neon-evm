@@ -1,9 +1,10 @@
 import click
 import requests
+import os
 
 
 class GithubClient():
-    PROXY_ENDPOINT = "https://api.github.com/repos/neonlabsorg/proxy-model.py"
+    PROXY_ENDPOINT = os.environ.get("PROXY_ENDPOINT")
 
     def __init__(self, token):
         self.headers = {"Authorization": f"Bearer {token}",
@@ -22,11 +23,12 @@ class GithubClient():
             f"{self.PROXY_ENDPOINT}/actions/workflows/pipeline.yml/runs?branch={proxy_branch}", headers=self.headers)
         return int(response.json()["total_count"])
 
-    def run_proxy_dispatches(self, proxy_branch, github_ref, github_sha, full_test_suite):
+    def run_proxy_dispatches(self, proxy_branch, github_ref, github_sha, test_set, initial_pr):
         data = {"ref": proxy_branch,
-                "inputs": {"full_test_suite": full_test_suite,
+                "inputs": {"test_set": test_set,
                            "neon_evm_commit": github_sha,
-                           "neon_evm_branch": github_ref}
+                           "neon_evm_branch": github_ref,
+                           "initial_pr": initial_pr}
                 }
         response = requests.post(
             f"{self.PROXY_ENDPOINT}/actions/workflows/pipeline.yml/dispatches", json=data, headers=self.headers)

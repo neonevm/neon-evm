@@ -1,11 +1,10 @@
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+
 use ethnum::U256;
 use serde::{Deserialize, Serialize};
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
-use crate::account_storage::AccountStorage;
-
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OwnedAccountInfo {
     pub key: Pubkey,
     pub is_signer: bool,
@@ -62,16 +61,4 @@ pub struct Cache {
     pub block_number: U256,
     #[serde(with = "ethnum::serde::bytes::le")]
     pub block_timestamp: U256,
-}
-
-impl Cache {
-    pub fn get_account_or_insert<B: AccountStorage>(
-        &mut self,
-        key: Pubkey,
-        backend: &B,
-    ) -> &mut OwnedAccountInfo {
-        self.solana_accounts
-            .entry(key)
-            .or_insert_with(|| backend.clone_solana_account(&key))
-    }
 }

@@ -1,30 +1,30 @@
 ARG SOLANA_IMAGE
 # Install BPF SDK
-FROM solanalabs/rust:1.64.0 AS builder
+FROM solanalabs/rust:1.69.0 AS builder
 RUN cargo install rustfilt
 WORKDIR /opt
 ARG SOLANA_BPF_VERSION
 RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_BPF_VERSION}"/install)" && \
-    /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
+    /root/.local/share/solana/install/active_release/bin/sdk/sbf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 
 # Build evm_loader
 FROM builder AS evm-loader-builder
-COPY ./evm_loader/ /opt/evm_loader/
-WORKDIR /opt/evm_loader
+COPY . /opt/neon-evm/
+WORKDIR /opt/neon-evm/evm_loader
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo fmt --check && \
     cargo clippy --release && \
     cargo build --release && \
-    cargo build-sbf --arch bpf --features devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
-    cargo build-sbf --arch bpf --features testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
-    cargo build-sbf --arch bpf --features govertest && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
-    cargo build-sbf --arch bpf --features govertest,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
-    cargo build-sbf --arch bpf --features mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
-    cargo build-sbf --arch bpf --features mainnet,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet-emergency.so && \
-    cargo build-sbf --arch bpf --features ci --dump
+    cargo build-bpf --features devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
+    cargo build-bpf --features testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-bpf --features govertest && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
+    cargo build-bpf --features govertest,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
+    cargo build-bpf --features mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
+    cargo build-bpf --features mainnet,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet-emergency.so && \
+    cargo build-bpf --features ci --dump
 
 # Build Solidity contracts
 FROM ethereum/solc:0.8.0 AS solc
@@ -32,9 +32,9 @@ FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
-COPY evm_loader/tests/contracts/*.sol /opt/
-COPY evm_loader/tests/eof-contracts/*.binary /opt/eof-contracts/
-COPY evm_loader/solidity/*.sol /opt/
+COPY tests/contracts/*.sol /opt/
+COPY tests/eof-contracts/*.binary /opt/eof-contracts/
+COPY solidity/*.sol /opt/
 #COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
@@ -52,10 +52,10 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
     rm -rf /var/lib/apt/lists/*
 
-COPY evm_loader/tests/requirements.txt /tmp/
+COPY tests/requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 
-COPY /evm_loader/solidity/ /opt/contracts/contracts/
+#COPY /evm_loader/solidity/ /opt/contracts/contracts/
 WORKDIR /opt
 
 COPY --from=solana \
@@ -74,26 +74,26 @@ RUN /opt/solana/bin/solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518
 COPY evm_loader/solana-run-neon.sh \
      /opt/solana/bin/
 
-COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader-dump.txt /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-api /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader*.so /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader-dump.txt /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-cli /opt/
+COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-api /opt/
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
-COPY evm_loader/wait-for-solana.sh \
-    evm_loader/wait-for-neon.sh \
-    evm_loader/create-test-accounts.sh \
-    evm_loader/deploy-evm.sh \
-    evm_loader/deploy-test.sh \
-    evm_loader/evm_loader-keypair.json \
+COPY ci/wait-for-solana.sh \
+    ci/wait-for-neon.sh \
+    ci/deploy-evm.sh \
+    ci/deploy-test.sh \
+    ci/create-test-accounts.sh \
+    ci/evm_loader-keypair.json \
     /opt/
 
-COPY evm_loader/keys/ /opt/keys
-COPY evm_loader/tests /opt/tests
-COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
-COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
+COPY ci/operator-keypairs/ /opt/operator-keypairs
+COPY tests /opt/tests
+COPY ci/operator-keypairs/id.json /root/.config/solana/id.json
+COPY ci/operator-keypairs/id2.json /root/.config/solana/id2.json
+COPY ci/keys/ /opt/keys
 
-
-ENV CONTRACTS_DIR=/opt/solidity/
+#ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt

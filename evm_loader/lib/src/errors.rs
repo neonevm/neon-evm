@@ -13,7 +13,7 @@ use solana_sdk::signer::SignerError as SolanaSignerError;
 use thiserror::Error;
 
 use crate::commands::init_environment::EnvironmentError;
-use crate::types::PgError;
+use crate::types::tracer_ch_common::ChError;
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
@@ -78,8 +78,6 @@ pub enum NeonError {
     TxParametersParsingError(String),
     #[error("AddrParseError. {0:?}")]
     AddrParseError(#[from] AddrParseError),
-    #[error("AxumError. {0:?}")]
-    AxumError(#[from] axum::Error),
     #[error("SolanaClientError. {0:?}")]
     SolanaClientError(solana_client::client_error::ClientError),
     /// Environment Error
@@ -93,10 +91,12 @@ pub enum NeonError {
     WrongEnvironment,
     #[error("Hex Error. {0}")]
     FromHexError(#[from] hex::FromHexError),
-    #[error("PostgreSQL Error: {0}")]
-    PostgreError(#[from] PgError),
     #[error("Panic: {0}")]
     Panic(String),
+    #[error("ClickHouse: {0}")]
+    ClickHouse(ChError),
+    #[error("Slot {0} is less than earliest_rooted_slot={1}")]
+    EarlySlot(u64, u64),
 }
 
 impl NeonError {
@@ -115,7 +115,6 @@ impl NeonError {
             NeonError::PubkeyError(_) => 116,
             NeonError::EvmError(_) => 117,
             NeonError::AddrParseError(_) => 118,
-            NeonError::AxumError(_) => 119,
             NeonError::SolanaClientError(_) => 120,
             NeonError::EvmLoaderNotSpecified => 201,
             NeonError::KeypairNotSpecified => 202,
@@ -131,7 +130,8 @@ impl NeonError {
             NeonError::IncorrectAddress(_) => 248,
             NeonError::IncorrectIndex(_) => 249,
             NeonError::TxParametersParsingError(_) => 250,
-            NeonError::PostgreError(_) => 251,
+            NeonError::ClickHouse(_) => 252,
+            NeonError::EarlySlot(_, _) => 253,
         }
     }
 }

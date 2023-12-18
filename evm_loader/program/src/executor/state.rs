@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use ethnum::{AsU256, U256};
+use maybe_async::maybe_async;
 use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
 
@@ -103,9 +104,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.actions.push(action);
     }
 
-    pub fn external_account(&self, address: Pubkey) -> Result<OwnedAccountInfo> {
-        let mut cache = self.cache.borrow_mut();
-
+    #[maybe_async]
+    pub async fn external_account(&self, address: Pubkey) -> Result<OwnedAccountInfo> {
         let metas = self
             .actions
             .iter()
@@ -120,18 +120,30 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .collect::<Vec<_>>();
 
         if !metas.iter().any(|m| (m.pubkey == address) && m.is_writable) {
-            return Ok(cache.get_account_or_insert(address, self.backend).clone());
+            insert_account_if_not_present(&self.cache, address, self.backend).await;
+            return Ok(self
+                .cache
+                .borrow()
+                .solana_accounts
+                .get(&address)
+                .unwrap()
+                .clone());
         }
 
-        let mut accounts = metas
-            .into_iter()
-            .map(|m| {
-                (
-                    m.pubkey,
-                    cache.get_account_or_insert(m.pubkey, self.backend).clone(),
-                )
-            })
-            .collect::<BTreeMap<Pubkey, OwnedAccountInfo>>();
+        let mut accounts = BTreeMap::<Pubkey, OwnedAccountInfo>::new();
+
+        for m in metas {
+            insert_account_if_not_present(&self.cache, m.pubkey, self.backend).await;
+            accounts.insert(
+                m.pubkey,
+                self.cache
+                    .borrow()
+                    .solana_accounts
+                    .get(&m.pubkey)
+                    .unwrap()
+                    .clone(),
+            );
+        }
 
         for action in &self.actions {
             if let Action::ExternalInstruction {
@@ -171,14 +183,30 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 }
 
+#[maybe_async]
+async fn insert_account_if_not_present<B: AccountStorage>(
+    cache: &RefCell<Cache>,
+    key: Pubkey,
+    backend: &B,
+) {
+    if !cache.borrow().solana_accounts.contains_key(&key) {
+        let owned_account_info = backend.clone_solana_account(&key).await;
+        cache
+            .borrow_mut()
+            .solana_accounts
+            .insert(key, owned_account_info);
+    }
+}
+
+#[maybe_async(?Send)]
 impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     fn chain_id(&self) -> U256 {
         let chain_id = self.backend.chain_id();
         U256::from(chain_id)
     }
 
-    fn nonce(&self, from_address: &Address) -> Result<u64> {
-        let mut nonce = self.backend.nonce(from_address);
+    async fn nonce(&self, from_address: &Address) -> Result<u64> {
+        let mut nonce = self.backend.nonce(from_address).await;
 
         for action in &self.actions {
             if let Action::EvmIncrementNonce { address } = action {
@@ -198,8 +226,8 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(())
     }
 
-    fn balance(&self, from_address: &Address) -> Result<U256> {
-        let mut balance = self.backend.balance(from_address);
+    async fn balance(&self, from_address: &Address) -> Result<U256> {
+        let mut balance = self.backend.balance(from_address).await;
 
         for action in &self.actions {
             match action {
@@ -228,7 +256,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(balance)
     }
 
-    fn transfer(&mut self, source: Address, target: Address, value: U256) -> Result<()> {
+    async fn transfer(&mut self, source: Address, target: Address, value: U256) -> Result<()> {
         if value == U256::ZERO {
             return Ok(());
         }
@@ -237,7 +265,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             return Ok(());
         }
 
-        if self.balance(&source)? < value {
+        if self.balance(&source).await? < value {
             return Err(Error::InsufficientBalance(source, value));
         }
 
@@ -251,7 +279,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(())
     }
 
-    fn code_size(&self, from_address: &Address) -> Result<usize> {
+    async fn code_size(&self, from_address: &Address) -> Result<usize> {
         if self.is_precompile_extension(from_address) {
             return Ok(1); // This is required in order to make a normal call to an extension contract
         }
@@ -264,10 +292,10 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             }
         }
 
-        Ok(self.backend.code_size(from_address))
+        Ok(self.backend.code_size(from_address).await)
     }
 
-    fn code_hash(&self, from_address: &Address) -> Result<[u8; 32]> {
+    async fn code_hash(&self, from_address: &Address) -> Result<[u8; 32]> {
         use solana_program::keccak::hash;
 
         for action in &self.actions {
@@ -278,10 +306,10 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             }
         }
 
-        Ok(self.backend.code_hash(from_address))
+        Ok(self.backend.code_hash(from_address).await)
     }
 
-    fn code(&self, from_address: &Address) -> Result<crate::evm::Buffer> {
+    async fn code(&self, from_address: &Address) -> Result<crate::evm::Buffer> {
         for action in &self.actions {
             if let Action::EvmSetCode { address, code } = action {
                 if from_address == address {
@@ -290,7 +318,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             }
         }
 
-        Ok(self.backend.code(from_address))
+        Ok(self.backend.code(from_address).await)
     }
 
     fn set_code(&mut self, address: Address, code: crate::evm::Buffer) -> Result<()> {
@@ -317,7 +345,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(())
     }
 
-    fn storage(&self, from_address: &Address, from_index: &U256) -> Result<[u8; 32]> {
+    async fn storage(&self, from_address: &Address, from_index: &U256) -> Result<[u8; 32]> {
         for action in self.actions.iter().rev() {
             if let Action::EvmSetStorage {
                 address,
@@ -331,7 +359,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             }
         }
 
-        Ok(self.backend.storage(from_address, from_index))
+        Ok(self.backend.storage(from_address, from_index).await)
     }
 
     fn set_storage(&mut self, address: Address, index: U256, value: [u8; 32]) -> Result<()> {
@@ -345,7 +373,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(())
     }
 
-    fn block_hash(&self, number: U256) -> Result<[u8; 32]> {
+    async fn block_hash(&self, number: U256) -> Result<[u8; 32]> {
         // geth:
         //  - checks the overflow
         //  - converts to u64
@@ -367,7 +395,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             return Ok(<[u8; 32]>::default());
         }
 
-        Ok(self.backend.block_hash(number))
+        Ok(self.backend.block_hash(number).await)
     }
 
     fn block_number(&self) -> Result<U256> {
@@ -380,11 +408,11 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(cache.block_timestamp)
     }
 
-    fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
+    async fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
     where
         F: FnOnce(&solana_program::account_info::AccountInfo) -> R,
     {
-        self.backend.map_solana_account(address, action)
+        self.backend.map_solana_account(address, action).await
     }
 
     fn snapshot(&mut self) {
@@ -412,7 +440,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             .expect("Fatal Error: Inconsistent EVM Call Stack");
     }
 
-    fn precompile_extension(
+    async fn precompile_extension(
         &mut self,
         context: &Context,
         address: &Address,
@@ -420,5 +448,6 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         is_static: bool,
     ) -> Option<Result<Vec<u8>>> {
         self.call_precompile_extension(context, address, data, is_static)
+            .await
     }
 }

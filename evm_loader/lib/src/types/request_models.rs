@@ -1,9 +1,13 @@
-use crate::types::trace::{TraceCallConfig, TraceConfig};
 use crate::types::{PubkeyBase58, TxParams};
 use ethnum::U256;
+use evm_loader::evm::tracing::TraceCallConfig;
 use evm_loader::types::Address;
 use serde::{Deserialize, Serialize};
+use solana_sdk::debug_account_data::debug_account_data;
 use solana_sdk::pubkey::Pubkey;
+use std::fmt;
+
+use super::AccessListItem;
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct GetEtherRequest {
@@ -18,13 +22,32 @@ pub struct GetStorageAtRequest {
     pub slot: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct TxParamsRequestModel {
     pub sender: Address,
     pub contract: Option<Address>,
     pub data: Option<Vec<u8>>,
     pub value: Option<U256>,
     pub gas_limit: Option<U256>,
+    pub access_list: Option<Vec<AccessListItem>>,
+}
+
+impl fmt::Debug for TxParamsRequestModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("TxParamsRequestModel");
+
+        f.field("sender", &self.sender)
+            .field("contract", &self.contract);
+
+        if let Some(data) = &self.data {
+            debug_account_data(&data[..], &mut f);
+        }
+
+        f.field("value", &self.value)
+            .field("gas_limit", &self.gas_limit)
+            .field("access_list", &self.access_list)
+            .finish_non_exhaustive()
+    }
 }
 
 impl From<TxParamsRequestModel> for TxParams {
@@ -36,6 +59,7 @@ impl From<TxParamsRequestModel> for TxParams {
             data: model.data,
             value: model.value,
             gas_limit: model.gas_limit,
+            access_list: model.access_list,
         }
     }
 }
@@ -78,13 +102,7 @@ pub struct EmulateRequestModel {
     #[serde(flatten)]
     pub emulation_params: EmulationParamsRequestModel,
     pub slot: Option<u64>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct EmulateHashRequestModel {
-    #[serde(flatten)]
-    pub emulation_params: EmulationParamsRequestModel,
-    pub hash: String,
+    pub tx_index_in_block: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -92,19 +110,4 @@ pub struct TraceRequestModel {
     #[serde(flatten)]
     pub emulate_request: EmulateRequestModel,
     pub trace_call_config: Option<TraceCallConfig>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct TraceHashRequestModel {
-    #[serde(flatten)]
-    pub emulate_hash_request: EmulateHashRequestModel,
-    pub trace_config: Option<TraceConfig>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct TraceNextBlockRequestModel {
-    #[serde(flatten)]
-    pub emulation_params: EmulationParamsRequestModel,
-    pub slot: u64,
-    pub trace_config: Option<TraceConfig>,
 }

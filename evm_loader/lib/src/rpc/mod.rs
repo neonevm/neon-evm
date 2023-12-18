@@ -1,11 +1,8 @@
 mod db_call_client;
-mod db_trx_client;
 mod validator_client;
 
 pub use db_call_client::CallDbClient;
-pub use db_trx_client::TrxDbClient;
 
-use crate::types::TxParams;
 use crate::{NeonError, NeonResult};
 use async_trait::async_trait;
 use solana_cli::cli::CliError;
@@ -31,8 +28,8 @@ use solana_transaction_status::{
 };
 use std::any::Any;
 
-#[async_trait]
-pub trait Rpc: Send + Sync {
+#[async_trait(?Send)]
+pub trait Rpc {
     fn commitment(&self) -> CommitmentConfig;
     async fn confirm_transaction_with_spinner(
         &self,
@@ -83,7 +80,7 @@ pub trait Rpc: Send + Sync {
         &self,
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)>;
-    async fn get_transaction_data(&self) -> ClientResult<TxParams>;
+
     fn as_any(&self) -> &dyn Any;
 }
 

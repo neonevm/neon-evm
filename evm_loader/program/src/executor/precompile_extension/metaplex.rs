@@ -3,6 +3,7 @@
 use std::convert::{Into, TryInto};
 
 use ethnum::U256;
+use maybe_async::maybe_async;
 use mpl_token_metadata::state::{
     Creator, Metadata, TokenMetadataAccount, TokenStandard, CREATE_FEE, MAX_MASTER_EDITION_LEN,
     MAX_METADATA_LEN,
@@ -25,8 +26,9 @@ use crate::{
 // "[0x69, 0x1f, 0x34, 0x31]": "name(bytes32)"
 // "[0x6b, 0xaa, 0x03, 0x30]": "symbol(bytes32)"
 
-pub fn metaplex<B: AccountStorage>(
-    state: &mut ExecutorState<B>,
+#[maybe_async]
+pub async fn metaplex<B: AccountStorage>(
+    state: &mut ExecutorState<'_, B>,
     address: &Address,
     input: &[u8],
     context: &crate::evm::Context,
@@ -73,27 +75,27 @@ pub fn metaplex<B: AccountStorage>(
         [0xf7, 0xb6, 0x37, 0xbb] => {
             // "isInitialized(bytes32)"
             let mint = read_pubkey(input)?;
-            is_initialized(context, state, mint)
+            is_initialized(context, state, mint).await
         }
         [0x23, 0x5b, 0x2b, 0x94] => {
             // "isNFT(bytes32)"
             let mint = read_pubkey(input)?;
-            is_nft(context, state, mint)
+            is_nft(context, state, mint).await
         }
         [0x9e, 0xd1, 0x9d, 0xdb] => {
             // "uri(bytes32)"
             let mint = read_pubkey(input)?;
-            uri(context, state, mint)
+            uri(context, state, mint).await
         }
         [0x69, 0x1f, 0x34, 0x31] => {
             // "name(bytes32)"
             let mint = read_pubkey(input)?;
-            token_name(context, state, mint)
+            token_name(context, state, mint).await
         }
         [0x6b, 0xaa, 0x03, 0x30] => {
             // "symbol(bytes32)"
             let mint = read_pubkey(input)?;
-            symbol(context, state, mint)
+            symbol(context, state, mint).await
         }
         _ => Err(Error::UnknownPrecompileMethodSelector(*address, selector)),
     }
@@ -236,22 +238,26 @@ fn create_master_edition<B: AccountStorage>(
     Ok(edition_pubkey.to_bytes().to_vec())
 }
 
-fn is_initialized<B: AccountStorage>(
+#[maybe_async]
+async fn is_initialized<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     mint: Pubkey,
 ) -> Result<Vec<u8>> {
-    let is_initialized = metadata(context, state, mint)?.map_or_else(|| false, |_| true);
+    let is_initialized = metadata(context, state, mint)
+        .await?
+        .map_or_else(|| false, |_| true);
 
     Ok(to_solidity_bool(is_initialized))
 }
 
-fn is_nft<B: AccountStorage>(
+#[maybe_async]
+async fn is_nft<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     mint: Pubkey,
 ) -> Result<Vec<u8>> {
-    let is_nft = metadata(context, state, mint)?.map_or_else(
+    let is_nft = metadata(context, state, mint).await?.map_or_else(
         || false,
         |m| m.token_standard == Some(TokenStandard::NonFungible),
     );
@@ -259,43 +265,53 @@ fn is_nft<B: AccountStorage>(
     Ok(to_solidity_bool(is_nft))
 }
 
-fn uri<B: AccountStorage>(
+#[maybe_async]
+async fn uri<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     mint: Pubkey,
 ) -> Result<Vec<u8>> {
-    let uri = metadata(context, state, mint)?.map_or_else(String::new, |m| m.data.uri);
+    let uri = metadata(context, state, mint)
+        .await?
+        .map_or_else(String::new, |m| m.data.uri);
 
     Ok(to_solidity_string(uri.trim_end_matches('\0')))
 }
 
-fn token_name<B: AccountStorage>(
+#[maybe_async]
+async fn token_name<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     mint: Pubkey,
 ) -> Result<Vec<u8>> {
-    let token_name = metadata(context, state, mint)?.map_or_else(String::new, |m| m.data.name);
+    let token_name = metadata(context, state, mint)
+        .await?
+        .map_or_else(String::new, |m| m.data.name);
 
     Ok(to_solidity_string(token_name.trim_end_matches('\0')))
 }
 
-fn symbol<B: AccountStorage>(
+#[maybe_async]
+async fn symbol<B: AccountStorage>(
     context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     mint: Pubkey,
 ) -> Result<Vec<u8>> {
-    let symbol = metadata(context, state, mint)?.map_or_else(String::new, |m| m.data.symbol);
+    let symbol = metadata(context, state, mint)
+        .await?
+        .map_or_else(String::new, |m| m.data.symbol);
 
     Ok(to_solidity_string(symbol.trim_end_matches('\0')))
 }
 
-fn metadata<B: AccountStorage>(
+#[maybe_async]
+async fn metadata<B: AccountStorage>(
     _context: &crate::evm::Context,
-    state: &mut ExecutorState<B>,
+    state: &mut ExecutorState<'_, B>,
     mint: Pubkey,
 ) -> Result<Option<Metadata>> {
     let (metadata_pubkey, _) = mpl_token_metadata::pda::find_metadata_account(&mint);
-    let metadata_account = state.external_account(metadata_pubkey)?;
+    let metadata_account = state.external_account(metadata_pubkey).await?;
 
     let result = {
         if mpl_token_metadata::check_id(&metadata_account.owner) {
