@@ -19,7 +19,7 @@ for key, value in json.loads(sys.argv[1])['value'].items():
 " "$ELF_PARAMS")
 
 
-py.test -vvvvv -n 16 tests/
+py.test -n 6 tests/
 
 echo "Deploy test success"
 exit 0
