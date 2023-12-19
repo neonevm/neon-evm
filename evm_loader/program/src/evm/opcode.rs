@@ -1,14 +1,30 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
 use maybe_async::maybe_async;
+use serde::{Deserialize, Serialize};
 use solana_program::log::sol_log_data;
 
+use super::eof::has_eof_magic;
 use super::{database::Database, tracing_event, Context, Machine, Reason};
+use crate::evm::eof::Container;
 use crate::{
     error::{Error, Result},
     evm::{trace_end_step, Buffer},
     types::Address,
 };
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ReturnContext {
+    pub section: usize,
+    pub pc: usize,
+    pub stack_height: usize,
+}
 
 #[derive(Eq, PartialEq)]
 pub enum Action {
@@ -17,6 +33,7 @@ pub enum Action {
     Stop,
     Return(Vec<u8>),
     Revert(Vec<u8>),
+    CodeSection(usize, usize),
     Suicide,
     Noop,
 }
@@ -26,10 +43,8 @@ impl<B: Database> Machine<B> {
     /// Unknown instruction
     #[maybe_async]
     pub async fn opcode_unknown(&mut self, _backend: &mut B) -> Result<Action> {
-        Err(Error::UnknownOpcode(
-            self.context.contract,
-            self.execution_code[self.pc],
-        ))
+        let code = self.get_code();
+        Err(Error::UnknownOpcode(self.context.contract, code[self.pc]))
     }
 
     /// (u)int256 addition modulo 2**256
@@ -881,6 +896,45 @@ impl<B: Database> Machine<B> {
         Ok(Action::Continue)
     }
 
+    /// move pc past op and operand (+3), add relative offset, subtract 1 to
+    /// account for interpreter loop.
+    #[maybe_async]
+    pub async fn opcode_rjump(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
+        let offset = code.get_i16_or_default(self.pc + 1);
+        Ok(Action::Jump(
+            ((self.pc + 3) as isize + offset as isize) as usize,
+        ))
+    }
+
+    #[maybe_async]
+    pub async fn opcode_rjumpi(&mut self, backend: &mut B) -> Result<Action> {
+        let condition = self.stack.pop_u256()?;
+        if condition == U256::ZERO {
+            // Not branching, just skip over immediate argument.
+            Ok(Action::Jump(self.pc + 3))
+        } else {
+            self.opcode_rjump(backend).await
+        }
+    }
+
+    #[maybe_async]
+    pub async fn opcode_rjumpv(&mut self, _backend: &mut B) -> Result<Action> {
+        let idx = self.stack.pop_u256()?;
+        let code = self.get_code();
+        let count = code.get_or_default(self.pc + 1) as usize;
+
+        #[allow(clippy::cast_lossless)]
+        if idx > U256::new(u64::MAX as u128) || idx > U256::new(count as u128) {
+            return Ok(Action::Jump(self.pc + 2 + count * 2));
+        }
+        let offset = code.get_i16_or_default(self.pc + 1 + 2 + 2 * idx.as_u64() as usize);
+
+        Ok(Action::Jump(
+            ((self.pc + 2 + count * 2) as isize + offset as isize) as usize,
+        ))
+    }
+
     /// Place zero on stack
     #[maybe_async]
     pub async fn opcode_push_0(&mut self, _backend: &mut B) -> Result<Action> {
@@ -893,11 +947,12 @@ impl<B: Database> Machine<B> {
     /// ~50% of contract bytecode are PUSH opcodes
     #[maybe_async]
     pub async fn opcode_push_1(&mut self, _backend: &mut B) -> Result<Action> {
-        if self.execution_code.len() <= self.pc + 1 {
+        let code = self.get_code();
+        if code.len() <= self.pc + 1 {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
-        let value = unsafe { *self.execution_code.get_unchecked(self.pc + 1) };
+        let value = unsafe { *code.get_unchecked(self.pc + 1) };
 
         self.stack.push_byte(value)?;
 
@@ -907,12 +962,13 @@ impl<B: Database> Machine<B> {
     /// Place 2-31 byte item on stack.
     #[maybe_async]
     pub async fn opcode_push_2_31<const N: usize>(&mut self, _backend: &mut B) -> Result<Action> {
-        if self.execution_code.len() <= self.pc + 1 + N {
+        let code = self.get_code();
+        if code.len() <= self.pc + 1 + N {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
         let value = unsafe {
-            let ptr = self.execution_code.as_ptr().add(self.pc + 1);
+            let ptr = code.as_ptr().add(self.pc + 1);
             &*ptr.cast::<[u8; N]>()
         };
 
@@ -924,12 +980,13 @@ impl<B: Database> Machine<B> {
     /// Place 32 byte item on stack
     #[maybe_async]
     pub async fn opcode_push_32(&mut self, _backend: &mut B) -> Result<Action> {
-        if self.execution_code.len() <= self.pc + 1 + 32 {
+        let code = self.get_code();
+        if code.len() <= self.pc + 1 + 32 {
             return Err(Error::PushOutOfBounds(self.context.contract));
         }
 
         let value = unsafe {
-            let ptr = self.execution_code.as_ptr().add(self.pc + 1);
+            let ptr = code.as_ptr().add(self.pc + 1);
             &*ptr.cast::<[u8; 32]>()
         };
 
@@ -979,15 +1036,51 @@ impl<B: Database> Machine<B> {
         let address = self.context.contract.as_bytes();
 
         match N {
-            0 => sol_log_data(&[b"LOG0", address, &[0], data]),                                                
-            1 => sol_log_data(&[b"LOG1", address, &[1], &topics[0], data]),                                    
-            2 => sol_log_data(&[b"LOG2", address, &[2], &topics[0], &topics[1], data]),                        
-            3 => sol_log_data(&[b"LOG3", address, &[3], &topics[0], &topics[1], &topics[2], data]),            
+            0 => sol_log_data(&[b"LOG0", address, &[0], data]),
+            1 => sol_log_data(&[b"LOG1", address, &[1], &topics[0], data]),
+            2 => sol_log_data(&[b"LOG2", address, &[2], &topics[0], &topics[1], data]),
+            3 => sol_log_data(&[b"LOG3", address, &[3], &topics[0], &topics[1], &topics[2], data]),
             4 => sol_log_data(&[b"LOG4", address, &[4], &topics[0], &topics[1], &topics[2], &topics[3], data]),
             _ => unreachable!(),
         }
 
         Ok(Action::Continue)
+    }
+
+    #[maybe_async]
+    pub async fn opcode_callf(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
+        let idx = code.get_u16_or_default(self.pc + 1);
+        let typ = &self
+            .container
+            .as_ref()
+            .ok_or(Error::ContainerNotFound)?
+            .types[idx as usize];
+
+        if self.stack.len() + typ.max_stack_height as usize >= 1024 {
+            return Err(Error::StackOverflow);
+        }
+
+        let ret_ctx = ReturnContext {
+            section: self.code_section,
+            pc: self.pc + 3,
+            stack_height: self.stack.len() - typ.input as usize,
+        };
+
+        self.return_stack.push(ret_ctx);
+        Ok(Action::CodeSection(idx as usize, 0))
+    }
+
+    #[maybe_async]
+    pub async fn opcode_retf(&mut self, _backend: &mut B) -> Result<Action> {
+        let ret_ctx = self.return_stack.pop().ok_or(Error::EmptyStack)?;
+
+        // If returning from top frame, exit cleanly.
+        if self.return_stack.is_empty() {
+            return Ok(Action::Stop);
+        }
+
+        Ok(Action::CodeSection(ret_ctx.section, ret_ctx.pc))
     }
 
     /// Create a new account with associated code.
@@ -1001,10 +1094,10 @@ impl<B: Database> Machine<B> {
         let offset = self.stack.pop_usize()?;
         let length = self.stack.pop_usize()?;
 
-        let created_address = {
-            let nonce = backend.nonce(&self.context.contract).await?;
-            Address::from_create(&self.context.contract, nonce)
-        };
+        let nonce = backend.nonce(&self.context.contract).await?;
+        let _initialization_code = self.memory.read(offset, length)?;
+
+        let created_address = Address::from_create(&self.context.contract, nonce);
 
         self.opcode_create_impl(created_address, value, offset, length, backend)
             .await
@@ -1022,10 +1115,9 @@ impl<B: Database> Machine<B> {
         let length = self.stack.pop_usize()?;
         let salt = *self.stack.pop_array()?;
 
-        let created_address = {
-            let initialization_code = self.memory.read(offset, length)?;
-            Address::from_create2(&self.context.contract, &salt, initialization_code)
-        };
+        let initialization_code = self.memory.read(offset, length)?;
+        let created_address =
+            Address::from_create2(&self.context.contract, &salt, initialization_code);
 
         self.opcode_create_impl(created_address, value, offset, length, backend)
             .await
@@ -1066,7 +1158,13 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        self.fork(Reason::Create, context, init_code, Buffer::empty(), None);
+        let is_caller_eof = has_eof_magic(&backend.code(&context.caller).await?);
+
+        if !is_caller_eof && has_eof_magic(&init_code) {
+            return Err(Error::EOFLegacyCode);
+        }
+
+        self.fork(Reason::Create, context, init_code, Buffer::empty(), None)?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CREATE", address.as_bytes()]);
@@ -1119,7 +1217,7 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CALL", address.as_bytes()]);
@@ -1171,7 +1269,7 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"CALLCODE", address.as_bytes()]);
@@ -1213,7 +1311,7 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         backend.snapshot();
 
         sol_log_data(&[b"ENTER", b"DELEGATECALL", address.as_bytes()]);
@@ -1253,7 +1351,7 @@ impl<B: Database> Machine<B> {
             }
         );
 
-        self.fork(Reason::Call, context, code, call_data, Some(gas_limit));
+        self.fork(Reason::Call, context, code, call_data, Some(gas_limit))?;
         self.is_static = true;
 
         backend.snapshot();
@@ -1309,6 +1407,10 @@ impl<B: Database> Machine<B> {
     ) -> Result<Action> {
         if self.reason == Reason::Create {
             let code = std::mem::take(&mut return_data);
+            if has_eof_magic(&code) {
+                let container = Container::unmarshal_binary(&code)?;
+                container.validate_container()?;
+            }
             backend.set_code(self.context.contract, code)?;
         }
 
@@ -1395,9 +1497,17 @@ impl<B: Database> Machine<B> {
     /// Invalid instruction
     #[maybe_async]
     pub async fn opcode_invalid(&mut self, _backend: &mut B) -> Result<Action> {
-        Err(Error::InvalidOpcode(
+        let code = self.get_code();
+        Err(Error::InvalidOpcode(self.context.contract, code[self.pc]))
+    }
+
+    /// Deprecated instruction
+    #[maybe_async]
+    pub async fn opcode_deprecated(&mut self, _backend: &mut B) -> Result<Action> {
+        let code = self.get_code();
+        Err(Error::DeprecatedOpcode(
             self.context.contract,
-            self.execution_code[self.pc],
+            code[self.pc],
         ))
     }
 

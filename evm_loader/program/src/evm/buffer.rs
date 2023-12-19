@@ -127,6 +127,38 @@ impl Buffer {
             0
         }
     }
+
+    #[inline]
+    #[must_use]
+    pub fn get_unchecked_at(&self, index: usize) -> u8 {
+        unsafe { self.ptr.add(index).read() }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn get_u16_or_default(&self, index: usize) -> u16 {
+        if self.len() < index + 2 {
+            return u16::default();
+        };
+
+        u16::from_be_bytes(*arrayref::array_ref![*self, index, 2])
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn get_i16_or_default(&self, index: usize) -> i16 {
+        if self.len() < index + 2 {
+            return i16::default();
+        };
+
+        i16::from_be_bytes(*arrayref::array_ref![*self, index, 2])
+    }
+}
+
+impl PartialEq for Buffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.deref().eq(&**other)
+    }
 }
 
 impl Drop for Buffer {

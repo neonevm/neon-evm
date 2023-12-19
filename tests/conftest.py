@@ -26,11 +26,15 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure():
+def get_contract_path_with_eof():
     if "RUST_LOG" in os.environ:
-        pytest.CONTRACTS_PATH = pathlib.Path("/opt/solidity")
+        return [pathlib.Path("/opt/solidity"), pathlib.Path("/opt/solidity/eof-contracts")]
     else:
-        pytest.CONTRACTS_PATH = pathlib.Path(__file__).parent / "contracts"
+        return [pathlib.Path(__file__).parent / "contracts", pathlib.Path(__file__).parent]
+
+
+def pytest_configure():
+    pytest.CONTRACTS_PATH, pytest.EOF_CONTRACTS_PATH = get_contract_path_with_eof()
 
 
 @pytest.fixture(scope="session")
@@ -45,7 +49,8 @@ def prepare_operator(key_file):
         account = Keypair.from_secret_key(secret_key)
     tx = solana_client.request_airdrop(account.public_key, 1000000 * 10 ** 9, commitment=Confirmed)
     wait_confirm_transaction(solana_client, tx.value)
-    caller_ether = eth_keys.PrivateKey(account.secret_key[:32]).public_key.to_canonical_address()
+    caller_ether = eth_keys.PrivateKey(
+        account.secret_key[:32]).public_key.to_canonical_address()
     evm_loader = EvmLoader(account)
     evm_loader.ether2program(caller_ether)
     caller, caller_nonce = evm_loader.ether2program(caller_ether)
@@ -99,6 +104,16 @@ def user_account(evm_loader) -> Caller:
     return make_new_user(evm_loader)
 
 
+@pytest.fixture(params=get_contract_path_with_eof(), ids=["regular", "eof"])
+def contract_path_with_eof(request):
+    return request.param
+
+
+@pytest.fixture(params=[False, True], ids=["regular", "eof"])
+def is_eof(request):
+    return request.param
+
+
 @pytest.fixture(scope="session")
 def session_user(evm_loader) -> Caller:
     return make_new_user(evm_loader)
@@ -133,9 +148,16 @@ def rw_lock_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_u
 
 
 @pytest.fixture(scope="function")
+def rw_lock_contract_with_eof(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
+                              treasury_pool, is_eof) -> (Contract, bool):
+    return (deploy_contract(operator_keypair, session_user, "rw_lock.binary", evm_loader, treasury_pool, is_eof=is_eof), is_eof)
+
+
+@pytest.fixture(scope="function")
 def rw_lock_caller(evm_loader: EvmLoader, operator_keypair: Keypair,
                    session_user: Caller, treasury_pool: TreasuryPool, rw_lock_contract: Contract) -> Contract:
-    constructor_args = eth_abi.encode(['address'], [rw_lock_contract.eth_address.hex()])
+    constructor_args = eth_abi.encode(
+        ['address'], [rw_lock_contract.eth_address.hex()])
     return deploy_contract(operator_keypair, session_user, "rw_lock_caller.binary", evm_loader,
                            treasury_pool, encoded_args=constructor_args)
 
@@ -144,6 +166,12 @@ def rw_lock_caller(evm_loader: EvmLoader, operator_keypair: Keypair,
 def string_setter_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
                            treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "string_setter.binary", evm_loader, treasury_pool)
+
+
+@pytest.fixture(scope="function")
+def string_setter_contract_with_eof(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
+                                    treasury_pool, is_eof) -> (Contract, bool):
+    return (deploy_contract(operator_keypair, session_user, "string_setter.binary", evm_loader, treasury_pool, is_eof=is_eof), is_eof)
 
 
 @pytest.fixture(scope="session")

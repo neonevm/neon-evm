@@ -171,12 +171,13 @@ def make_instruction_data_from_tx(instruction, private_key=None):
         if instruction['chainId'] is None:
             raise Exception("chainId value is needed in input dict")
         if private_key is None:
-            raise Exception("Needed private key for transaction creation from fields")
+            raise Exception(
+                "Needed private key for transaction creation from fields")
 
         signed_tx = w3.eth.account.sign_transaction(instruction, private_key)
         # print(signed_tx.rawTransaction.hex())
         _trx = Trx.from_string(signed_tx.rawTransaction)
-        # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))     
+        # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
 
         raw_msg = _trx.get_msg(instruction['chainId'])
         sig = keys.Signature(vrs=[1 if _trx.v % 2 == 0 else 0, _trx.r, _trx.s])
@@ -207,7 +208,8 @@ def make_instruction_data_from_tx(instruction, private_key=None):
 
 def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
     if 255 < check_instruction_index < 0:
-        raise Exception("Invalid index for instruction - {}".format(check_instruction_index))
+        raise Exception(
+            "Invalid index for instruction - {}".format(check_instruction_index))
 
     check_count = 1
     eth_address_size = 20

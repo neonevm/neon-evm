@@ -52,13 +52,13 @@ class TestTransactionStepFromInstruction:
 
     @pytest.mark.parametrize("chain_id", [None, 111])
     def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
-                             chain_id):
+                             chain_id, is_eof):
         contract_filename = "small.binary"
 
-        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=chain_id)
+        signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=chain_id, is_eof=is_eof)
         contract = create_contract_address(sender_with_tokens, evm_loader)
 
-        contract_path = pytest.CONTRACTS_PATH / contract_filename
+        contract_path = (pytest.EOF_CONTRACTS_PATH if is_eof else pytest.CONTRACTS_PATH) / contract_filename
         with open(contract_path, 'rb') as f:
             contract_code = f.read()
 
@@ -72,7 +72,8 @@ class TestTransactionStepFromInstruction:
         check_transaction_logs_have_text(resp.value, "exit_status=0x12")
 
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                          evm_loader, holder_acc, string_setter_contract):
+                                                          evm_loader, holder_acc, string_setter_contract_with_eof):
+        string_setter_contract, is_eof = string_setter_contract_with_eof
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
         signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
 
@@ -82,14 +83,15 @@ class TestTransactionStepFromInstruction:
                                                           )
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12" if is_eof else "exit_status=0x11")
 
         assert text in to_text(
             neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
                                                   "get()"))
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                       evm_loader, holder_acc, string_setter_contract):
+                                                       evm_loader, holder_acc, string_setter_contract_with_eof):
+        string_setter_contract, is_eof = string_setter_contract_with_eof
         transfer_amount = random.randint(1, 1000)
 
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
@@ -105,7 +107,7 @@ class TestTransactionStepFromInstruction:
                                                           )
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12" if is_eof else "exit_status=0x11")
 
         sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_after = get_neon_balance(solana_client, string_setter_contract.solana_address)
@@ -485,9 +487,10 @@ class TestTransactionStepFromInstructionParallelRuns:
 
 
 class TestStepFromInstructionChangingOperatorsDuringTrxRun:
-    def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, user_account, evm_loader,
+    def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract_with_eof, user_account, evm_loader,
                                                             operator_keypair, second_operator_keypair, treasury_pool,
                                                             new_holder_acc):
+        rw_lock_contract, is_eof = rw_lock_contract_with_eof
         signed_tx = make_contract_call_trx(user_account, rw_lock_contract, 'update_storage_str(string)', ['text'])
 
         send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
@@ -511,7 +514,7 @@ class TestStepFromInstructionChangingOperatorsDuringTrxRun:
                                                       new_holder_acc, signed_tx,
                                                       [user_account.solana_account_address,
                                                        rw_lock_contract.solana_address], 1, second_operator_keypair)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12" if is_eof else "exit_status=0x11")
 
 
 class TestStepFromInstructionWithChangedRLPTrx:

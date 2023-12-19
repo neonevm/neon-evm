@@ -33,13 +33,14 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY tests/contracts/*.sol /opt/
+COPY tests/eof-contracts/*.binary /opt/eof-contracts/
 COPY solidity/*.sol /opt/
 #COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --optimize --optimize-runs 200 --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
-        ls -l
+    ls -l
 
 # Define solana-image that contains utility
 FROM ${SOLANA_IMAGE} AS solana
