@@ -4,7 +4,7 @@ use ethnum::U256;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::evm::opcode_table::OPNAMES;
+use crate::evm::opcode_table::{EOF_OPNAMES, OPNAMES};
 use crate::evm::tracing::TraceConfig;
 use crate::evm::tracing::{EmulationResult, Event, EventListener};
 use crate::types::hexbytes::HexBytes;
@@ -77,7 +77,9 @@ impl StructLog {
         memory: Option<Vec<String>>,
         stack: Option<Vec<U256>>,
     ) -> Self {
-        let op = OPNAMES[opcode as usize];
+        let op = *EOF_OPNAMES
+            .get(opcode as usize)
+            .unwrap_or(&OPNAMES[opcode as usize]);
         Self {
             pc,
             op,

@@ -10,7 +10,7 @@ use ethnum::{I256, U256};
 use crate::{error::Error, types::Address};
 
 const ELEMENT_SIZE: usize = 32;
-const STACK_SIZE: usize = ELEMENT_SIZE * 128;
+pub const STACK_SIZE: usize = ELEMENT_SIZE * 128;
 
 pub struct Stack {
     begin: *mut u8,
@@ -37,6 +37,12 @@ impl Stack {
             end,
             top: begin,
         }
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        unsafe { self.top.offset_from(self.begin) as usize / ELEMENT_SIZE }
     }
 
     #[cfg(not(target_os = "solana"))]

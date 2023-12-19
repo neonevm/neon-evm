@@ -64,7 +64,8 @@ class TestExecuteTrxFromInstruction:
         assert recipient_balance_after == amount
 
     def test_call_contract_function_without_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                          evm_loader, string_setter_contract):
+                                                          evm_loader, string_setter_contract_with_eof):
+        string_setter_contract, is_eof = string_setter_contract_with_eof
         text = ''.join(random.choice(string.ascii_letters) for _ in range(10))
         signed_tx = make_contract_call_trx(sender_with_tokens, string_setter_contract, "set(string)", [text])
 
@@ -74,17 +75,17 @@ class TestExecuteTrxFromInstruction:
                                              string_setter_contract.solana_address],
                                             operator_keypair)
 
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12" if is_eof else "exit_status=0x11")
         assert text in to_text(
             neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, string_setter_contract,
                                                   "get()"))
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
-                                                       evm_loader):
+                                                       evm_loader, is_eof):
         transfer_amount = random.randint(1, 1000)
 
         contract = deploy_contract(operator_keypair, sender_with_tokens, "string_setter.binary", evm_loader,
-                                   treasury_pool)
+                                   treasury_pool, is_eof=is_eof)
 
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_before = get_neon_balance(solana_client, contract.solana_address)
@@ -100,7 +101,7 @@ class TestExecuteTrxFromInstruction:
                                              contract.solana_address],
                                             operator_keypair)
 
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value, "exit_status=0x12" if is_eof else "exit_status=0x11")
 
         assert text in to_text(neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, contract, "get()"))
 

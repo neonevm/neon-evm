@@ -110,6 +110,9 @@ pub enum Error {
     #[error("EVM encountered invalid opcode, contract = {0}, opcode = {1:X}")]
     InvalidOpcode(Address, u8),
 
+    #[error("EVM encountered deprecated opcode, contract = {0}, opcode = {1:X}")]
+    DeprecatedOpcode(Address, u8),
+
     #[error("EVM encountered unknown opcode, contract = {0}, opcode = {1:X}")]
     UnknownOpcode(Address, u8),
 
@@ -145,6 +148,99 @@ pub enum Error {
 
     #[error("Holder Account - invalid transaction hash {}, expected = {}", hex::encode(.0), hex::encode(.1))]
     HolderInvalidHash([u8; 32], [u8; 32]),
+
+    #[error("Validation: undefined instruction: op {0:X}, pos {1}")]
+    ValidationUndefinedInstruction(u8, usize),
+
+    #[error("Validation: truncated immediate: op {0:X}, pos {1}")]
+    ValidationTruncatedImmediate(u8, usize),
+
+    #[error("Validation: invalid section argument: arg {0}, last {1}, pos {2}")]
+    ValidationInvalidSectionArgument(u16, usize, usize),
+
+    #[error("Validation: invalid jump destination: offset {0}, dest {1}, pos {2}")]
+    ValidationInvalidJumpDest(i16, usize, usize),
+
+    #[error("Validation: conflicting stack height: have {0}, want {1}")]
+    ValidationConflictingStack(usize, usize),
+
+    #[error("Validation: invalid number of branches in jump table: must not be 0, pos {0}")]
+    ValidationInvalidBranchCount(usize),
+
+    #[error("Validation: invalid number of outputs: have {0}, want {1}, at pos {2}")]
+    ValidationInvalidOutputs(u8, usize, usize),
+
+    #[error("Validation: invalid max stack height: {0}: have {1}, want {2}")]
+    ValidationInvalidMaxStackHeight(usize, usize, u16),
+
+    #[error("Validation: invalid code termination: end with {0}, pos {1}")]
+    ValidationInvalidCodeTermination(u8, usize),
+
+    #[error("Validation: unreachable code")]
+    ValidationUnreachableCode,
+
+    #[error("EVM Empty stack")]
+    EmptyStack,
+
+    #[error("EVM container not found")]
+    ContainerNotFound,
+
+    #[error("EVM function metadata not found at index {0}")]
+    FunctionMetadataNotFound(usize),
+
+    #[error("Opcode not supported, opcode {0:X}")]
+    UnsupportedOpcode(u8),
+
+    #[error("Unexpected end of file")]
+    UnexpectedEndOfFile,
+
+    #[error("Invalid magic: want 0xEF00")]
+    InvalidMagic,
+
+    #[error("Invalid version: have {0}, want 1")]
+    InvalidVersion(u8),
+
+    #[error("Missing section header: found section kind {:?} instead of {:?}", .0, .1)]
+    MissingSectionHeader(u8, u8),
+
+    #[error("Invalid type section size: type section size must be divisible by 4, have {0}")]
+    InvalidTypeSizeMustBeDivisibleBy4(u16),
+
+    #[error("Invalid type section size: type section must not exceed 4*1024, have {0}")]
+    InvalidTypeSizeExceed(u16),
+
+    #[error("Invalid code header")]
+    InvalidCodeHeader,
+
+    #[error("Invalid code size: mismatch of code sections cound and type signatures, types {0}, code {1}")]
+    MismatchCodeSize(usize, usize),
+
+    #[error("Invalid code size for section {0}: size must not be 0")]
+    InvalidCodeSize(usize),
+
+    #[error("Missing header terminator: have ({:#x?})", .0)]
+    MissingTerminator(u8),
+
+    #[error("Invalid type content, too many inputs for section {0}: have {1}")]
+    TooManyInputs(u8, u8),
+
+    #[error("Invalid type content, too many outputs for section {0}: have {1}")]
+    TooManyOutputs(u8, u8),
+
+    #[error("Invalid type content, max stack height exceeds limit for section {0}: have {1}")]
+    TooLargeMaxStackHeight(u8, u8),
+
+    #[error("Invalid section 0 type, input and output should be zero: have {0}, {1}")]
+    InvalidSection0Type(u8, u8),
+
+    #[error("invalid code: EOF contract must not deploy legacy code")]
+    EOFLegacyCode,
+
+    #[error("Invalid container size: have {0}, want {1}")]
+    InvalidContainerSize(usize, usize),
+
+    #[error("Unknown section header ({:#x?})", .0)]
+    UnknownSectionHeader(u8),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

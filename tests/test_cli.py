@@ -38,9 +38,8 @@ def test_emulate_transfer(user_account, evm_loader, session_user):
     assert result['steps_executed'] == 1, f"Steps executed amount is not 1. Result: {result}"
     assert result['used_gas'] > 0, f"Used gas is less than 0. Result: {result}"
 
-
-def test_emulate_contract_deploy(user_account, evm_loader):
-    contract_path = pytest.CONTRACTS_PATH / "hello_world.binary"
+def test_emulate_contract_deploy(user_account, evm_loader, contract_path_with_eof):
+    contract_path = contract_path_with_eof / "hello_world.binary"
 
     with open(contract_path, 'rb') as f:
         contract_code = f.read()
@@ -56,8 +55,8 @@ def test_emulate_contract_deploy(user_account, evm_loader):
     assert result['used_gas'] > 0, f"Used gas is less than 0. Result: {result}"
 
 
-def test_emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool):
-    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool)
+def test_emulate_call_contract_function(user_account, evm_loader, operator_keypair, treasury_pool, is_eof):
+    contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool, is_eof=is_eof)
     assert contract.eth_address
     assert get_solana_balance(contract.solana_address) > 0
     data = abi.function_signature_to_4byte_selector('call_hello_world()')

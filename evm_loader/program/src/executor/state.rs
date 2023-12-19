@@ -322,10 +322,10 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     fn set_code(&mut self, address: Address, code: crate::evm::Buffer) -> Result<()> {
-        if code.starts_with(&[0xEF]) {
-            // https://eips.ethereum.org/EIPS/eip-3541
-            return Err(Error::EVMObjectFormatNotSupported(address));
-        }
+        // if code.starts_with(&[0xEF]) {
+        //     // https://eips.ethereum.org/EIPS/eip-3541
+        //     return Err(Error::EVMObjectFormatNotSupported(address));
+        // }
 
         if code.len() > 0x6000 {
             // https://eips.ethereum.org/EIPS/eip-170
