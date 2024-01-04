@@ -139,7 +139,7 @@ def run_tests(github_sha, neon_test_branch):
 
     exec_status = docker_client.exec_inspect(exec_id['Id'])["ExitCode"]
 
-    run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml logs dk-neon-api")
+    run_subprocess(f"docker-compose -p {project_name} -f ./ci/docker-compose-ci.yml logs neon-core-api")
 
     stop_containers(project_name)
 
