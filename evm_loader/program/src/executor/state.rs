@@ -285,14 +285,75 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     async fn code_hash(&self, from_address: Address, chain_id: u64) -> Result<[u8; 32]> {
-        use solana_program::keccak::hash;
-
+        // NOTE: The code here is extremely brittle because it tries to simulate what would happen
+        // if the actions collected so far were applied to the state. I was told that we can not
+        // maintain a copy of the state for the reduction (new_state = transaction.apply(state))
+        // because we do not have enough working memory. This code is hellish to maintain and I do
+        // not think this should be merged.
+        let mut account_code: Option<&[u8]> = None;
         for action in &self.actions {
-            if let Action::EvmSetCode { address, code, .. } = action {
-                if &from_address == address {
-                    return Ok(hash(code).to_bytes());
+            #[allow(clippy::match_same_arms)]
+            match *action {
+                Action::ExternalInstruction { .. } => {
+                    // Can not add or remove an account, or set the code for an account.
+                }
+                Action::Transfer {
+                    target,
+                    chain_id: _chain_id,
+                    ..
+                } => {
+                    // Will create the target account if it does not exist.
+                    if target == from_address {
+                        account_code = Some(&[]);
+                    }
+                }
+                Action::Burn {
+                    source,
+                    chain_id: _chain_id,
+                    value: _value,
+                } => {
+                    // Will create the source account, however the transaction will fail when the value is larger than 0.
+                    // Don't check for zero, the transaction will fail anyway and this code path will be cheaper than doing the (potentially cached) find_program_address syscall.
+                    // FIXME: Do we know if the address targetted by burn has code or not? Do we need to call backend.code_hash to determine this?
+                    if source == from_address {
+                        account_code = Some(&[]);
+                    }
+                }
+                Action::EvmSetStorage { .. } => {
+                    // FIXME: It does not seem like this can add or remove an account, not sure.
+                }
+                // Can create an account.
+                Action::EvmIncrementNonce {
+                    address,
+                    chain_id: _chain_id,
+                } => {
+                    // Can create an account
+                    // FIXME: Do we know if the address targetted by burn has code or not? Do we need to call backend.code_hash to determine this?
+                    if address == from_address {
+                        account_code = Some(&[]);
+                    }
+                }
+                // Can create an account and set the code.
+                Action::EvmSetCode {
+                    address,
+                    chain_id: _chain_id,
+                    ref code,
+                } => {
+                    if address == from_address {
+                        account_code = Some(code);
+                    }
+                }
+                Action::EvmSelfDestruct { address } => {
+                    // FIXME: Can accounts be deleted and should that affect the code hash? Probably
+                    if address == from_address {
+                        account_code = None;
+                    }
                 }
             }
+        }
+
+        if let Some(account_code) = account_code {
+            return Ok(solana_program::keccak::hash(account_code).to_bytes());
         }
 
         Ok(self.backend.code_hash(from_address, chain_id).await)
