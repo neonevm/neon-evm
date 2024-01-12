@@ -226,8 +226,8 @@ impl<'de> serde::Deserialize<'de> for Buffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use crate::executor::OwnedAccountInfo;
+    use solana_program::account_info::IntoAccountInfo;
 
     macro_rules! assert_slice_ptr_eq {
         ($actual:expr, $expected:expr) => {{
@@ -252,17 +252,6 @@ mod tests {
         assert_slice_ptr_eq!(&*Buffer::from_vec(data), expected);
     }
 
-    struct OwnedAccountInfo {
-        key: Pubkey,
-        lamports: u64,
-        data: Vec<u8>,
-        owner: Pubkey,
-        rent_epoch: u64,
-        is_signer: bool,
-        is_writable: bool,
-        executable: bool,
-    }
-
     impl OwnedAccountInfo {
         fn with_data(data: Vec<u8>) -> Self {
             OwnedAccountInfo {
@@ -276,19 +265,6 @@ mod tests {
                 executable: false,
             }
         }
-
-        fn as_mut(&mut self) -> AccountInfo<'_> {
-            AccountInfo {
-                key: &self.key,
-                lamports: Rc::new(RefCell::new(&mut self.lamports)),
-                data: Rc::new(RefCell::new(&mut self.data)),
-                owner: &self.owner,
-                rent_epoch: self.rent_epoch,
-                is_signer: self.is_signer,
-                is_writable: self.is_writable,
-                executable: self.executable,
-            }
-        }
     }
 
     #[test]
@@ -297,7 +273,7 @@ mod tests {
         let expected = (data.as_ptr(), data.len());
         let mut account_info = OwnedAccountInfo::with_data(data);
         assert_slice_ptr_eq!(
-            &*unsafe { Buffer::from_account(&account_info.as_mut(), 0..expected.1) },
+            &*unsafe { Buffer::from_account(&account_info.into_account_info(), 0..expected.1) },
             expected
         );
     }
@@ -308,7 +284,7 @@ mod tests {
         let expected = (data.as_ptr(), data.len());
         let mut account_info = OwnedAccountInfo::with_data(data);
         assert_slice_ptr_eq!(
-            &*unsafe { Buffer::from_account(&account_info.as_mut(), 0..expected.1) },
+            &*unsafe { Buffer::from_account(&account_info.into_account_info(), 0..expected.1) },
             expected
         );
     }
