@@ -1,7 +1,7 @@
 use std::cell::{Ref, RefMut};
 use std::mem::size_of;
 
-use crate::config::{GAS_LIMIT_MULTIPLIER_NO_CHAINID, OPERATOR_PRIORITY_SLOTS};
+use crate::config::GAS_LIMIT_MULTIPLIER_NO_CHAINID;
 use crate::error::{Error, Result};
 use crate::types::{Address, Transaction};
 use ethnum::U256;
@@ -144,7 +144,7 @@ impl<'a> StateAccount<'a> {
             }
         }
 
-        state.update_priority_operator(&accounts.operator)?;
+        state.update_current_operator(&accounts.operator);
 
         Ok(state)
     }
@@ -270,20 +270,9 @@ impl<'a> StateAccount<'a> {
         Ok(())
     }
 
-    fn update_priority_operator(&mut self, operator: &Operator) -> Result<()> {
+    fn update_current_operator(&mut self, operator: &Operator) {
         let mut header = self.header_mut();
-
-        if operator.key != &header.operator {
-            let clock = Clock::get()?;
-            if (clock.slot - header.slot) <= OPERATOR_PRIORITY_SLOTS {
-                return Err(Error::HolderInvalidOwner(header.owner, *operator.key));
-            }
-
-            header.operator = *operator.key;
-            header.slot = clock.slot;
-        }
-
-        Ok(())
+        header.operator = *operator.key;
     }
 
     #[must_use]

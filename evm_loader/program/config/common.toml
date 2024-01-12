@@ -1,6 +1,5 @@
 account_seed_version = [3, "u8"]
 payment_to_treasure = 5000
-operator_priority_slots = 16
 holder_msg_size = 950
 evm_steps_min = 500
 evm_steps_last_iteration_max = 1
