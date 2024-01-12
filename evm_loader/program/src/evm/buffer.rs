@@ -1,15 +1,9 @@
-use std::{
-    ops::{Deref, Range},
-    ptr::NonNull,
-};
+use std::ops::{Deref, Range};
 
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 enum Inner {
-    Empty,
-    Owned {
-        data: Vec<u8>,
-    },
+    Owned(Vec<u8>),
     Account {
         key: Pubkey,
         range: Range<usize>,
@@ -22,6 +16,8 @@ enum Inner {
 }
 
 pub struct Buffer {
+    // We maintain a ptr and len to be able to construct a slice without having to discriminate
+    // inner. This means we should not allow mutation of inner after the construction of a buffer.
     ptr: *const u8,
     len: usize,
     inner: Inner,
@@ -30,8 +26,7 @@ pub struct Buffer {
 impl Buffer {
     fn new(inner: Inner) -> Self {
         let (ptr, len) = match &inner {
-            Inner::Empty => (NonNull::dangling().as_ptr() as *const _, 0),
-            Inner::Owned { data } => (data.as_ptr(), data.len()),
+            Inner::Owned(data) => (data.as_ptr(), data.len()),
             Inner::Account { data, range, .. } => {
                 let ptr = unsafe { data.add(range.start) };
                 (ptr, range.len())
@@ -65,12 +60,7 @@ impl Buffer {
 
     #[must_use]
     pub fn from_vec(v: Vec<u8>) -> Self {
-        if v.is_empty() {
-            return Self::empty();
-        }
-
-        let inner = Inner::Owned { data: v };
-        Self::new(inner)
+        Self::new(Inner::Owned(v))
     }
 
     #[must_use]
@@ -80,7 +70,7 @@ impl Buffer {
 
     #[must_use]
     pub fn empty() -> Self {
-        Buffer::new(Inner::Empty)
+        Buffer::new(Inner::Owned(Vec::default()))
     }
 
     #[must_use]
@@ -125,7 +115,6 @@ impl Clone for Buffer {
     #[inline]
     fn clone(&self) -> Self {
         match &self.inner {
-            Inner::Empty => Self::empty(),
             Inner::Owned { .. } => Self::from_slice(self),
             Inner::Account { key, data, range } => Self::new(Inner::Account {
                 key: *key,
@@ -154,8 +143,7 @@ impl serde::Serialize for Buffer {
         use serde::ser::SerializeStructVariant;
 
         match &self.inner {
-            Inner::Empty => serializer.serialize_unit_variant("evm_buffer", 0, "empty"),
-            Inner::Owned { data } => {
+            Inner::Owned(data) => {
                 let bytes = serde_bytes::Bytes::new(data);
                 serializer.serialize_newtype_variant("evm_buffer", 1, "owned", bytes)
             }
@@ -221,17 +209,116 @@ impl<'de> serde::Deserialize<'de> for Buffer {
 
                 let (index, variant) = data.variant::<u32>()?;
                 match index {
-                    0 => variant.unit_variant().map(|_| Buffer::empty()),
                     1 => variant.newtype_variant().map(Buffer::from_slice),
                     2 => variant.struct_variant(&["key", "range"], self),
                     _ => Err(serde::de::Error::unknown_variant(
                         "_",
-                        &["empty", "owned", "account"],
+                        &["owned", "account"],
                     )),
                 }
             }
         }
 
-        deserializer.deserialize_enum("evm_buffer", &["empty", "owned", "account"], BufferVisitor)
+        deserializer.deserialize_enum("evm_buffer", &["owned", "account"], BufferVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    macro_rules! assert_slice_ptr_eq {
+        ($actual:expr, $expected:expr) => {{
+            let actual: &[_] = $actual;
+            let (expected_ptr, expected_len): (*const _, usize) = $expected;
+            assert_eq!(actual.as_ptr(), expected_ptr);
+            assert_eq!(actual.len(), expected_len);
+        }};
+    }
+
+    #[test]
+    fn test_deref_owned_empty() {
+        let data = Vec::default();
+        let expected = (data.as_ptr(), data.len());
+        assert_slice_ptr_eq!(&*Buffer::default(), expected);
+    }
+
+    #[test]
+    fn test_deref_owned_non_empty() {
+        let data = vec![1];
+        let expected = (data.as_ptr(), data.len());
+        assert_slice_ptr_eq!(&*Buffer::from_vec(data), expected);
+    }
+
+    struct OwnedAccountInfo {
+        key: Pubkey,
+        lamports: u64,
+        data: Vec<u8>,
+        owner: Pubkey,
+        rent_epoch: u64,
+        is_signer: bool,
+        is_writable: bool,
+        executable: bool,
+    }
+
+    impl OwnedAccountInfo {
+        fn with_data(data: Vec<u8>) -> Self {
+            OwnedAccountInfo {
+                key: Pubkey::default(),
+                lamports: 0,
+                data,
+                owner: Pubkey::default(),
+                rent_epoch: 0,
+                is_signer: false,
+                is_writable: false,
+                executable: false,
+            }
+        }
+
+        fn as_mut(&mut self) -> AccountInfo<'_> {
+            AccountInfo {
+                key: &self.key,
+                lamports: Rc::new(RefCell::new(&mut self.lamports)),
+                data: Rc::new(RefCell::new(&mut self.data)),
+                owner: &self.owner,
+                rent_epoch: self.rent_epoch,
+                is_signer: self.is_signer,
+                is_writable: self.is_writable,
+                executable: self.executable,
+            }
+        }
+    }
+
+    #[test]
+    fn test_deref_account_empty() {
+        let data = Vec::default();
+        let expected = (data.as_ptr(), data.len());
+        let mut account_info = OwnedAccountInfo::with_data(data);
+        assert_slice_ptr_eq!(
+            &*unsafe { Buffer::from_account(&account_info.as_mut(), 0..expected.1) },
+            expected
+        );
+    }
+
+    #[test]
+    fn test_deref_account_non_empty() {
+        let data = vec![1];
+        let expected = (data.as_ptr(), data.len());
+        let mut account_info = OwnedAccountInfo::with_data(data);
+        assert_slice_ptr_eq!(
+            &*unsafe { Buffer::from_account(&account_info.as_mut(), 0..expected.1) },
+            expected
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: !self.ptr.is_null()")]
+    fn test_deref_account_uninit() {
+        let _: &[u8] = &Buffer::new(Inner::AccountUninit {
+            key: Pubkey::default(),
+            range: 0..0,
+        });
     }
 }
