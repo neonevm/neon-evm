@@ -2,6 +2,7 @@ use std::ops::{Deref, Range};
 
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
+#[cfg_attr(test, derive(Debug, PartialEq))]
 enum Inner {
     Owned(Vec<u8>),
     Account {
@@ -15,12 +16,20 @@ enum Inner {
     },
 }
 
+#[cfg_attr(test, derive(Debug))]
 pub struct Buffer {
     // We maintain a ptr and len to be able to construct a slice without having to discriminate
     // inner. This means we should not allow mutation of inner after the construction of a buffer.
     ptr: *const u8,
     len: usize,
     inner: Inner,
+}
+
+#[cfg(test)]
+impl core::cmp::PartialEq for Buffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
 }
 
 impl Buffer {
@@ -209,6 +218,7 @@ impl<'de> serde::Deserialize<'de> for Buffer {
 
                 let (index, variant) = data.variant::<u32>()?;
                 match index {
+                    0 => variant.unit_variant().map(|()| Buffer::empty()),
                     1 => variant.newtype_variant().map(Buffer::from_slice),
                     2 => variant.struct_variant(&["key", "range"], self),
                     _ => Err(serde::de::Error::unknown_variant(
@@ -296,5 +306,96 @@ mod tests {
             key: Pubkey::default(),
             range: 0..0,
         });
+    }
+
+    #[test]
+    fn historic_empty_deserialization_works() {
+        let serialized = [
+            0, 0, 0, 0, // Variant
+        ];
+        let deserialized = Buffer::empty();
+        assert_eq!(
+            bincode::deserialize::<Buffer>(&serialized).unwrap(),
+            deserialized
+        );
+    }
+
+    #[test]
+    fn non_empty_owned_serialization_works() {
+        let deserialized = Buffer::from_vec(vec![0xcc; 3]);
+        let serialized = [
+            1, 0, 0, 0, // Variant
+            3, 0, 0, 0, 0, 0, 0, 0, // Byte count
+            0xcc, 0xcc, 0xcc, // Bytes
+        ];
+        assert_eq!(bincode::serialize(&deserialized).unwrap(), serialized);
+    }
+
+    #[test]
+    fn non_empty_owned_deserialization_works() {
+        let serialized = [
+            1, 0, 0, 0, // Variant
+            3, 0, 0, 0, 0, 0, 0, 0, // Byte count
+            0xcc, 0xcc, 0xcc, // Bytes
+        ];
+        let deserialized = Buffer::from_vec(vec![0xcc; 3]);
+        assert_eq!(
+            bincode::deserialize::<Buffer>(&serialized).unwrap(),
+            deserialized
+        );
+    }
+
+    #[test]
+    fn non_empty_account_serialization_works() {
+        let mut account = OwnedAccountInfo {
+            key: Pubkey::from([0xaa; 32]),
+            is_signer: false,
+            is_writable: false,
+            lamports: 0,
+            data: vec![0xcc; 10],
+            owner: Pubkey::from([0xbb; 32]),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let deserialized = unsafe { Buffer::from_account(&account.into_account_info(), 6..8) };
+        let serialized = [
+            2, 0, 0, 0, // Variant
+            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+            0xaa, 0xaa, 0xaa, 0xaa, // Pubkey
+            6, 0, 0, 0, 0, 0, 0, 0, // Range start
+            8, 0, 0, 0, 0, 0, 0, 0, // Range end
+        ];
+        assert_eq!(bincode::serialize(&deserialized).unwrap(), serialized);
+    }
+
+    #[test]
+    fn non_empty_account_deserialization_works() {
+        let serialized = [
+            2, 0, 0, 0, // Variant
+            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+            0xaa, 0xaa, 0xaa, 0xaa, // Pubkey
+            6, 0, 0, 0, 0, 0, 0, 0, // Range start
+            8, 0, 0, 0, 0, 0, 0, 0, // Range end
+        ];
+        let deserialized = Buffer::new(Inner::AccountUninit {
+            key: Pubkey::from([0xaa; 32]),
+            range: 6..8,
+        });
+        assert_eq!(
+            bincode::deserialize::<Buffer>(&serialized).unwrap(),
+            deserialized
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "unreachable")]
+    fn account_uninit_serialization_fails() {
+        let _: Vec<u8> = bincode::serialize(&Buffer::new(Inner::AccountUninit {
+            key: Pubkey::default(),
+            range: 0..0,
+        }))
+        .unwrap();
     }
 }
