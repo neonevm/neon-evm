@@ -3,7 +3,6 @@ mod validator_client;
 
 pub use db_call_client::CallDbClient;
 pub use validator_client::CloneRpcClient;
-pub use validator_client::SolanaRpc;
 
 use crate::commands::get_config::{BuildConfigSimulator, ConfigSimulator};
 use crate::{NeonError, NeonResult};

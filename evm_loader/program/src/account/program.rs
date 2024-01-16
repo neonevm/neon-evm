@@ -7,29 +7,6 @@ use solana_program::{rent::Rent, system_instruction, sysvar::Sysvar};
 use std::convert::From;
 use std::ops::Deref;
 
-pub struct Neon<'a>(&'a AccountInfo<'a>);
-
-impl<'a> Neon<'a> {
-    pub fn from_account(
-        program_id: &Pubkey,
-        info: &'a AccountInfo<'a>,
-    ) -> Result<Self, ProgramError> {
-        if program_id != info.key {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not Neon program", info.key);
-        }
-
-        Ok(Self(info))
-    }
-}
-
-impl<'a> Deref for Neon<'a> {
-    type Target = AccountInfo<'a>;
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
-
 pub struct System<'a>(&'a AccountInfo<'a>);
 
 impl<'a> From<&System<'a>> for &'a AccountInfo<'a> {

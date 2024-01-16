@@ -3,10 +3,6 @@ use solana_sdk::{program_error::ProgramError, program_stubs::SyscallStubs, sysva
 
 use crate::{errors::NeonError, rpc::Rpc};
 
-pub struct DefaultStubs;
-
-impl SyscallStubs for DefaultStubs {}
-
 pub struct EmulatorStubs {
     rent: Rent,
 }
