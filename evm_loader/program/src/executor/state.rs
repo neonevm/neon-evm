@@ -284,20 +284,6 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         Ok(self.backend.code_size(from_address).await)
     }
 
-    async fn code_hash(&self, from_address: Address, chain_id: u64) -> Result<[u8; 32]> {
-        use solana_program::keccak::hash;
-
-        for action in &self.actions {
-            if let Action::EvmSetCode { address, code, .. } = action {
-                if &from_address == address {
-                    return Ok(hash(code).to_bytes());
-                }
-            }
-        }
-
-        Ok(self.backend.code_hash(from_address, chain_id).await)
-    }
-
     async fn code(&self, from_address: Address) -> Result<crate::evm::Buffer> {
         for action in &self.actions {
             if let Action::EvmSetCode { address, code, .. } = action {

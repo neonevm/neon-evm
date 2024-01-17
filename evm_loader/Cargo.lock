@@ -1890,6 +1890,7 @@ dependencies = [
  "spl-token 3.5.0",
  "static_assertions",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

@@ -623,27 +623,6 @@ impl<T: Rpc> AccountStorage for EmulatorAccountStorage<'_, T> {
         address.find_solana_address(self.program_id())
     }
 
-    async fn code_hash(&self, address: Address, chain_id: u64) -> [u8; 32] {
-        use solana_sdk::keccak::hash;
-
-        info!("code_hash {address} {chain_id}");
-
-        let code = self.code(address).await.to_vec();
-        if !code.is_empty() {
-            return hash(&code).to_bytes();
-        }
-
-        // https://eips.ethereum.org/EIPS/eip-1052
-        // https://eips.ethereum.org/EIPS/eip-161
-        if (self.balance(address, chain_id).await == 0)
-            && (self.nonce(address, chain_id).await == 0)
-        {
-            return <[u8; 32]>::default();
-        }
-
-        hash(&[]).to_bytes()
-    }
-
     async fn code_size(&self, address: Address) -> usize {
         info!("code_size {address}");
 

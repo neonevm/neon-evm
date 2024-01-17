@@ -58,8 +58,6 @@ pub trait AccountStorage {
     /// Get contract solana address
     fn contract_pubkey(&self, address: Address) -> (Pubkey, u8);
 
-    /// Get code hash
-    async fn code_hash(&self, address: Address, chain_id: u64) -> [u8; 32];
     /// Get code size
     async fn code_size(&self, address: Address) -> usize;
     /// Get code data

@@ -62,6 +62,9 @@ async-trait = { version = "0.1.73", optional = true }
 version = "0.2.7"
 features = ["is_sync"]
 
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+
 [lib]
 crate-type = ["cdylib", "lib"]
 

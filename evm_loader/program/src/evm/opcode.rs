@@ -3,7 +3,10 @@ use ethnum::{I256, U256};
 use maybe_async::maybe_async;
 use solana_program::log::sol_log_data;
 
-use super::{database::Database, tracing_event, Context, Machine, Reason};
+use super::{
+    database::{Database, DatabaseExt},
+    tracing_event, Context, Machine, Reason,
+};
 use crate::{
     error::{Error, Result},
     evm::{trace_end_step, Buffer},
