@@ -229,6 +229,9 @@ operators_whitelist = [
     "AuikYUkrP9bRCxPq99YpEkFCgWLS9KM2oe3sCPkTCEwr",
     "AyEE2tf4AezMxtBYXoWgoK1PwMDMsPfDahQRtZvU8BLc",
     "B5Gefd2yR3nBi4eFDtp3grmVsRq6sw4UYmGVZG6vrda3",
+    "7P1VpfLJNo1rMJbHmz2P6U34ygkRM5UNogknFUXP2b1k",
+    "8HzCjhBNP3rs7SydUrZAiQGEoqXHNtpNPE475zzHmzba",
+    "CRJ7MFYvMjXysVDkifFmiS8jmpDMS5qZRwyu3EN3Rfav",
 ]
 
 [chain.neon]
