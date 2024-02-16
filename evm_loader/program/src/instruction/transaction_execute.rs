@@ -3,6 +3,7 @@ use solana_program::pubkey::Pubkey;
 use crate::account::{AccountsDB, AllocateResult};
 use crate::account_storage::ProgramAccountStorage;
 use crate::error::{Error, Result};
+use crate::evm::tracing::NoopEventListener;
 use crate::evm::Machine;
 use crate::executor::ExecutorState;
 use crate::gasometer::Gasometer;
@@ -38,8 +39,8 @@ pub fn execute(
     let (exit_reason, apply_state) = {
         let mut backend = ExecutorState::new(&account_storage);
 
-        let mut evm = Machine::new(trx, origin, &mut backend)?;
-        let (result, _) = evm.execute(u64::MAX, &mut backend)?;
+        let mut evm = Machine::new(trx, origin, &mut backend, None::<NoopEventListener>)?;
+        let (result, _, _) = evm.execute(u64::MAX, &mut backend)?;
 
         let actions = backend.into_actions();
 

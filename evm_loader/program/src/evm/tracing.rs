@@ -1,19 +1,16 @@
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::rc::Rc;
-
-use ethnum::U256;
-use serde_json::Value;
-
 use super::{Context, ExitStatus};
+use crate::evm::database::Database;
+use ethnum::U256;
 
-pub trait EventListener: Debug {
-    fn event(&mut self, event: Event);
-    fn into_traces(self: Box<Self>) -> Value;
+pub struct NoopEventListener;
+
+pub trait EventListener {
+    fn event(&mut self, executor_state: &impl Database, event: Event);
 }
 
-pub type TracerType = Rc<RefCell<Box<dyn EventListener>>>;
-pub type TracerTypeOpt = Option<TracerType>;
+impl EventListener for NoopEventListener {
+    fn event(&mut self, _executor_state: &impl Database, _event: Event) {}
+}
 
 /// Trace event
 pub enum Event {

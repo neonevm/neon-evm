@@ -2,13 +2,14 @@ use crate::account::{AccountsDB, AllocateResult, StateAccount};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::{EVM_STEPS_LAST_ITERATION_MAX, EVM_STEPS_MIN};
 use crate::error::{Error, Result};
+use crate::evm::tracing::NoopEventListener;
 use crate::evm::{ExitStatus, Machine};
 use crate::executor::{Action, ExecutorState};
 use crate::gasometer::Gasometer;
 use crate::types::{Address, Transaction};
 
 type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
-type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>>;
+type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>, NoopEventListener>;
 
 pub fn do_begin<'a>(
     accounts: AccountsDB<'a>,
@@ -22,7 +23,7 @@ pub fn do_begin<'a>(
     let accounts = ProgramAccountStorage::new(accounts)?;
 
     let mut backend = ExecutorState::new(&accounts);
-    let evm = Machine::new(trx, origin, &mut backend)?;
+    let evm = Machine::new(trx, origin, &mut backend, None::<NoopEventListener>)?;
 
     // Burn `gas_limit` tokens from the origin account
     // Later we will mint them to the operator
@@ -50,9 +51,9 @@ pub fn do_continue<'a>(
     let account_storage = ProgramAccountStorage::new(accounts)?;
     let (mut backend, mut evm) = deserialize_evm_state(&storage, &account_storage)?;
 
-    let (result, steps_executed) = {
+    let (result, steps_executed, _) = {
         match backend.exit_status() {
-            Some(status) => (status.clone(), 0_u64),
+            Some(status) => (status.clone(), 0_u64, None),
             None => evm.execute(step_count, &mut backend)?,
         }
     };

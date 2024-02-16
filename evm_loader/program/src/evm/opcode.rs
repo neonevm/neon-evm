@@ -7,6 +7,7 @@ use super::{
     database::{Database, DatabaseExt},
     tracing_event, Context, Machine, Reason,
 };
+use crate::evm::tracing::EventListener;
 use crate::{
     error::{Error, Result},
     evm::{trace_end_step, Buffer},
@@ -25,7 +26,7 @@ pub enum Action {
 }
 
 #[allow(clippy::unused_async)]
-impl<B: Database> Machine<B> {
+impl<B: Database, T: EventListener> Machine<B, T> {
     /// Unknown instruction
     #[maybe_async]
     pub async fn opcode_unknown(&mut self, _backend: &mut B) -> Result<Action> {
@@ -799,7 +800,11 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = backend.storage(self.context.contract, index).await?;
 
-        tracing_event!(self, super::tracing::Event::StorageAccess { index, value });
+        tracing_event!(
+            self,
+            backend,
+            super::tracing::Event::StorageAccess { index, value }
+        );
 
         self.stack.push_array(&value)?;
 
@@ -816,7 +821,11 @@ impl<B: Database> Machine<B> {
         let index = self.stack.pop_u256()?;
         let value = *self.stack.pop_array()?;
 
-        tracing_event!(self, super::tracing::Event::StorageAccess { index, value });
+        tracing_event!(
+            self,
+            backend,
+            super::tracing::Event::StorageAccess { index, value }
+        );
 
         backend.set_storage(self.context.contract, index, value)?;
 
@@ -1073,6 +1082,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::BeginVM {
                 context,
                 code: init_code.to_vec()
@@ -1133,6 +1143,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::BeginVM {
                 context,
                 code: code.to_vec()
@@ -1188,6 +1199,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::BeginVM {
                 context,
                 code: code.to_vec()
@@ -1241,6 +1253,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::BeginVM {
                 context,
                 code: code.to_vec()
@@ -1290,6 +1303,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::BeginVM {
                 context,
                 code: code.to_vec()
@@ -1367,9 +1381,10 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Return(return_data));
         }
 
-        trace_end_step!(self, Some(return_data.clone()));
+        trace_end_step!(self, backend, Some(return_data.clone()));
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::EndVM {
                 status: super::ExitStatus::Return(return_data.clone())
             }
@@ -1416,9 +1431,10 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Revert(return_data));
         }
 
-        trace_end_step!(self, Some(return_data.clone()));
+        trace_end_step!(self, backend, Some(return_data.clone()));
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::EndVM {
                 status: super::ExitStatus::Revert(return_data.clone())
             }
@@ -1472,9 +1488,10 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Suicide);
         }
 
-        trace_end_step!(self, None);
+        trace_end_step!(self, backend, None);
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::EndVM {
                 status: super::ExitStatus::Suicide
             }
@@ -1504,9 +1521,10 @@ impl<B: Database> Machine<B> {
             return Ok(Action::Stop);
         }
 
-        trace_end_step!(self, None);
+        trace_end_step!(self, backend, None);
         tracing_event!(
             self,
+            backend,
             super::tracing::Event::EndVM {
                 status: super::ExitStatus::Stop
             }

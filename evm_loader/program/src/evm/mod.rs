@@ -11,8 +11,9 @@ use solana_program::log::sol_log_data;
 
 pub use buffer::Buffer;
 
-#[cfg(not(target_os = "solana"))]
-use crate::evm::tracing::TracerTypeOpt;
+use crate::evm::tracing::EventListener;
+#[cfg(target_os = "solana")]
+use crate::evm::tracing::NoopEventListener;
 use crate::{
     error::{build_revert_message, Error, Result},
     evm::{opcode::Action, precompile::is_precompile_address},
@@ -28,43 +29,43 @@ mod opcode;
 pub mod opcode_table;
 mod precompile;
 mod stack;
-#[cfg(not(target_os = "solana"))]
 pub mod tracing;
 mod utils;
 
 macro_rules! tracing_event {
-    ($self:ident, $x:expr) => {
+    ($self:ident, $backend:ident, $x:expr) => {
         #[cfg(not(target_os = "solana"))]
-        if let Some(tracer) = &$self.tracer {
-            tracer.borrow_mut().event($x);
+        if let Some(tracer) = &mut $self.tracer {
+            tracer.event($backend, $x);
         }
     };
-    ($self:ident, $condition:expr, $x:expr) => {
+    ($self:ident, $backend:ident, $condition:expr, $x:expr) => {
         #[cfg(not(target_os = "solana"))]
-        if let Some(tracer) = &$self.tracer {
+        if let Some(tracer) = &mut $self.tracer {
             if $condition {
-                tracer.borrow_mut().event($x);
+                tracer.event($backend, $x);
             }
         }
     };
 }
 
 macro_rules! trace_end_step {
-    ($self:ident, $return_data:expr) => {
+    ($self:ident, $backend:ident, $return_data:expr) => {
         #[cfg(not(target_os = "solana"))]
-        if let Some(tracer) = &$self.tracer {
-            tracer
-                .borrow_mut()
-                .event(crate::evm::tracing::Event::EndStep {
+        if let Some(tracer) = &mut $self.tracer {
+            tracer.event(
+                $backend,
+                crate::evm::tracing::Event::EndStep {
                     gas_used: 0_u64,
                     return_data: $return_data,
-                })
+                },
+            )
         }
     };
-    ($self:ident, $condition:expr; $return_data_getter:expr) => {
+    ($self:ident, $backend:ident, $condition:expr; $return_data_getter:expr) => {
         #[cfg(not(target_os = "solana"))]
         if $condition {
-            trace_end_step!($self, $return_data_getter)
+            trace_end_step!($self, $backend, $return_data_getter)
         }
     };
 }
@@ -134,7 +135,7 @@ pub struct Context {
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "B: Database")]
-pub struct Machine<B: Database> {
+pub struct Machine<B: Database, T: EventListener> {
     origin: Address,
     chain_id: u64,
     context: Context,
@@ -161,12 +162,12 @@ pub struct Machine<B: Database> {
     #[serde(skip)]
     phantom: PhantomData<*const B>,
 
-    #[cfg(not(target_os = "solana"))]
     #[serde(skip)]
-    tracer: TracerTypeOpt,
+    tracer: Option<T>,
 }
 
-impl<B: Database> Machine<B> {
+#[cfg(target_os = "solana")]
+impl<B: Database> Machine<B, NoopEventListener> {
     pub fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize> {
         let mut cursor = std::io::Cursor::new(buffer);
 
@@ -175,7 +176,6 @@ impl<B: Database> Machine<B> {
         cursor.position().try_into().map_err(Error::from)
     }
 
-    #[cfg(target_os = "solana")]
     pub fn deserialize_from(buffer: &[u8], backend: &B) -> Result<Self> {
         fn reinit_buffer<B: Database>(buffer: &mut Buffer, backend: &B) {
             if let Some((key, range)) = buffer.uninit_data() {
@@ -184,7 +184,10 @@ impl<B: Database> Machine<B> {
             }
         }
 
-        fn reinit_machine<B: Database>(mut machine: &mut Machine<B>, backend: &B) {
+        fn reinit_machine<B: Database>(
+            mut machine: &mut Machine<B, NoopEventListener>,
+            backend: &B,
+        ) {
             loop {
                 reinit_buffer(&mut machine.call_data, backend);
                 reinit_buffer(&mut machine.execution_code, backend);
@@ -202,13 +205,15 @@ impl<B: Database> Machine<B> {
 
         Ok(evm)
     }
+}
 
+impl<B: Database, T: EventListener> Machine<B, T> {
     #[maybe_async]
     pub async fn new(
         trx: Transaction,
         origin: Address,
         backend: &mut B,
-        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
+        tracer: Option<T>,
     ) -> Result<Self> {
         let trx_chain_id = trx.chain_id().unwrap_or_else(|| backend.default_chain_id());
 
@@ -241,25 +246,9 @@ impl<B: Database> Machine<B> {
         // }
 
         if trx.target().is_some() {
-            Self::new_call(
-                trx_chain_id,
-                trx,
-                origin,
-                backend,
-                #[cfg(not(target_os = "solana"))]
-                tracer,
-            )
-            .await
+            Self::new_call(trx_chain_id, trx, origin, backend, tracer).await
         } else {
-            Self::new_create(
-                trx_chain_id,
-                trx,
-                origin,
-                backend,
-                #[cfg(not(target_os = "solana"))]
-                tracer,
-            )
-            .await
+            Self::new_create(trx_chain_id, trx, origin, backend, tracer).await
         }
     }
 
@@ -269,7 +258,7 @@ impl<B: Database> Machine<B> {
         trx: Transaction,
         origin: Address,
         backend: &mut B,
-        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
+        tracer: Option<T>,
     ) -> Result<Self> {
         assert!(trx.target().is_some());
 
@@ -308,7 +297,6 @@ impl<B: Database> Machine<B> {
             reason: Reason::Call,
             parent: None,
             phantom: PhantomData,
-            #[cfg(not(target_os = "solana"))]
             tracer,
         })
     }
@@ -319,7 +307,7 @@ impl<B: Database> Machine<B> {
         trx: Transaction,
         origin: Address,
         backend: &mut B,
-        #[cfg(not(target_os = "solana"))] tracer: TracerTypeOpt,
+        tracer: Option<T>,
     ) -> Result<Self> {
         assert!(trx.target().is_none());
 
@@ -362,13 +350,16 @@ impl<B: Database> Machine<B> {
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,
-            #[cfg(not(target_os = "solana"))]
             tracer,
         })
     }
 
     #[maybe_async]
-    pub async fn execute(&mut self, step_limit: u64, backend: &mut B) -> Result<(ExitStatus, u64)> {
+    pub async fn execute(
+        &mut self,
+        step_limit: u64,
+        backend: &mut B,
+    ) -> Result<(ExitStatus, u64, Option<T>)> {
         assert!(self.execution_code.is_initialized());
         assert!(self.call_data.is_initialized());
         assert!(self.return_data.is_initialized());
@@ -377,6 +368,7 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             tracing::Event::BeginVM {
                 context: self.context,
                 code: self.execution_code.to_vec()
@@ -399,6 +391,7 @@ impl<B: Database> Machine<B> {
 
                 tracing_event!(
                     self,
+                    backend,
                     tracing::Event::BeginStep {
                         opcode,
                         pc: self.pc,
@@ -415,7 +408,7 @@ impl<B: Database> Machine<B> {
                     }
                 };
 
-                trace_end_step!(self, opcode_result != Action::Noop; match &opcode_result {
+                trace_end_step!(self, backend, opcode_result != Action::Noop; match &opcode_result {
                     Action::Return(value) | Action::Revert(value) => Some(value.clone()),
                     _ => None,
                 });
@@ -434,12 +427,13 @@ impl<B: Database> Machine<B> {
 
         tracing_event!(
             self,
+            backend,
             tracing::Event::EndVM {
                 status: status.clone()
             }
         );
 
-        Ok((status, step))
+        Ok((status, step, self.tracer.take()))
     }
 
     fn fork(
@@ -468,8 +462,7 @@ impl<B: Database> Machine<B> {
             reason,
             parent: None,
             phantom: PhantomData,
-            #[cfg(not(target_os = "solana"))]
-            tracer: self.tracer.clone(),
+            tracer: self.tracer.take(),
         };
 
         core::mem::swap(self, &mut other);
@@ -481,6 +474,8 @@ impl<B: Database> Machine<B> {
 
         let mut other = *self.parent.take().unwrap();
         core::mem::swap(self, &mut other);
+
+        self.tracer = other.tracer.take();
 
         other
     }

@@ -29,6 +29,7 @@ use crate::build_info::get_build_info;
 use evm_loader::types::Address;
 use neon_lib::errors::NeonError;
 use neon_lib::rpc::{CallDbClient, RpcEnum};
+use neon_lib::tracing::tracers::TracerTypeEnum;
 use neon_lib::types::TracerDb;
 use solana_clap_utils::keypair::signer_from_path;
 use solana_sdk::signature::Signer;
@@ -44,9 +45,9 @@ async fn run(options: &ArgMatches<'_>) -> NeonCliResult {
             let rpc = build_rpc(options, config).await?;
 
             let request = read_tx_from_stdin()?;
-            emulate::execute(&rpc, config.evm_loader, request, None)
+            emulate::execute(&rpc, config.evm_loader, request, None::<TracerTypeEnum>)
                 .await
-                .map(|result| json!(result))
+                .map(|(result, _)| json!(result))
         }
         ("trace", Some(_)) => {
             let rpc = build_rpc(options, config).await?;

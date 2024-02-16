@@ -9,7 +9,7 @@ edition = "2021"
 thiserror = "1.0"
 anyhow = "1.0"
 bincode = "1.3.1"
-evm-loader = { path = "../program", default-features = false, features = ["log", "async-trait", "serde_json"] }
+evm-loader = { path = "../program", default-features = false, features = ["log", "async-trait"] }
 solana-sdk = "=1.16.23"
 solana-client = "=1.16.23"
 solana-clap-utils = "=1.16.23"

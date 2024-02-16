@@ -1,16 +1,17 @@
 use crate::error::Result;
+use crate::evm::tracing::EventListener;
 
 use super::{database::Database, opcode::Action, Machine};
 
 macro_rules! opcode_table {
     ($( $opcode:literal, $opname:literal, $op:path;)*) => {
         #[cfg(target_os = "solana")]
-        type OpCode<B> = fn(&mut Machine<B>, &mut B) -> Result<Action>;
+        type OpCode<B, T> = fn(&mut Machine<B, T>, &mut B) -> Result<Action>;
 
         #[cfg(target_os = "solana")]
-        impl<B: Database> Machine<B> {
-            const OPCODES: [OpCode<B>; 256] = {
-                let mut opcodes: [OpCode<B>; 256] = [Self::opcode_unknown; 256];
+        impl<B: Database, T: EventListener> Machine<B, T> {
+            const OPCODES: [OpCode<B, T>; 256] = {
+                let mut opcodes: [OpCode<B, T>; 256] = [Self::opcode_unknown; 256];
 
                 $(opcodes[$opcode as usize] = $op;)*
 
@@ -25,7 +26,7 @@ macro_rules! opcode_table {
         }
 
         #[cfg(not(target_os = "solana"))]
-        impl<B: Database> Machine<B> {
+        impl<B: Database, T: EventListener> Machine<B, T> {
             pub async fn execute_opcode(&mut self, backend: &mut B, opcode: u8) -> Result<Action> {
                 match opcode {
                     $($opcode => $op(self, backend).await,)*
