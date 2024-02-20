@@ -3,6 +3,7 @@ use crate::account::{
     program, AccountsDB, BalanceAccount, Operator, StateAccount, Treasury, TAG_HOLDER, TAG_STATE,
     TAG_STATE_FINALIZED,
 };
+use crate::debug::log_data;
 use crate::error::{Error, Result};
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_step::{do_begin, do_continue};
@@ -16,7 +17,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Begin or Continue Transaction from Instruction");
+    log_msg!("Instruction: Begin or Continue Transaction from Instruction");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
     let step_count = u64::from(u32::from_le_bytes(*array_ref![instruction, 4, 4]));
@@ -52,8 +53,8 @@ pub fn process<'a>(
             let trx = Transaction::from_rlp(message)?;
             let origin = trx.recover_caller_address()?;
 
-            solana_program::log::sol_log_data(&[b"HASH", &trx.hash()]);
-            solana_program::log::sol_log_data(&[b"MINER", miner_address.as_bytes()]);
+            log_data(&[b"HASH", &trx.hash()]);
+            log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(U256::ZERO, accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();
@@ -69,8 +70,8 @@ pub fn process<'a>(
         TAG_STATE => {
             let storage = StateAccount::restore(program_id, storage_info, &accounts_db, false)?;
 
-            solana_program::log::sol_log_data(&[b"HASH", &storage.trx_hash()]);
-            solana_program::log::sol_log_data(&[b"MINER", miner_address.as_bytes()]);
+            log_data(&[b"HASH", &storage.trx_hash()]);
+            log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(storage.gas_used(), accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();

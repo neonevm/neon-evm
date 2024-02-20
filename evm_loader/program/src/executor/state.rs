@@ -5,6 +5,7 @@ use ethnum::{AsU256, U256};
 use maybe_async::maybe_async;
 use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
+use solana_program::rent::Rent;
 
 use crate::account_storage::AccountStorage;
 use crate::error::{Error, Result};
@@ -155,10 +156,16 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                             data,
                             meta,
                             &mut accounts,
+                            self.rent(),
                         )?;
                     }
                     program_id if mpl_token_metadata::check_id(program_id) => {
-                        crate::external_programs::metaplex::emulate(data, meta, &mut accounts)?;
+                        crate::external_programs::metaplex::emulate(
+                            data,
+                            meta,
+                            &mut accounts,
+                            self.rent(),
+                        )?;
                     }
                     _ => {
                         return Err(Error::Custom(format!(
@@ -385,6 +392,14 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     fn block_timestamp(&self) -> Result<U256> {
         let cache = self.cache.borrow();
         Ok(cache.block_timestamp)
+    }
+
+    fn rent(&self) -> &Rent {
+        self.backend.rent()
+    }
+
+    fn return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+        self.backend.return_data()
     }
 
     async fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R

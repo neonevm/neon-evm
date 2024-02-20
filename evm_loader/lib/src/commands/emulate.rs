@@ -8,7 +8,6 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::commands::get_config::BuildConfigSimulator;
 use crate::rpc::Rpc;
-use crate::syscall_stubs::setup_emulator_syscall_stubs;
 use crate::tracing::tracers::Tracer;
 use crate::types::{EmulateRequest, TxParams};
 use crate::{
@@ -78,7 +77,6 @@ pub async fn execute<T: Tracer>(
 
     let step_limit = emulate_request.step_limit.unwrap_or(100000);
 
-    setup_emulator_syscall_stubs(rpc).await?;
     emulate_trx(emulate_request.tx, &mut storage, step_limit, tracer).await
 }
 

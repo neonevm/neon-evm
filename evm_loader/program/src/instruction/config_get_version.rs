@@ -10,7 +10,7 @@ pub fn process<'a>(
     _accounts: &'a [AccountInfo<'a>],
     _instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Config Get Version");
+    log_msg!("Instruction: Config Get Version");
 
     let version = std::str::from_utf8(&NEON_PKG_VERSION)?;
     let revision = std::str::from_utf8(&NEON_REVISION)?;

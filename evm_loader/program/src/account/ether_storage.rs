@@ -97,6 +97,7 @@ impl<'a> StorageCell<'a> {
         allocate_cells: usize,
         accounts: &AccountsDB<'a>,
         signer_seeds: &[&[u8]],
+        rent: &Rent,
     ) -> Result<Self> {
         let base_account = accounts.get(&address.base);
         let cell_account = accounts.get(&address.pubkey);
@@ -114,6 +115,7 @@ impl<'a> StorageCell<'a> {
             cell_account,
             address.seed(),
             space,
+            rent,
         )?;
 
         super::set_tag(&crate::ID, cell_account, TAG_STORAGE_CELL)?;
@@ -200,7 +202,7 @@ impl<'a> StorageCell<'a> {
         Ok(())
     }
 
-    pub fn sync_lamports(&mut self, rent: Rent, accounts: &AccountsDB<'a>) -> Result<()> {
+    pub fn sync_lamports(&mut self, rent: &Rent, accounts: &AccountsDB<'a>) -> Result<()> {
         let original_data_len = unsafe { self.account.original_data_len() };
         if original_data_len == self.account.data_len() {
             return Ok(());

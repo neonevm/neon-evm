@@ -6,7 +6,6 @@ use solana_program::account_info::IntoAccountInfo;
 use solana_program::instruction::AccountMeta;
 use solana_program::program_option::COption;
 use solana_program::rent::Rent;
-use solana_program::sysvar::Sysvar;
 use spl_token::state::Mint;
 use std::collections::BTreeMap;
 
@@ -26,13 +25,14 @@ pub fn emulate(
     instruction: &[u8],
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+    rent: &Rent,
 ) -> ProgramResult {
     match MetadataInstruction::try_from_slice(instruction)? {
         MetadataInstruction::CreateMetadataAccountV3(args) => {
-            create_metadata_accounts_v3(meta, accounts, &args)
+            create_metadata_accounts_v3(meta, accounts, &args, rent)
         }
         MetadataInstruction::CreateMasterEditionV3(args) => {
-            create_master_edition_v3(meta, accounts, &args)
+            create_master_edition_v3(meta, accounts, &args, rent)
         }
         _ => Err!(ProgramError::InvalidInstructionData; "Unknown Metaplex instruction"),
     }
@@ -42,6 +42,7 @@ fn create_metadata_accounts_v3(
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
     args: &CreateMetadataAccountArgsV3,
+    rent: &Rent,
 ) -> ProgramResult {
     let metadata_account_key = &meta[0].pubkey;
     let mint_key = &meta[1].pubkey;
@@ -52,8 +53,6 @@ fn create_metadata_accounts_v3(
     // let _rent_key = &meta[6].pubkey;
 
     let mut metadata: Metadata = {
-        let rent = Rent::get()?;
-
         let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
         metadata_account.data.resize(MAX_METADATA_LEN, 0);
         metadata_account.owner = mpl_token_metadata::ID;
@@ -123,6 +122,7 @@ fn create_master_edition_v3(
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
     args: &CreateMasterEditionArgs,
+    rent: &Rent,
 ) -> ProgramResult {
     let edition_account_key = &meta[0].pubkey;
     let mint_key = &meta[1].pubkey;
@@ -160,8 +160,6 @@ fn create_master_edition_v3(
     }
 
     {
-        let rent = Rent::get()?;
-
         let edition_account = accounts.get_mut(edition_account_key).unwrap();
         edition_account.data.resize(MAX_MASTER_EDITION_LEN, 0);
         edition_account.owner = mpl_token_metadata::ID;

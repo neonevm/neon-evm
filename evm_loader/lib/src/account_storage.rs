@@ -8,7 +8,7 @@ use evm_loader::account_storage::find_slot_hash;
 use evm_loader::types::Address;
 use solana_sdk::rent::Rent;
 use solana_sdk::system_program;
-use solana_sdk::sysvar::{slot_hashes, Sysvar};
+use solana_sdk::sysvar::slot_hashes;
 use std::collections::HashSet;
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 
@@ -51,6 +51,7 @@ pub struct EmulatorAccountStorage<'rpc, T: Rpc> {
     chains: Vec<ChainInfo>,
     block_number: u64,
     block_timestamp: i64,
+    rent: Rent,
     state_overrides: Option<AccountOverrides>,
 }
 
@@ -79,6 +80,14 @@ impl<'rpc, T: Rpc + BuildConfigSimulator> EmulatorAccountStorage<'rpc, T> {
             Some(chains) => chains,
         };
 
+        let rent_account = rpc
+            .get_account(&solana_sdk::sysvar::rent::id())
+            .await?
+            .value
+            .ok_or(NeonError::AccountNotFound(solana_sdk::sysvar::rent::id()))?;
+        let rent = bincode::deserialize::<Rent>(&rent_account.data)?;
+        info!("Rent: {rent:?}");
+
         Ok(Self {
             accounts: RefCell::new(HashMap::new()),
             program_id,
@@ -88,6 +97,7 @@ impl<'rpc, T: Rpc + BuildConfigSimulator> EmulatorAccountStorage<'rpc, T> {
             block_number,
             block_timestamp,
             state_overrides,
+            rent,
         })
     }
 
@@ -206,8 +216,6 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
     pub async fn apply_actions(&mut self, actions: Vec<Action>) -> Result<(), NeonError> {
         info!("apply_actions");
 
-        let rent = Rent::get()?;
-
         let mut new_balance_accounts = HashSet::new();
 
         for action in actions {
@@ -255,12 +263,13 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
                         let empty_size = StorageCell::required_account_size(0);
 
                         let gas = if account.is_none() {
-                            rent.minimum_balance(cell_size)
+                            self.rent.minimum_balance(cell_size)
                         } else {
                             let existing_value = self.storage(address, index).await;
                             if existing_value == [0_u8; 32] {
-                                rent.minimum_balance(cell_size)
-                                    .saturating_sub(rent.minimum_balance(empty_size))
+                                self.rent
+                                    .minimum_balance(cell_size)
+                                    .saturating_sub(self.rent.minimum_balance(empty_size))
                             } else {
                                 0
                             }
@@ -287,7 +296,7 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
                     self.use_contract_account(address, true).await?;
 
                     let space = ContractAccount::required_account_size(&code);
-                    self.gas = self.gas.saturating_add(rent.minimum_balance(space));
+                    self.gas = self.gas.saturating_add(self.rent.minimum_balance(space));
                 }
                 Action::EvmSelfDestruct { address } => {
                     info!("selfdestruct {address}");
@@ -313,7 +322,8 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
         }
 
         self.gas = self.gas.saturating_add(
-            rent.minimum_balance(BalanceAccount::required_account_size())
+            self.rent
+                .minimum_balance(BalanceAccount::required_account_size())
                 .saturating_mul(new_balance_accounts.len() as u64),
         );
 
@@ -323,8 +333,6 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
     pub async fn mark_legacy_accounts(&mut self) -> Result<(), NeonError> {
         let mut accounts = self.accounts.borrow_mut();
         let mut additional_balances = Vec::new();
-
-        let rent = Rent::get()?;
 
         for (key, account) in accounts.iter_mut() {
             let Some(account_data) = account.data.as_mut() else {
@@ -354,7 +362,9 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
 
                 if (legacy_data.code_size > 0) || (legacy_data.generation > 0) {
                     // This is a contract, we need additional gas for conversion
-                    let lamports = rent.minimum_balance(BalanceAccount::required_account_size());
+                    let lamports = self
+                        .rent
+                        .minimum_balance(BalanceAccount::required_account_size());
                     self.gas = self.gas.saturating_add(lamports);
                 }
             }
@@ -524,6 +534,16 @@ impl<T: Rpc> AccountStorage for EmulatorAccountStorage<'_, T> {
     fn block_timestamp(&self) -> U256 {
         info!("block_timestamp");
         self.block_timestamp.try_into().unwrap()
+    }
+
+    fn rent(&self) -> &Rent {
+        &self.rent
+    }
+
+    fn return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+        info!("return_data");
+        // TODO: implement return_data() method with SyncedAccountStorage implementation
+        unimplemented!();
     }
 
     async fn block_hash(&self, slot: u64) -> [u8; 32] {

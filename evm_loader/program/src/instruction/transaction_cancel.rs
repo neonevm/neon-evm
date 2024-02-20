@@ -1,4 +1,5 @@
 use crate::account::{AccountsDB, BalanceAccount, Operator, StateAccount};
+use crate::debug::log_data;
 use crate::error::{Error, Result};
 use crate::gasometer::{CANCEL_TRX_COST, LAST_ITERATION_COST};
 use arrayref::array_ref;
@@ -10,7 +11,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Cancel Transaction");
+    log_msg!("Instruction: Cancel Transaction");
 
     let transaction_hash = array_ref![instruction, 0, 32];
 
@@ -18,8 +19,8 @@ pub fn process<'a>(
     let operator = Operator::from_account(&accounts[1])?;
     let operator_balance = BalanceAccount::from_account(program_id, accounts[2].clone())?;
 
-    solana_program::log::sol_log_data(&[b"HASH", transaction_hash]);
-    solana_program::log::sol_log_data(&[b"MINER", operator_balance.address().as_bytes()]);
+    log_data(&[b"HASH", transaction_hash]);
+    log_data(&[b"MINER", operator_balance.address().as_bytes()]);
 
     let accounts_db = AccountsDB::new(&accounts[3..], operator, Some(operator_balance), None, None);
     let storage = StateAccount::restore(program_id, storage_info, &accounts_db, true)?;
@@ -46,7 +47,7 @@ fn execute<'a>(
 ) -> Result<()> {
     let used_gas = U256::ZERO;
     let total_used_gas = storage.gas_used();
-    solana_program::log::sol_log_data(&[
+    log_data(&[
         b"GAS",
         &used_gas.to_le_bytes(),
         &total_used_gas.to_le_bytes(),

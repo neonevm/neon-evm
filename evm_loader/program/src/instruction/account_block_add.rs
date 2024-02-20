@@ -10,7 +10,7 @@ pub fn process<'a>(
     let stack_height = solana_program::instruction::get_stack_height();
     assert_eq!(stack_height, TRANSACTION_LEVEL_STACK_HEIGHT);
 
-    solana_program::msg!("Instruction: Block Accounts");
+    log_msg!("Instruction: Block Accounts");
 
     todo!();
 

@@ -7,7 +7,7 @@ pub fn process<'a>(
     _accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Config Get Property by Name");
+    log_msg!("Instruction: Config Get Property by Name");
 
     let requested_property = std::str::from_utf8(instruction)?;
 

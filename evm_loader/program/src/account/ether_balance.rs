@@ -11,7 +11,7 @@ use crate::{
     types::Address,
 };
 use ethnum::U256;
-use solana_program::{account_info::AccountInfo, pubkey::Pubkey, system_program};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent, system_program};
 
 use super::{AccountsDB, ACCOUNT_PREFIX_LEN, ACCOUNT_SEED_VERSION, TAG_ACCOUNT_BALANCE};
 
@@ -46,6 +46,7 @@ impl<'a> BalanceAccount<'a> {
         chain_id: u64,
         accounts: &AccountsDB<'a>,
         keys: Option<&KeysCache>,
+        rent: &Rent,
     ) -> Result<Self> {
         let (pubkey, bump_seed) = keys.map_or_else(
             || address.find_balance_address(&crate::ID, chain_id),
@@ -93,6 +94,7 @@ impl<'a> BalanceAccount<'a> {
             &account,
             program_seeds,
             ACCOUNT_PREFIX_LEN + size_of::<Header>(),
+            rent,
         )?;
 
         super::set_tag(&crate::ID, &account, TAG_ACCOUNT_BALANCE)?;

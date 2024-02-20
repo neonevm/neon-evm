@@ -7,7 +7,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     _instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Delete Holder Account");
+    log_msg!("Instruction: Delete Holder Account");
 
     let holder_info = accounts[0].clone();
     let operator = unsafe { Operator::from_account_not_whitelisted(&accounts[1]) }?;

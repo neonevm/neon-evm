@@ -78,7 +78,7 @@ impl<'a> ContractAccount<'a> {
         if system_program::check_id(info.owner) {
             let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], address.as_bytes(), &[bump_seed]];
             let space = required_size.min(MAX_PERMITTED_DATA_INCREASE);
-            system.create_pda_account(&crate::ID, operator, info, seeds, space)?;
+            system.create_pda_account(&crate::ID, operator, info, seeds, space, rent)?;
         } else if crate::check_id(info.owner) {
             super::validate_tag(&crate::ID, info, TAG_EMPTY)?;
 

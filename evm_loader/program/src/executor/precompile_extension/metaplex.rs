@@ -7,7 +7,7 @@ use mpl_token_metadata::state::{
     Creator, Metadata, TokenMetadataAccount, TokenStandard, CREATE_FEE, MAX_MASTER_EDITION_LEN,
     MAX_METADATA_LEN,
 };
-use solana_program::{pubkey::Pubkey, rent::Rent, sysvar::Sysvar};
+use solana_program::pubkey::Pubkey;
 
 use crate::{
     account::ACCOUNT_SEED_VERSION,
@@ -193,9 +193,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             None,  // Collection Details
         );
 
-        let rent = Rent::get()?;
-        let fee = rent.minimum_balance(MAX_METADATA_LEN) + CREATE_FEE;
-
+        let fee = self.backend.rent().minimum_balance(MAX_METADATA_LEN) + CREATE_FEE;
         self.queue_external_instruction(instruction, seeds, fee);
 
         Ok(metadata_pubkey.to_bytes().to_vec())
@@ -230,9 +228,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             max_supply,
         );
 
-        let rent = Rent::get()?;
-        let fee = rent.minimum_balance(MAX_MASTER_EDITION_LEN) + CREATE_FEE;
-
+        let fee = self.backend.rent().minimum_balance(MAX_MASTER_EDITION_LEN) + CREATE_FEE;
         self.queue_external_instruction(instruction, seeds, fee);
 
         Ok(edition_pubkey.to_bytes().to_vec())

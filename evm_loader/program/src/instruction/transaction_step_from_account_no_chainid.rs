@@ -6,7 +6,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Begin or Continue Transaction from Account Without ChainId");
+    log_msg!("Instruction: Begin or Continue Transaction from Account Without ChainId");
 
     super::transaction_step_from_account::process_inner(program_id, accounts, instruction, true)
 }

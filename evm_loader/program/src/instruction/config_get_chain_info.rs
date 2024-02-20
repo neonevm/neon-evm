@@ -7,7 +7,7 @@ pub fn process<'a>(
     _accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Config Get Chain Info");
+    log_msg!("Instruction: Config Get Chain Info");
 
     let bytes = instruction.try_into()?;
     let index = usize::from_le_bytes(bytes);

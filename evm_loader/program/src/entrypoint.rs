@@ -49,7 +49,7 @@ fn process_instruction<'a>(
             instruction::config_get_version::process(program_id, accounts, instruction)
         }
         _ => {
-            solana_program::msg!("Emergency image: all instructions are rejected");
+            log_msg!("Emergency image: all instructions are rejected");
             Err(ProgramError::InvalidInstructionData.into())
         }
     }

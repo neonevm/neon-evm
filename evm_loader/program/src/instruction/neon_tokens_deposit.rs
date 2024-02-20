@@ -1,7 +1,7 @@
 use arrayref::array_ref;
 use ethnum::U256;
 use solana_program::program::invoke_signed;
-use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent, sysvar::Sysvar};
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{program, token, AccountsDB, BalanceAccount, Operator, ACCOUNT_SEED_VERSION};
@@ -42,7 +42,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Deposit");
+    log_msg!("Instruction: Deposit");
 
     let parsed_accounts = Accounts::from_slice(accounts)?;
 
@@ -162,7 +162,9 @@ fn execute(program_id: &Pubkey, accounts: Accounts, address: Address, chain_id: 
         excessive_lamports += crate::account::legacy::update_legacy_accounts(&accounts_db)?;
     }
 
-    let mut balance_account = BalanceAccount::create(address, chain_id, &accounts_db, None)?;
+    let rent = Rent::get()?;
+
+    let mut balance_account = BalanceAccount::create(address, chain_id, &accounts_db, None, &rent)?;
     balance_account.mint(deposit)?;
 
     **accounts_db.operator().try_borrow_mut_lamports()? += excessive_lamports;

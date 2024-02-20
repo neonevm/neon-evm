@@ -7,7 +7,6 @@ use std::{fmt::Display, marker::PhantomData, ops::Range};
 use ethnum::U256;
 use maybe_async::maybe_async;
 use serde::{Deserialize, Serialize};
-use solana_program::log::sol_log_data;
 
 pub use buffer::Buffer;
 
@@ -15,6 +14,7 @@ use crate::evm::tracing::EventListener;
 #[cfg(target_os = "solana")]
 use crate::evm::tracing::NoopEventListener;
 use crate::{
+    debug::log_data,
     error::{build_revert_message, Error, Result},
     evm::{opcode::Action, precompile::is_precompile_address},
     types::{Address, Transaction},
@@ -263,7 +263,7 @@ impl<B: Database, T: EventListener> Machine<B, T> {
         assert!(trx.target().is_some());
 
         let target = trx.target().unwrap();
-        sol_log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
+        log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
 
         backend.increment_nonce(origin, chain_id)?;
         backend.snapshot();
@@ -312,7 +312,7 @@ impl<B: Database, T: EventListener> Machine<B, T> {
         assert!(trx.target().is_none());
 
         let target = Address::from_create(&origin, trx.nonce());
-        sol_log_data(&[b"ENTER", b"CREATE", target.as_bytes()]);
+        log_data(&[b"ENTER", b"CREATE", target.as_bytes()]);
 
         if (backend.nonce(target, chain_id).await? != 0) || (backend.code_size(target).await? != 0)
         {

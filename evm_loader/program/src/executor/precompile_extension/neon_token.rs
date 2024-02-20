@@ -3,9 +3,7 @@ use std::convert::TryInto;
 use arrayref::array_ref;
 use ethnum::U256;
 use maybe_async::maybe_async;
-use solana_program::{
-    account_info::IntoAccountInfo, program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
-};
+use solana_program::{account_info::IntoAccountInfo, program_pack::Pack, pubkey::Pubkey};
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::{
@@ -118,8 +116,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
                 &spl_token::ID,
             );
 
-            let rent = Rent::get()?;
-            let fee = rent.minimum_balance(spl_token::state::Account::LEN);
+            let fee = self
+                .backend
+                .rent()
+                .minimum_balance(spl_token::state::Account::LEN);
             self.queue_external_instruction(create_associated, vec![], fee);
         }
 

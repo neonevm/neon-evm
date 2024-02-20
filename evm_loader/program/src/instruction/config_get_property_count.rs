@@ -7,7 +7,7 @@ pub fn process<'a>(
     _accounts: &'a [AccountInfo<'a>],
     _instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Config Get Property Count");
+    log_msg!("Instruction: Config Get Property Count");
 
     let count = crate::config::PARAMETERS.len();
 

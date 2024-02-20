@@ -181,7 +181,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl From<Error> for ProgramError {
     fn from(e: Error) -> Self {
-        solana_program::msg!("{}", e);
+        log_msg!("{}", e);
         match e {
             Error::ProgramError(e) => e,
             _ => Self::Custom(0),
@@ -269,18 +269,18 @@ fn format_revert_panic(msg: &[u8]) -> Option<U256> {
 
 pub fn print_revert_message(msg: &[u8]) {
     if msg.is_empty() {
-        return solana_program::msg!("Revert");
+        return log_msg!("Revert");
     }
 
     if let Some(reason) = format_revert_error(msg) {
-        return solana_program::msg!("Revert: Error(\"{}\")", reason);
+        return log_msg!("Revert: Error(\"{}\")", reason);
     }
 
     if let Some(reason) = format_revert_panic(msg) {
-        return solana_program::msg!("Revert: Panic({:#x})", reason);
+        return log_msg!("Revert: Panic({:#x})", reason);
     }
 
-    solana_program::msg!("Revert: {}", hex::encode(msg));
+    log_msg!("Revert: {}", hex::encode(msg));
 }
 
 #[must_use]

@@ -5,7 +5,7 @@ pub mod commands;
 pub mod config;
 pub mod errors;
 pub mod rpc;
-pub mod syscall_stubs;
+
 pub mod tracing;
 pub mod types;
 

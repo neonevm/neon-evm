@@ -13,7 +13,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> ProgramResult {
-    solana_program::msg!("Instruction: Collect treasury");
+    log_msg!("Instruction: Collect treasury");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
 

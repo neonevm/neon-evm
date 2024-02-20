@@ -1,5 +1,5 @@
 use arrayref::array_ref;
-use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent, sysvar::Sysvar};
 
 use crate::account::{program, AccountsDB, BalanceAccount, Operator};
 use crate::config::{CHAIN_ID_LIST, DEFAULT_CHAIN_ID};
@@ -11,7 +11,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Create Balance Account");
+    log_msg!("Instruction: Create Balance Account");
 
     let operator = unsafe { Operator::from_account_not_whitelisted(&accounts[0]) }?;
     let system = program::System::from_account(&accounts[1])?;
@@ -28,7 +28,7 @@ pub fn process<'a>(
         .binary_search_by_key(&chain_id, |c| c.0)
         .map_err(|_| Error::InvalidChainId(chain_id))?;
 
-    solana_program::msg!("Address: {}, ChainID: {}", address, chain_id);
+    log_msg!("Address: {}, ChainID: {}", address, chain_id);
 
     let mut excessive_lamports = 0;
     if chain_id == DEFAULT_CHAIN_ID {
@@ -36,7 +36,8 @@ pub fn process<'a>(
         excessive_lamports += crate::account::legacy::update_legacy_accounts(&accounts_db)?;
     };
 
-    BalanceAccount::create(address, chain_id, &accounts_db, None)?;
+    let rent = Rent::get()?;
+    BalanceAccount::create(address, chain_id, &accounts_db, None, &rent)?;
 
     **accounts_db.operator().try_borrow_mut_lamports()? += excessive_lamports;
 

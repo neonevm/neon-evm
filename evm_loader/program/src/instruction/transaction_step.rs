@@ -1,6 +1,7 @@
 use crate::account::{AccountsDB, AllocateResult, StateAccount};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::{EVM_STEPS_LAST_ITERATION_MAX, EVM_STEPS_MIN};
+use crate::debug::log_data;
 use crate::error::{Error, Result};
 use crate::evm::tracing::NoopEventListener;
 use crate::evm::{ExitStatus, Machine};
@@ -103,7 +104,7 @@ fn finalize<'a>(
 
     let used_gas = gasometer.used_gas();
     let total_used_gas = gasometer.used_gas_total();
-    solana_program::log::sol_log_data(&[
+    log_data(&[
         b"GAS",
         &used_gas.to_le_bytes(),
         &total_used_gas.to_le_bytes(),
@@ -124,8 +125,6 @@ fn finalize<'a>(
 }
 
 pub fn log_return_value(status: &ExitStatus) {
-    use solana_program::log::sol_log_data;
-
     let code: u8 = match status {
         ExitStatus::Stop => 0x11,
         ExitStatus::Return(_) => 0x12,
@@ -134,12 +133,12 @@ pub fn log_return_value(status: &ExitStatus) {
         ExitStatus::StepLimit => unreachable!(),
     };
 
-    solana_program::msg!("exit_status={:#04X}", code); // Tests compatibility
+    log_msg!("exit_status={:#04X}", code); // Tests compatibility
     if let ExitStatus::Revert(msg) = status {
         crate::error::print_revert_message(msg);
     }
 
-    sol_log_data(&[b"RETURN", &[code]]);
+    log_data(&[b"RETURN", &[code]]);
 }
 
 fn serialize_evm_state(

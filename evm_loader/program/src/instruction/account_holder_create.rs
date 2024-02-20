@@ -8,7 +8,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Create Holder Account");
+    log_msg!("Instruction: Create Holder Account");
 
     let holder = accounts[0].clone();
     let operator = unsafe { Operator::from_account_not_whitelisted(&accounts[1]) }?;

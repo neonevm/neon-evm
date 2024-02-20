@@ -3,7 +3,7 @@ use solana_program::account_info::AccountInfo;
 use solana_program::program::{invoke_signed_unchecked, invoke_unchecked};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use solana_program::{rent::Rent, system_instruction, sysvar::Sysvar};
+use solana_program::{rent::Rent, system_instruction};
 use std::convert::From;
 use std::ops::Deref;
 
@@ -31,8 +31,8 @@ impl<'a> System<'a> {
         new_account: &AccountInfo<'a>,
         new_account_seeds: &[&[u8]],
         space: usize,
+        rent: &Rent,
     ) -> Result<(), ProgramError> {
-        let rent = Rent::get()?;
         let minimum_balance = rent.minimum_balance(space).max(1);
 
         if new_account.lamports() > 0 {
@@ -81,8 +81,9 @@ impl<'a> System<'a> {
         new_account: &AccountInfo<'a>,
         seed: &str,
         space: usize,
+        rent: &Rent,
     ) -> Result<(), ProgramError> {
-        let minimum_balance = Rent::get()?.minimum_balance(space).max(1);
+        let minimum_balance = rent.minimum_balance(space).max(1);
 
         if new_account.lamports() > 0 {
             let required_lamports = minimum_balance.saturating_sub(new_account.lamports());

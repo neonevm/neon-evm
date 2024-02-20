@@ -3,8 +3,8 @@ use std::convert::{Into, TryInto};
 use ethnum::U256;
 use maybe_async::maybe_async;
 use solana_program::{
-    program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, rent::Rent,
-    system_instruction, system_program, sysvar::Sysvar,
+    program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, system_instruction,
+    system_program,
 };
 
 use crate::{
@@ -260,14 +260,8 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         }
     }
 
-    fn create_account(
-        &mut self,
-        account: &OwnedAccountInfo,
-        space: usize,
-        seeds: Vec<Vec<u8>>,
-    ) -> Result<()> {
-        let rent = Rent::get()?;
-        let minimum_balance = rent.minimum_balance(space);
+    fn create_account(&mut self, account: &OwnedAccountInfo, space: usize, seeds: Vec<Vec<u8>>) {
+        let minimum_balance = self.backend.rent().minimum_balance(space);
 
         let required_lamports = minimum_balance.saturating_sub(account.lamports);
 
@@ -285,8 +279,6 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
 
         let assign = system_instruction::assign(&account.key, &spl_token::ID);
         self.queue_external_instruction(assign, seeds, 0);
-
-        Ok(())
     }
 
     #[maybe_async]
@@ -324,7 +316,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             vec![bump_seed],
         ];
 
-        self.create_account(&account, spl_token::state::Mint::LEN, seeds)?;
+        self.create_account(&account, spl_token::state::Mint::LEN, seeds);
 
         let initialize_mint = spl_token::instruction::initialize_mint(
             &spl_token::ID,
@@ -372,7 +364,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             vec![bump_seed],
         ];
 
-        self.create_account(&account, spl_token::state::Account::LEN, seeds)?;
+        self.create_account(&account, spl_token::state::Account::LEN, seeds);
 
         let initialize_mint = spl_token::instruction::initialize_account2(
             &spl_token::ID,

@@ -7,7 +7,7 @@ pub fn process<'a>(
     _accounts: &'a [AccountInfo<'a>],
     _instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Config Get Environment");
+    log_msg!("Instruction: Config Get Environment");
 
     let environment: &str = if cfg!(feature = "mainnet") {
         "mainnet"

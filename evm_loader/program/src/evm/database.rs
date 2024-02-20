@@ -2,7 +2,7 @@ use super::{Buffer, Context};
 use crate::{error::Result, types::Address};
 use ethnum::U256;
 use maybe_async::maybe_async;
-use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent};
 
 #[maybe_async(?Send)]
 pub trait Database {
@@ -32,6 +32,8 @@ pub trait Database {
     async fn block_hash(&self, number: U256) -> Result<[u8; 32]>;
     fn block_number(&self) -> Result<U256>;
     fn block_timestamp(&self) -> Result<U256>;
+    fn rent(&self) -> &Rent;
+    fn return_data(&self) -> Option<(Pubkey, Vec<u8>)>;
 
     async fn map_solana_account<F, R>(&self, address: &Pubkey, action: F) -> R
     where
@@ -221,6 +223,14 @@ mod tests {
         }
 
         fn block_timestamp(&self) -> Result<U256> {
+            unimplemented!();
+        }
+
+        fn rent(&self) -> &Rent {
+            unimplemented!();
+        }
+
+        fn return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
             unimplemented!();
         }
 

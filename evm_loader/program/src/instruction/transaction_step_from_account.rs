@@ -3,7 +3,7 @@ use crate::account::{
     program, AccountsDB, BalanceAccount, Holder, Operator, StateAccount, Treasury, TAG_HOLDER,
     TAG_STATE, TAG_STATE_FINALIZED,
 };
-
+use crate::debug::log_data;
 use crate::error::{Error, Result};
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_step::{do_begin, do_continue};
@@ -17,7 +17,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction: &[u8],
 ) -> Result<()> {
-    solana_program::msg!("Instruction: Begin or Continue Transaction from Account");
+    log_msg!("Instruction: Begin or Continue Transaction from Account");
 
     process_inner(program_id, accounts, instruction, false)
 }
@@ -69,8 +69,8 @@ pub fn process_inner<'a>(
                 trx
             };
 
-            solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
-            solana_program::log::sol_log_data(&[b"MINER", miner_address.as_bytes()]);
+            log_data(&[b"HASH", &trx.hash]);
+            log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let origin = trx.recover_caller_address()?;
 
@@ -101,8 +101,8 @@ pub fn process_inner<'a>(
             let storage =
                 StateAccount::restore(program_id, holder_or_storage.clone(), &accounts_db, false)?;
 
-            solana_program::log::sol_log_data(&[b"HASH", &storage.trx_hash()]);
-            solana_program::log::sol_log_data(&[b"MINER", miner_address.as_bytes()]);
+            log_data(&[b"HASH", &storage.trx_hash()]);
+            log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(storage.gas_used(), accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();

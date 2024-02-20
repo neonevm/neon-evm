@@ -6,10 +6,11 @@ use crate::{
 use solana_program::{
     account_info::AccountInfo,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    msg,
     program_pack::Pack,
     pubkey::Pubkey,
+    rent::Rent,
     system_program,
+    sysvar::Sysvar,
 };
 
 struct Accounts<'a> {
@@ -69,7 +70,7 @@ pub fn process<'a>(
     accounts: &'a [AccountInfo<'a>],
     _instruction: &[u8],
 ) -> Result<()> {
-    msg!("Instruction: Create Main Treasury");
+    log_msg!("Instruction: Create Main Treasury");
 
     let accounts = Accounts::from_slice(accounts)?;
     let (expected_key, bump_seed) = MainTreasury::address(program_id);
@@ -120,6 +121,7 @@ pub fn process<'a>(
         accounts.main_treasury,
         &[TREASURY_POOL_SEED.as_bytes(), &[bump_seed]],
         spl_token::state::Account::LEN,
+        &Rent::get()?,
     )?;
 
     accounts.token_program.create_account(

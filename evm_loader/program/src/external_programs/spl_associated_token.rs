@@ -4,7 +4,7 @@ use crate::executor::OwnedAccountInfo;
 use borsh::BorshDeserialize;
 use solana_program::{
     entrypoint::ProgramResult, instruction::AccountMeta, program_error::ProgramError,
-    program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
+    program_pack::Pack, pubkey::Pubkey, rent::Rent,
 };
 use spl_associated_token_account::instruction::AssociatedTokenAccountInstruction;
 
@@ -12,6 +12,7 @@ pub fn emulate(
     instruction: &[u8],
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
+    rent: &Rent,
 ) -> ProgramResult {
     let instruction = if instruction.is_empty() {
         AssociatedTokenAccountInstruction::Create
@@ -33,8 +34,6 @@ pub fn emulate(
 
     let required_lamports = {
         let associated_token_account = &accounts[associated_token_account_key];
-
-        let rent = Rent::get()?;
         rent.minimum_balance(spl_token::state::Account::LEN)
             .max(1)
             .saturating_sub(associated_token_account.lamports)
