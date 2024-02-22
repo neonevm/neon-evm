@@ -6,4 +6,5 @@ pub use transaction::Transaction;
 pub use transaction::TransactionPayload;
 
 mod address;
+pub mod serde;
 mod transaction;

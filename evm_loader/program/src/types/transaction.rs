@@ -1,13 +1,22 @@
 use ethnum::U256;
+use maybe_async::maybe_async;
+use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 
-use crate::error::Error;
+use crate::{
+    account_storage::AccountStorage, config::GAS_LIMIT_MULTIPLIER_NO_CHAINID, error::Error,
+};
 
-use super::Address;
+use super::{
+    serde::{bytes_32, option_u256},
+    Address,
+};
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct StorageKey([u8; 32]);
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+pub struct StorageKey(#[serde(with = "bytes_32")] [u8; 32]);
 
 impl rlp::Decodable for StorageKey {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
@@ -67,17 +76,25 @@ impl TransactionEnvelope {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LegacyTx {
     pub nonce: u64,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub gas_price: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub gas_limit: U256,
     pub target: Option<Address>,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub value: U256,
+    #[serde(with = "serde_bytes")]
     pub call_data: Vec<u8>,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub v: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub r: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub s: U256,
+    #[serde(with = "option_u256")]
     pub chain_id: Option<U256>,
     pub recovery_id: u8,
 }
@@ -148,16 +165,23 @@ impl rlp::Decodable for LegacyTx {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AccessListTx {
     pub nonce: u64,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub gas_price: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub gas_limit: U256,
     pub target: Option<Address>,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub value: U256,
+    #[serde(with = "serde_bytes")]
     pub call_data: Vec<u8>,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub r: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub s: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub chain_id: U256,
     pub recovery_id: u8,
     pub access_list: Vec<(Address, Vec<StorageKey>)>,
@@ -245,17 +269,19 @@ impl rlp::Decodable for AccessListTx {
 // TODO: Will be added as a part of EIP-1559
 // struct DynamicFeeTx {}
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TransactionPayload {
     Legacy(LegacyTx),
     AccessList(AccessListTx),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction {
     pub transaction: TransactionPayload,
     pub byte_len: usize,
+    #[serde(with = "bytes_32")]
     pub hash: [u8; 32],
+    #[serde(with = "bytes_32")]
     pub signed_hash: [u8; 32],
 }
 
@@ -491,6 +517,12 @@ impl Transaction {
         }
     }
 
+    pub fn gas_limit_in_tokens(&self) -> Result<U256, Error> {
+        self.gas_price()
+            .checked_mul(self.gas_limit())
+            .ok_or(Error::IntegerOverflow)
+    }
+
     #[must_use]
     pub fn target(&self) -> Option<Address> {
         match self.transaction {
@@ -512,16 +544,6 @@ impl Transaction {
         match &self.transaction {
             TransactionPayload::Legacy(LegacyTx { call_data, .. })
             | TransactionPayload::AccessList(AccessListTx { call_data, .. }) => call_data,
-        }
-    }
-
-    #[must_use]
-    pub fn into_call_data(self) -> crate::evm::Buffer {
-        match self.transaction {
-            TransactionPayload::Legacy(LegacyTx { call_data, .. })
-            | TransactionPayload::AccessList(AccessListTx { call_data, .. }) => {
-                crate::evm::Buffer::from_vec(call_data)
-            }
         }
     }
 
@@ -581,6 +603,40 @@ impl Transaction {
             TransactionPayload::AccessList(AccessListTx { access_list, .. }) => Some(access_list),
             TransactionPayload::Legacy(_) => None,
         }
+    }
+
+    pub fn use_gas_limit_multiplier(&mut self) {
+        let gas_multiplier = U256::from(GAS_LIMIT_MULTIPLIER_NO_CHAINID);
+
+        match &mut self.transaction {
+            TransactionPayload::AccessList(AccessListTx { gas_limit, .. })
+            | TransactionPayload::Legacy(LegacyTx { gas_limit, .. }) => {
+                *gas_limit = gas_limit.saturating_mul(gas_multiplier);
+            }
+        }
+    }
+
+    #[maybe_async]
+    pub async fn validate(
+        &self,
+        origin: Address,
+        backend: &impl AccountStorage,
+    ) -> Result<(), crate::error::Error> {
+        let chain_id = self
+            .chain_id()
+            .unwrap_or_else(|| backend.default_chain_id());
+
+        if !backend.is_valid_chain_id(chain_id) {
+            return Err(Error::InvalidChainId(chain_id));
+        }
+
+        let origin_nonce = backend.nonce(origin, chain_id).await;
+        if origin_nonce != self.nonce() {
+            let error = Error::InvalidTransactionNonce(origin, origin_nonce, self.nonce());
+            return Err(error);
+        }
+
+        Ok(())
     }
 }
 

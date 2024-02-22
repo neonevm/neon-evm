@@ -1,7 +1,7 @@
 use crate::account::legacy::{TAG_HOLDER_DEPRECATED, TAG_STATE_FINALIZED_DEPRECATED};
 use crate::account::{
-    program, AccountsDB, BalanceAccount, Operator, StateAccount, Treasury, TAG_HOLDER, TAG_STATE,
-    TAG_STATE_FINALIZED,
+    program, AccountsDB, AccountsStatus, BalanceAccount, Operator, StateAccount, Treasury,
+    TAG_HOLDER, TAG_STATE, TAG_STATE_FINALIZED,
 };
 use crate::debug::log_data;
 use crate::error::{Error, Result};
@@ -63,20 +63,22 @@ pub fn process<'a>(
             excessive_lamports += crate::account::legacy::update_legacy_accounts(&accounts_db)?;
             gasometer.refund_lamports(excessive_lamports);
 
-            let storage = StateAccount::new(program_id, storage_info, &accounts_db, origin, &trx)?;
+            let storage = StateAccount::new(program_id, storage_info, &accounts_db, origin, trx)?;
 
-            do_begin(accounts_db, storage, gasometer, trx, origin)
+            do_begin(accounts_db, storage, gasometer)
         }
         TAG_STATE => {
-            let storage = StateAccount::restore(program_id, storage_info, &accounts_db, false)?;
+            let (storage, accounts_status) =
+                StateAccount::restore(program_id, storage_info, &accounts_db)?;
 
-            log_data(&[b"HASH", &storage.trx_hash()]);
+            log_data(&[b"HASH", &storage.trx().hash()]);
             log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(storage.gas_used(), accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();
 
-            do_continue(step_count, accounts_db, storage, gasometer)
+            let reset = accounts_status != AccountsStatus::Ok;
+            do_continue(step_count, accounts_db, storage, gasometer, reset)
         }
         _ => Err(Error::AccountInvalidTag(*storage_info.key, TAG_HOLDER)),
     }?;

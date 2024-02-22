@@ -125,9 +125,6 @@ fn process_instruction<'a>(
             instruction::create_main_treasury::process(program_id, accounts, instruction)
                 .map_err(Error::from)
         }
-        EvmInstruction::AccountBlockAdd => {
-            instruction::account_block_add::process(program_id, accounts, instruction)
-        }
         EvmInstruction::AccountCreateBalance => {
             instruction::account_create_balance::process(program_id, accounts, instruction)
         }

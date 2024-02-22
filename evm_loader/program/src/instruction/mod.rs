@@ -157,9 +157,6 @@ pub enum EvmInstruction {
     ///  None
     CreateMainTreasury,
 
-    /// Block additional accounts
-    AccountBlockAdd,
-
     /// Create a User Balance account
     ///
     /// Accounts:
@@ -194,7 +191,6 @@ impl EvmInstruction {
             0x25 => Self::HolderDelete,       // 37
             0x26 => Self::HolderWrite,        // 38
             0x29 => Self::CreateMainTreasury, // 41
-            0x2B => Self::AccountBlockAdd,    // 43
 
             0x30 => Self::AccountCreateBalance,              // 48
             0x31 => Self::Deposit,                           // 49
@@ -218,7 +214,6 @@ impl EvmInstruction {
     }
 }
 
-pub mod account_block_add;
 pub mod account_create_balance;
 pub mod account_holder_create;
 pub mod account_holder_delete;

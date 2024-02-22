@@ -7,7 +7,6 @@ use crate::evm::tracing::NoopEventListener;
 use crate::evm::{ExitStatus, Machine};
 use crate::executor::{Action, ExecutorState};
 use crate::gasometer::Gasometer;
-use crate::types::{Address, Transaction};
 
 type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
 type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>, NoopEventListener>;
@@ -16,23 +15,34 @@ pub fn do_begin<'a>(
     accounts: AccountsDB<'a>,
     mut storage: StateAccount<'a>,
     gasometer: Gasometer,
-    trx: Transaction,
-    origin: Address,
 ) -> Result<()> {
     debug_print!("do_begin");
 
-    let accounts = ProgramAccountStorage::new(accounts)?;
+    let account_storage = ProgramAccountStorage::new(accounts)?;
 
-    let mut backend = ExecutorState::new(&accounts);
-    let evm = Machine::new(trx, origin, &mut backend, None::<NoopEventListener>)?;
+    let origin = storage.trx_origin();
+
+    storage.trx().validate(origin, &account_storage)?;
+
+    // Increment origin nonce in the first iteration
+    // This allows us to run multiple iterative transactions from the same sender in parallel
+    // These transactions are guaranteed to start in a correct sequence
+    // BUT they finalize in an undefined order
+    let mut origin_account = account_storage.origin(origin, storage.trx())?;
+    origin_account.increment_nonce()?;
 
     // Burn `gas_limit` tokens from the origin account
     // Later we will mint them to the operator
-    let mut origin_balance = accounts.create_balance_account(origin, storage.trx_chain_id())?;
-    origin_balance.burn(storage.gas_limit_in_tokens()?)?;
+    // Remaining tokens are returned to the origin in the last iteration
+    let gas_limit_in_tokens = storage.trx().gas_limit_in_tokens()?;
+    origin_account.burn(gas_limit_in_tokens)?;
+
+    // Initialize EVM and serialize it to the Holder
+    let mut backend = ExecutorState::new(&account_storage);
+    let evm = Machine::new(storage.trx(), origin, &mut backend, None)?;
 
     serialize_evm_state(&mut storage, &backend, &evm)?;
-    finalize(0, storage, accounts, None, gasometer)
+    finalize(0, storage, account_storage, None, gasometer)
 }
 
 pub fn do_continue<'a>(
@@ -40,32 +50,35 @@ pub fn do_continue<'a>(
     accounts: AccountsDB<'a>,
     mut storage: StateAccount<'a>,
     gasometer: Gasometer,
+    reset: bool,
 ) -> Result<()> {
     debug_print!("do_continue");
 
-    if (step_count < EVM_STEPS_MIN) && (storage.trx_gas_price() > 0) {
+    if (step_count < EVM_STEPS_MIN) && (storage.trx().gas_price() > 0) {
         return Err(Error::Custom(format!(
             "Step limit {step_count} below minimum {EVM_STEPS_MIN}"
         )));
     }
 
     let account_storage = ProgramAccountStorage::new(accounts)?;
-    let (mut backend, mut evm) = deserialize_evm_state(&storage, &account_storage)?;
+    let (mut backend, mut evm) = if reset {
+        let mut backend = ExecutorState::new(&account_storage);
+        let evm = Machine::new(storage.trx(), storage.trx_origin(), &mut backend, None)?;
+        (backend, evm)
+    } else {
+        deserialize_evm_state(&storage, &account_storage)?
+    };
 
-    let (result, steps_executed, _) = {
-        match backend.exit_status() {
-            Some(status) => (status.clone(), 0_u64, None),
-            None => evm.execute(step_count, &mut backend)?,
-        }
+    let (result, steps_executed, _) = match backend.exit_status() {
+        Some(status) => (status.clone(), 0_u64, None),
+        None => evm.execute(step_count, &mut backend)?,
     };
 
     if (result != ExitStatus::StepLimit) && (steps_executed > 0) {
         backend.set_exit_status(result.clone());
     }
 
-    if steps_executed > 0 {
-        serialize_evm_state(&mut storage, &backend, &evm)?;
-    }
+    serialize_evm_state(&mut storage, &backend, &evm)?;
 
     let results = match result {
         ExitStatus::StepLimit => None,
@@ -115,10 +128,12 @@ fn finalize<'a>(
     if let Some(status) = status {
         log_return_value(&status);
 
-        let mut origin = accounts.balance_account(storage.trx_origin(), storage.trx_chain_id())?;
+        let mut origin = accounts.origin(storage.trx_origin(), storage.trx())?;
         storage.refund_unused_gas(&mut origin)?;
 
-        storage.finalize(accounts.program_id(), accounts.db())?;
+        storage.finalize(accounts.program_id())?;
+    } else {
+        storage.save_data()?;
     }
 
     Ok(())

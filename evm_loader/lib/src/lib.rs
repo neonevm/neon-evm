@@ -1,4 +1,5 @@
 pub mod account_storage;
+pub mod account_update;
 pub mod build_info;
 pub mod build_info_common;
 pub mod commands;

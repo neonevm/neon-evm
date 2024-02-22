@@ -6,13 +6,13 @@ use std::cell::{Ref, RefMut};
 
 pub use crate::config::ACCOUNT_SEED_VERSION;
 
-pub use ether_balance::BalanceAccount;
-pub use ether_contract::{AllocateResult, ContractAccount};
+pub use ether_balance::{BalanceAccount, Header as BalanceHeader};
+pub use ether_contract::{AllocateResult, ContractAccount, Header as ContractHeader};
 pub use ether_storage::{StorageCell, StorageCellAddress};
 pub use holder::Holder;
 pub use incinerator::Incinerator;
 pub use operator::Operator;
-pub use state::StateAccount;
+pub use state::{AccountsStatus, StateAccount};
 pub use state_finalized::StateFinalizedAccount;
 pub use treasury::{MainTreasury, Treasury};
 
@@ -32,15 +32,16 @@ pub mod token;
 mod treasury;
 
 pub const TAG_EMPTY: u8 = 0;
-pub const TAG_STATE: u8 = 23;
+pub const TAG_STATE: u8 = 24;
 pub const TAG_STATE_FINALIZED: u8 = 32;
 pub const TAG_HOLDER: u8 = 52;
 
-pub const TAG_ACCOUNT_BALANCE: u8 = 60;
-pub const TAG_ACCOUNT_CONTRACT: u8 = 70;
-pub const TAG_STORAGE_CELL: u8 = 43;
+pub const TAG_ACCOUNT_BALANCE: u8 = 61;
+pub const TAG_ACCOUNT_CONTRACT: u8 = 71;
+pub const TAG_STORAGE_CELL: u8 = 44;
 
-const ACCOUNT_PREFIX_LEN: usize = 2;
+pub const ACCOUNT_PREFIX_LEN: usize = 1/*tag*/ + 4/*revision*/;
+pub const HOLDER_PREFIX_LEN: usize = 1/*tag*/ + 1/*reserved*/;
 
 #[inline]
 fn section<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> Ref<'r, T> {
@@ -106,7 +107,7 @@ pub fn validate_tag(program_id: &Pubkey, info: &AccountInfo, tag: u8) -> Result<
     }
 }
 
-pub fn is_blocked(program_id: &Pubkey, info: &AccountInfo) -> Result<bool> {
+pub fn revision(program_id: &Pubkey, info: &AccountInfo) -> Result<u32> {
     if info.owner != program_id {
         return Err(Error::AccountInvalidOwner(*info.key, *program_id));
     }
@@ -116,41 +117,25 @@ pub fn is_blocked(program_id: &Pubkey, info: &AccountInfo) -> Result<bool> {
         return Err(Error::AccountInvalidData(*info.key));
     }
 
-    if legacy::is_legacy_tag(data[0]) {
-        return Err(Error::AccountLegacy(*info.key));
-    }
-
-    Ok(data[1] == 1)
+    let buffer = arrayref::array_ref![data, 1, 4];
+    Ok(u32::from_le_bytes(*buffer))
 }
 
-#[inline]
-fn set_block(program_id: &Pubkey, info: &AccountInfo, block: bool) -> Result<()> {
-    assert_eq!(info.owner, program_id);
+pub fn increment_revision(program_id: &Pubkey, info: &AccountInfo) -> Result<()> {
+    if info.owner != program_id {
+        return Err(Error::AccountInvalidOwner(*info.key, *program_id));
+    }
 
     let mut data = info.try_borrow_mut_data()?;
     if data.len() < ACCOUNT_PREFIX_LEN {
         return Err(Error::AccountInvalidData(*info.key));
     }
 
-    if legacy::is_legacy_tag(data[0]) {
-        return Err(Error::AccountLegacy(*info.key));
-    }
-
-    if block && (data[1] != 0) {
-        return Err(Error::AccountBlocked(*info.key));
-    }
-
-    data[1] = block.into();
+    let buffer = arrayref::array_mut_ref![data, 1, 4];
+    let revision = u32::from_le_bytes(*buffer);
+    *buffer = (revision + 1).to_le_bytes();
 
     Ok(())
-}
-
-pub fn block(program_id: &Pubkey, info: &AccountInfo) -> Result<()> {
-    set_block(program_id, info, true)
-}
-
-pub fn unblock(program_id: &Pubkey, info: &AccountInfo) -> Result<()> {
-    set_block(program_id, info, false)
 }
 
 /// # Safety

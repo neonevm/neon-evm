@@ -1,7 +1,7 @@
 use crate::account::legacy::{TAG_HOLDER_DEPRECATED, TAG_STATE_FINALIZED_DEPRECATED};
 use crate::account::{
-    program, AccountsDB, BalanceAccount, Holder, Operator, StateAccount, Treasury, TAG_HOLDER,
-    TAG_STATE, TAG_STATE_FINALIZED,
+    program, AccountsDB, AccountsStatus, BalanceAccount, Holder, Operator, StateAccount, Treasury,
+    TAG_HOLDER, TAG_STATE, TAG_STATE_FINALIZED,
 };
 use crate::debug::log_data;
 use crate::error::{Error, Result};
@@ -57,7 +57,7 @@ pub fn process_inner<'a>(
 
     match tag {
         TAG_HOLDER | TAG_HOLDER_DEPRECATED => {
-            let trx = {
+            let mut trx = {
                 let holder = Holder::from_account(program_id, holder_or_storage.clone())?;
                 holder.validate_owner(accounts_db.operator())?;
 
@@ -72,6 +72,11 @@ pub fn process_inner<'a>(
             log_data(&[b"HASH", &trx.hash]);
             log_data(&[b"MINER", miner_address.as_bytes()]);
 
+            if increase_gas_limit {
+                assert!(trx.chain_id().is_none());
+                trx.use_gas_limit_multiplier();
+            }
+
             let origin = trx.recover_caller_address()?;
 
             let mut gasometer = Gasometer::new(U256::ZERO, accounts_db.operator())?;
@@ -82,32 +87,28 @@ pub fn process_inner<'a>(
             excessive_lamports += crate::account::legacy::update_legacy_accounts(&accounts_db)?;
             gasometer.refund_lamports(excessive_lamports);
 
-            let mut storage = StateAccount::new(
+            let storage = StateAccount::new(
                 program_id,
                 holder_or_storage.clone(),
                 &accounts_db,
                 origin,
-                &trx,
+                trx,
             )?;
 
-            if increase_gas_limit {
-                assert!(trx.chain_id().is_none());
-                storage.use_gas_limit_multiplier();
-            }
-
-            do_begin(accounts_db, storage, gasometer, trx, origin)
+            do_begin(accounts_db, storage, gasometer)
         }
         TAG_STATE => {
-            let storage =
-                StateAccount::restore(program_id, holder_or_storage.clone(), &accounts_db, false)?;
+            let (storage, accounts_status) =
+                StateAccount::restore(program_id, holder_or_storage.clone(), &accounts_db)?;
 
-            log_data(&[b"HASH", &storage.trx_hash()]);
+            log_data(&[b"HASH", &storage.trx().hash()]);
             log_data(&[b"MINER", miner_address.as_bytes()]);
 
             let mut gasometer = Gasometer::new(storage.gas_used(), accounts_db.operator())?;
             gasometer.record_solana_transaction_cost();
 
-            do_continue(step_count, accounts_db, storage, gasometer)
+            let reset = accounts_status != AccountsStatus::Ok;
+            do_continue(step_count, accounts_db, storage, gasometer, reset)
         }
         TAG_STATE_FINALIZED | TAG_STATE_FINALIZED_DEPRECATED => Err(Error::StorageAccountFinalized),
         _ => Err(Error::AccountInvalidTag(*holder_or_storage.key, TAG_HOLDER)),

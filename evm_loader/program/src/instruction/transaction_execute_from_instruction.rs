@@ -41,6 +41,5 @@ pub fn process<'a>(
     gasometer.record_solana_transaction_cost();
     gasometer.record_address_lookup_table(accounts);
 
-    super::transaction_execute::validate(program_id, &accounts_db)?;
     super::transaction_execute::execute(accounts_db, gasometer, trx, origin)
 }

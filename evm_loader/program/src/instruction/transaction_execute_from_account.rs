@@ -46,6 +46,5 @@ pub fn process<'a>(
     gasometer.record_address_lookup_table(accounts);
     gasometer.record_write_to_holder(&trx);
 
-    super::transaction_execute::validate(program_id, &accounts_db)?;
     super::transaction_execute::execute(accounts_db, gasometer, trx, origin)
 }

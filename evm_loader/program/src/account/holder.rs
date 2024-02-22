@@ -7,7 +7,7 @@ use crate::account::TAG_STATE_FINALIZED;
 use crate::error::{Error, Result};
 use crate::types::Transaction;
 
-use super::{Operator, ACCOUNT_PREFIX_LEN, TAG_EMPTY, TAG_HOLDER};
+use super::{Operator, HOLDER_PREFIX_LEN, TAG_EMPTY, TAG_HOLDER};
 
 /// Ethereum holder data account
 #[repr(C, packed)]
@@ -21,7 +21,7 @@ pub struct Holder<'a> {
     account: AccountInfo<'a>,
 }
 
-const HEADER_OFFSET: usize = ACCOUNT_PREFIX_LEN;
+const HEADER_OFFSET: usize = HOLDER_PREFIX_LEN;
 const BUFFER_OFFSET: usize = HEADER_OFFSET + size_of::<Header>();
 
 impl<'a> Holder<'a> {

@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use evm_loader::account::legacy::{
-    LegacyEtherData, LegacyStorageData, TAG_ACCOUNT_CONTRACT_DEPRECATED,
-    TAG_STORAGE_CELL_DEPRECATED,
+    LegacyEtherData, LegacyStorageData, ACCOUNT_PREFIX_LEN_BEFORE_REVISION,
+    TAG_ACCOUNT_BALANCE_BEFORE_REVISION, TAG_ACCOUNT_CONTRACT_BEFORE_REVISION,
+    TAG_ACCOUNT_CONTRACT_DEPRECATED, TAG_STORAGE_CELL_BEFORE_REVISION, TAG_STORAGE_CELL_DEPRECATED,
 };
-use evm_loader::account::{TAG_ACCOUNT_CONTRACT, TAG_STORAGE_CELL};
+use evm_loader::account::{ACCOUNT_PREFIX_LEN, TAG_ACCOUNT_CONTRACT, TAG_STORAGE_CELL};
 use evm_loader::account_storage::find_slot_hash;
 use evm_loader::types::Address;
 use solana_sdk::rent::Rent;
@@ -12,6 +13,8 @@ use solana_sdk::sysvar::slot_hashes;
 use std::collections::HashSet;
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 
+use crate::account_update::update_account;
+use crate::NeonResult;
 use crate::{rpc::Rpc, NeonError};
 use ethnum::U256;
 use evm_loader::{
@@ -172,9 +175,13 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
         address: Address,
         chain_id: u64,
         is_writable: bool,
-    ) -> client_error::Result<(Pubkey, Option<Account>, Option<Account>)> {
+    ) -> NeonResult<(Pubkey, Option<Account>, Option<Account>)> {
         let (pubkey, _) = address.find_balance_address(self.program_id(), chain_id);
-        let account = self.use_account(pubkey, is_writable).await?;
+        let mut account = self.use_account(pubkey, is_writable).await?;
+
+        if let Some(account) = &mut account {
+            update_account(&self.program_id, &pubkey, account)?;
+        }
 
         let legacy_account = if account.is_none() && (chain_id == self.default_chain_id()) {
             let (legacy_pubkey, _) = address.find_solana_address(self.program_id());
@@ -190,9 +197,13 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
         &self,
         address: Address,
         is_writable: bool,
-    ) -> client_error::Result<(Pubkey, Option<Account>)> {
+    ) -> NeonResult<(Pubkey, Option<Account>)> {
         let (pubkey, _) = address.find_solana_address(self.program_id());
-        let account = self.use_account(pubkey, is_writable).await?;
+        let mut account = self.use_account(pubkey, is_writable).await?;
+
+        if let Some(account) = &mut account {
+            update_account(&self.program_id, &pubkey, account)?;
+        }
 
         Ok((pubkey, account))
     }
@@ -202,13 +213,17 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
         address: Address,
         index: U256,
         is_writable: bool,
-    ) -> client_error::Result<(Pubkey, Option<Account>)> {
+    ) -> NeonResult<(Pubkey, Option<Account>)> {
         let (base, _) = address.find_solana_address(self.program_id());
         let cell_address = StorageCellAddress::new(self.program_id(), &base, &index);
 
-        let account = self
+        let mut account = self
             .use_account(*cell_address.pubkey(), is_writable)
             .await?;
+
+        if let Some(account) = &mut account {
+            update_account(&self.program_id, cell_address.pubkey(), account)?;
+        }
 
         Ok((*cell_address.pubkey(), account))
     }
@@ -367,6 +382,27 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
                         .minimum_balance(BalanceAccount::required_account_size());
                     self.gas = self.gas.saturating_add(lamports);
                 }
+            }
+
+            if matches!(
+                tag,
+                TAG_ACCOUNT_BALANCE_BEFORE_REVISION
+                    | TAG_ACCOUNT_CONTRACT_BEFORE_REVISION
+                    | TAG_STORAGE_CELL_BEFORE_REVISION
+            ) {
+                const PREFIX_BEFORE: usize = ACCOUNT_PREFIX_LEN_BEFORE_REVISION;
+                const PREFIX_AFTER: usize = ACCOUNT_PREFIX_LEN;
+                const EXPANSION_LEN: usize = PREFIX_AFTER - PREFIX_BEFORE;
+
+                account.is_writable = true;
+                account.is_legacy = true;
+
+                let lamports = self
+                    .rent
+                    .minimum_balance(EXPANSION_LEN)
+                    .saturating_sub(self.rent.minimum_balance(0));
+
+                self.gas = self.gas.saturating_add(lamports);
             }
         }
 

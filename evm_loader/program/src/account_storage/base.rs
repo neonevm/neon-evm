@@ -4,11 +4,12 @@ use crate::account::{
 use crate::account_storage::ProgramAccountStorage;
 use crate::config::DEFAULT_CHAIN_ID;
 use crate::error::Result;
-use crate::types::Address;
+use crate::types::{Address, Transaction};
 use ethnum::U256;
 use solana_program::{clock::Clock, rent::Rent, system_program, sysvar::Sysvar};
 
 use super::keys_cache::KeysCache;
+use super::AccountStorage;
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn new(accounts: AccountsDB<'a>) -> Result<Self> {
@@ -94,5 +95,16 @@ impl<'a> ProgramAccountStorage<'a> {
             Some(&self.keys),
             &self.rent,
         )
+    }
+
+    pub fn origin(
+        &self,
+        address: Address,
+        transaction: &Transaction,
+    ) -> Result<BalanceAccount<'a>> {
+        let chain_id = transaction
+            .chain_id()
+            .unwrap_or_else(|| self.default_chain_id());
+        self.create_balance_account(address, chain_id)
     }
 }

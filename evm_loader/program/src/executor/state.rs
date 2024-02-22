@@ -423,8 +423,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
 
         if self.stack.is_empty() {
             // sanity check
-            assert_eq!(self.actions.len(), 1);
-            assert!(matches!(self.actions[0], Action::EvmIncrementNonce { .. }));
+            assert!(self.actions.is_empty());
         }
     }
 

@@ -357,6 +357,18 @@ pub async fn read_chains(
     simulator.get_chains().await
 }
 
+pub async fn read_default_chain_id(
+    rpc: &impl BuildConfigSimulator,
+    program_id: Pubkey,
+) -> NeonResult<u64> {
+    let mut simulator = rpc.build_config_simulator(program_id).await?;
+
+    let chains = simulator.get_chains().await?;
+    let default_chain = chains.iter().find(|chain| chain.name == "neon").unwrap();
+
+    Ok(default_chain.id)
+}
+
 impl CloneRpcClient {
     async fn get_account_with_sol(&self) -> ClientResult<Pubkey> {
         let r = self

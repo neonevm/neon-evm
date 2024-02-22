@@ -1,4 +1,3 @@
-use ethnum::U256;
 use evm_loader::account::{
     legacy::{
         LegacyFinalizedData, LegacyHolderData, TAG_HOLDER_DEPRECATED,
@@ -25,14 +24,6 @@ pub enum Status {
 }
 
 #[serde_as]
-#[derive(Debug, Default, Serialize)]
-pub struct AccountMeta {
-    pub is_writable: bool,
-    #[serde_as(as = "DisplayFromStr")]
-    pub key: Pubkey,
-}
-
-#[serde_as]
 #[skip_serializing_none]
 #[derive(Debug, Default, Serialize)]
 pub struct GetHolderResponse {
@@ -45,11 +36,8 @@ pub struct GetHolderResponse {
     pub tx: Option<[u8; 32]>,
     pub chain_id: Option<u64>,
 
-    pub gas_price: Option<U256>,
-    pub gas_limit: Option<U256>,
-    pub gas_used: Option<U256>,
-
-    pub accounts: Option<Vec<AccountMeta>>,
+    #[serde_as(as = "Option<Vec<DisplayFromStr>>")]
+    pub accounts: Option<Vec<Pubkey>>,
 }
 
 impl GetHolderResponse {
@@ -114,24 +102,14 @@ pub fn read_holder(program_id: &Pubkey, info: AccountInfo) -> NeonResult<GetHold
         }
         TAG_STATE => {
             let state = StateAccount::from_account(program_id, info)?;
-            let accounts = state
-                .blocked_accounts()
-                .iter()
-                .map(|a| AccountMeta {
-                    is_writable: a.is_writable,
-                    key: a.key,
-                })
-                .collect();
+            let accounts = state.accounts().copied().collect();
 
             Ok(GetHolderResponse {
                 status: Status::Active,
                 len: Some(data_len),
                 owner: Some(state.owner()),
-                tx: Some(state.trx_hash()),
-                chain_id: Some(state.trx_chain_id()),
-                gas_limit: Some(state.trx_gas_limit()),
-                gas_price: Some(state.trx_gas_price()),
-                gas_used: Some(state.gas_used()),
+                tx: Some(state.trx().hash()),
+                chain_id: state.trx().chain_id(),
                 accounts: Some(accounts),
             })
         }

@@ -1,5 +1,3 @@
-use solana_program::pubkey::Pubkey;
-
 use crate::account::{AccountsDB, AllocateResult};
 use crate::account_storage::ProgramAccountStorage;
 use crate::debug::log_data;
@@ -10,20 +8,6 @@ use crate::executor::ExecutorState;
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_step::log_return_value;
 use crate::types::{Address, Transaction};
-
-pub fn validate(program_id: &Pubkey, accounts: &AccountsDB) -> Result<()> {
-    for account in accounts {
-        if account.owner != program_id {
-            continue;
-        }
-
-        if crate::account::is_blocked(program_id, account)? {
-            return Err(Error::AccountBlocked(*account.key));
-        }
-    }
-
-    Ok(())
-}
 
 pub fn execute(
     accounts: AccountsDB<'_>,
@@ -37,10 +21,14 @@ pub fn execute(
 
     let mut account_storage = ProgramAccountStorage::new(accounts)?;
 
+    trx.validate(origin, &account_storage)?;
+
+    account_storage.origin(origin, &trx)?.increment_nonce()?;
+
     let (exit_reason, apply_state) = {
         let mut backend = ExecutorState::new(&account_storage);
 
-        let mut evm = Machine::new(trx, origin, &mut backend, None::<NoopEventListener>)?;
+        let mut evm = Machine::new(&trx, origin, &mut backend, None::<NoopEventListener>)?;
         let (result, _, _) = evm.execute(u64::MAX, &mut backend)?;
 
         let actions = backend.into_actions();

@@ -1,7 +1,10 @@
 use std::cell::{Ref, RefMut};
 
-use super::{ACCOUNT_PREFIX_LEN, TAG_STATE_FINALIZED};
-use crate::error::Result;
+use super::{Operator, HOLDER_PREFIX_LEN, TAG_STATE_FINALIZED};
+use crate::{
+    error::{Error, Result},
+    types::Transaction,
+};
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 /// Storage data account to store execution metainfo between steps for iterative execution
@@ -15,7 +18,7 @@ pub struct StateFinalizedAccount<'a> {
     account: AccountInfo<'a>,
 }
 
-const HEADER_OFFSET: usize = ACCOUNT_PREFIX_LEN;
+const HEADER_OFFSET: usize = HOLDER_PREFIX_LEN;
 
 impl<'a> StateFinalizedAccount<'a> {
     pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
@@ -51,5 +54,21 @@ impl<'a> StateFinalizedAccount<'a> {
     #[must_use]
     pub fn trx_hash(&self) -> [u8; 32] {
         self.header().transaction_hash
+    }
+
+    pub fn validate_owner(&self, operator: &Operator) -> Result<()> {
+        if &self.owner() != operator.key {
+            return Err(Error::HolderInvalidOwner(self.owner(), *operator.key));
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_trx(&self, transaction: &Transaction) -> Result<()> {
+        if self.trx_hash() == transaction.hash {
+            return Err(Error::StorageAccountFinalized);
+        }
+
+        Ok(())
     }
 }

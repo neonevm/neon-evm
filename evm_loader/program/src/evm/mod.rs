@@ -210,26 +210,12 @@ impl<B: Database> Machine<B, NoopEventListener> {
 impl<B: Database, T: EventListener> Machine<B, T> {
     #[maybe_async]
     pub async fn new(
-        trx: Transaction,
+        trx: &Transaction,
         origin: Address,
         backend: &mut B,
         tracer: Option<T>,
     ) -> Result<Self> {
         let trx_chain_id = trx.chain_id().unwrap_or_else(|| backend.default_chain_id());
-
-        if !backend.is_valid_chain_id(trx_chain_id) {
-            return Err(Error::InvalidChainId(trx_chain_id));
-        }
-
-        let nonce = backend.nonce(origin, trx_chain_id).await?;
-
-        if nonce == u64::MAX {
-            return Err(Error::NonceOverflow(origin));
-        }
-
-        if nonce != trx.nonce() {
-            return Err(Error::InvalidTransactionNonce(origin, nonce, trx.nonce()));
-        }
 
         if backend.balance(origin, trx_chain_id).await? < trx.value() {
             return Err(Error::InsufficientBalance(
@@ -238,12 +224,6 @@ impl<B: Database, T: EventListener> Machine<B, T> {
                 trx.value(),
             ));
         }
-
-        // TODO may be remove. This requires additional account
-        // Never actually happens, or at least should not
-        // if backend.code_size(origin).await? != 0 {
-        //     return Err(Error::SenderHasDeployedCode(origin));
-        // }
 
         if trx.target().is_some() {
             Self::new_call(trx_chain_id, trx, origin, backend, tracer).await
@@ -255,7 +235,7 @@ impl<B: Database, T: EventListener> Machine<B, T> {
     #[maybe_async]
     async fn new_call(
         chain_id: u64,
-        trx: Transaction,
+        trx: &Transaction,
         origin: Address,
         backend: &mut B,
         tracer: Option<T>,
@@ -265,7 +245,6 @@ impl<B: Database, T: EventListener> Machine<B, T> {
         let target = trx.target().unwrap();
         log_data(&[b"ENTER", b"CALL", target.as_bytes()]);
 
-        backend.increment_nonce(origin, chain_id)?;
         backend.snapshot();
 
         backend
@@ -287,7 +266,7 @@ impl<B: Database, T: EventListener> Machine<B, T> {
             gas_price: trx.gas_price(),
             gas_limit: trx.gas_limit(),
             execution_code,
-            call_data: trx.into_call_data(),
+            call_data: Buffer::from_slice(trx.call_data()),
             return_data: Buffer::empty(),
             return_range: 0..0,
             stack: Stack::new(),
@@ -304,7 +283,7 @@ impl<B: Database, T: EventListener> Machine<B, T> {
     #[maybe_async]
     async fn new_create(
         chain_id: u64,
-        trx: Transaction,
+        trx: &Transaction,
         origin: Address,
         backend: &mut B,
         tracer: Option<T>,
@@ -319,7 +298,6 @@ impl<B: Database, T: EventListener> Machine<B, T> {
             return Err(Error::DeployToExistingAccount(target, origin));
         }
 
-        backend.increment_nonce(origin, chain_id)?;
         backend.snapshot();
 
         backend.increment_nonce(target, chain_id)?;
@@ -346,7 +324,7 @@ impl<B: Database, T: EventListener> Machine<B, T> {
             pc: 0_usize,
             is_static: false,
             reason: Reason::Create,
-            execution_code: trx.into_call_data(),
+            execution_code: Buffer::from_slice(trx.call_data()),
             call_data: Buffer::empty(),
             parent: None,
             phantom: PhantomData,

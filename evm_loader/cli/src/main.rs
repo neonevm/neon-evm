@@ -90,12 +90,12 @@ async fn run(options: &ArgMatches<'_>) -> NeonCliResult {
                 .map(|result| json!(result))
         }
         ("cancel-trx", Some(params)) => {
-            let rpc_client = config.build_solana_rpc_client();
+            let rpc_client = config.build_clone_solana_rpc_client();
             let signer = build_signer(config)?;
 
             let storage_account =
                 pubkey_of(params, "storage_account").expect("storage_account parse error");
-            cancel_trx::execute(&rpc_client, &*signer, config.evm_loader, &storage_account)
+            cancel_trx::execute(rpc_client, &*signer, config.evm_loader, &storage_account)
                 .await
                 .map(|result| json!(result))
         }
