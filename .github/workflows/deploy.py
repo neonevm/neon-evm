@@ -105,16 +105,19 @@ def run_subprocess(command):
 @cli.command(name="run_tests")
 @click.option('--github_sha')
 @click.option('--neon_test_branch')
-def run_tests(github_sha, neon_test_branch):
+@click.option('--base_ref_branch')
+def run_tests(github_sha, neon_test_branch, base_ref_branch):
     os.environ["EVM_LOADER_IMAGE"] = f"{IMAGE_NAME}:{github_sha}"
 
-    if neon_test_branch in GithubClient.get_branches_list(NEON_TESTS_ENDPOINT) \
+    if GithubClient.is_branch_exist(NEON_TESTS_ENDPOINT, neon_test_branch) \
             and neon_test_branch not in ('master', 'develop'):
         neon_test_image_tag = neon_test_branch
+    elif re.match(VERSION_BRANCH_TEMPLATE, base_ref_branch): # PR to version branch
+        neon_test_image_tag = base_ref_branch
     else:
         neon_test_image_tag = 'latest'
     os.environ["NEON_TESTS_IMAGE"] = f"{NEON_TEST_IMAGE_NAME}:{neon_test_image_tag}"
-
+    click.echo(f"NEON_TESTS_IMAGE: {os.environ['NEON_TESTS_IMAGE']}")
     project_name = f"neon-evm-{github_sha}"
     stop_containers(project_name)
 

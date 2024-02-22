@@ -12,9 +12,6 @@ EVM_LOADER_PATH=${NEON_BIN}/evm_loader.so
 METAPLEX=metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
 METAPLEX_PATH=${NEON_BIN}/metaplex.so
 
-TEST_INVOKE_PROGRAM_ID_KEYPAIR=${NEON_BIN}/neon_test_invoke_program-keypair.json
-TEST_INVOKE=$(solana address -k ${TEST_INVOKE_PROGRAM_ID_KEYPAIR})
-TEST_INVOKE_PATH=${NEON_BIN}/neon_test_invoke_program.so
 
 VALIDATOR_ARGS=(
   --reset
@@ -23,8 +20,15 @@ VALIDATOR_ARGS=(
   --ticks-per-slot 16
   --upgradeable-program ${EVM_LOADER} ${EVM_LOADER_PATH} ${EVM_LOADER_AUTHORITY_KEYPAIR}
   --bpf-program ${METAPLEX} ${METAPLEX_PATH}
-  --bpf-program ${TEST_INVOKE} ${TEST_INVOKE_PATH}
 )
+
+LIST_OF_TEST_PROGRAMS=("test_invoke_program" "counter" "cross_program_invocation" "transfer_sol" "transfer_tokens")
+
+for program in "${LIST_OF_TEST_PROGRAMS[@]}"; do
+  keypair="${NEON_BIN}/deploy/${program}/${program}-keypair.json"
+  address=$(solana address -k $keypair)
+  VALIDATOR_ARGS+=(--bpf-program $address ${NEON_BIN}/deploy/$program/$program.so)
+done
 
 if [[ -n $GEYSER_PLUGIN_CONFIG ]]; then
   echo "Using geyser plugin with config: $GEYSER_PLUGIN_CONFIG"

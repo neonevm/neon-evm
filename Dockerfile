@@ -29,7 +29,7 @@ RUN cargo fmt --check && \
 
 
 # Add neon_test_invoke_program to the genesis
-FROM neonlabsorg/neon_test_invoke_program:develop AS neon_test_invoke_program
+FROM neonlabsorg/neon_test_programs:latest AS neon_test_programs
 
 # Define solana-image that contains utility
 FROM builder AS base
@@ -40,8 +40,8 @@ COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/deploy/evm_loader-dump.txt /opt/
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-cli /opt/
 COPY --from=evm-loader-builder /opt/neon-evm/evm_loader/target/release/neon-api /opt/
-COPY --from=neon_test_invoke_program /opt/neon_test_invoke_program.so /opt/
-COPY --from=neon_test_invoke_program /opt/neon_test_invoke_program-keypair.json /opt/
+
+COPY --from=neon_test_programs /opt/deploy/ /opt/deploy/
 
 COPY ci/wait-for-solana.sh \
     ci/wait-for-neon.sh \

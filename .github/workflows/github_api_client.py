@@ -42,6 +42,15 @@ class GithubClient():
         proxy_branches_obj = requests.get(
             f"{endpoint}/branches?per_page=100").json()
         return [item["name"] for item in proxy_branches_obj]
+    @staticmethod
+    def is_branch_exist(endpoint, branch):
+        if branch:
+            response = requests.get(f"{endpoint}/branches/{branch}")
+            if response.status_code == 200:
+                click.echo(f"The branch {branch} exist in the {endpoint} repository")
+                return True
+        else:
+            return False
 
     def get_proxy_run_info(self, id):
         response = requests.get(

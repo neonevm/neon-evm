@@ -64,7 +64,7 @@ jobs:
           elif [[ "${{ steps.tag_creation.outputs.base_branch }}" != "" ]]; then # tag creation
             tag=${{ steps.tag_creation.outputs.base_branch }}
 
-          elif [[ "${{ github.head_ref }}" != "" ]]; then # pr to feature or version branch
+          elif [[ "${{ github.head_ref }}" != "" ]]; then # pr to feature or version branch or develop
             tag=${{ github.head_ref }}
           else
             tag='develop'
@@ -75,7 +75,8 @@ jobs:
         run: |
           python3 ./.github/workflows/deploy.py run_tests \
           --github_sha=${GITHUB_SHA} \
-          --neon_test_branch=${{ steps.neon_test_branch.outputs.value }}
+          --neon_test_branch=${{ steps.neon_test_branch.outputs.value }} \
+          --base_ref_branch=${{ github.base_ref }}
   trigger-proxy-tests:
     runs-on: trigger-runner
     needs:
