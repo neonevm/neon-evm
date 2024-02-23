@@ -13,13 +13,16 @@ fn from_before_revision(account: &mut Account, new_tag: u8) {
     const PREFIX_BEFORE: usize = ACCOUNT_PREFIX_LEN_BEFORE_REVISION;
     const PREFIX_AFTER: usize = ACCOUNT_PREFIX_LEN;
 
-    assert!(account.data.len() > PREFIX_BEFORE);
+    let data: &mut Vec<u8> = &mut account.data;
 
-    let required_len = account.data.len() + PREFIX_AFTER - PREFIX_BEFORE;
-    account.data.resize(required_len, 0);
+    assert!(data.len() > PREFIX_BEFORE);
+    let data_len = data.len() - PREFIX_BEFORE;
 
-    account.data.copy_within(PREFIX_BEFORE.., PREFIX_AFTER);
-    account.data[0] = new_tag;
+    let required_len = data.len() + PREFIX_AFTER - PREFIX_BEFORE;
+    data.resize(required_len, 0);
+
+    data.copy_within(PREFIX_BEFORE..(PREFIX_BEFORE + data_len), PREFIX_AFTER);
+    data[0] = new_tag;
 }
 
 pub fn update_account(program_id: &Pubkey, key: &Pubkey, account: &mut Account) -> NeonResult<()> {

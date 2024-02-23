@@ -17,18 +17,21 @@ pub fn from_before_revision<'a>(
     const PREFIX_BEFORE: usize = ACCOUNT_PREFIX_LEN_BEFORE_REVISION;
     const PREFIX_AFTER: usize = ACCOUNT_PREFIX_LEN;
 
+    assert!(account.data_len() > PREFIX_BEFORE);
+    let data_len = account.data_len() - PREFIX_BEFORE;
+
     let required_len = account.data_len() + PREFIX_AFTER - PREFIX_BEFORE;
     account.realloc(required_len, false)?;
 
-    let minimum_balance = rent.minimum_balance(account.data_len());
+    let minimum_balance = rent.minimum_balance(required_len);
     if account.lamports() < minimum_balance {
         let required_lamports = minimum_balance - account.lamports();
         system.transfer(operator, account, required_lamports)?;
     }
 
     let mut account_data = account.try_borrow_mut_data()?;
+    account_data.copy_within(PREFIX_BEFORE..(PREFIX_BEFORE + data_len), PREFIX_AFTER);
     account_data[0] = new_tag;
-    account_data.copy_within(PREFIX_BEFORE.., PREFIX_AFTER);
 
     Ok(())
 }
