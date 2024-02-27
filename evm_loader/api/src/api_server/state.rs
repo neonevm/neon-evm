@@ -1,4 +1,4 @@
-use crate::Config;
+use neon_lib::config::APIOptions;
 use neon_lib::rpc::{CallDbClient, CloneRpcClient, RpcEnum};
 use neon_lib::types::TracerDb;
 use neon_lib::NeonError;
@@ -6,14 +6,14 @@ use neon_lib::NeonError;
 pub struct State {
     pub tracer_db: TracerDb,
     pub rpc_client: CloneRpcClient,
-    pub config: Config,
+    pub config: APIOptions,
 }
 
 impl State {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: APIOptions) -> Self {
         Self {
-            tracer_db: TracerDb::new(config.db_config.as_ref().expect("db-config not found")),
-            rpc_client: config.build_clone_solana_rpc_client(),
+            tracer_db: TracerDb::new(&config.db_config),
+            rpc_client: CloneRpcClient::new_from_api_config(&config),
             config,
         }
     }

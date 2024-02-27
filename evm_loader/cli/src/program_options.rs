@@ -117,6 +117,16 @@ pub fn parse<'a>() -> ArgMatches<'a> {
                 .help("Pubkey for evm_loader contract")
         )
         .arg(
+            Arg::with_name("solana_key_for_config")
+                .long("solana_key_for_config")
+                .value_name("SOLANA_KEY_FOR_CONFIG")
+                .takes_value(true)
+                .global(true)
+                .required(false)
+                .validator(is_valid_pubkey)
+                .help("Operator pubkey, used for config simulation")
+        )
+        .arg(
             Arg::with_name("commitment")
                 .long("commitment")
                 .takes_value(true)

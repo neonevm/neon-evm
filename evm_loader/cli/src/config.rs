@@ -5,7 +5,7 @@ use solana_clap_utils::{
     input_parsers::pubkey_of, input_validators::normalize_to_url_if_moniker,
     keypair::keypair_from_path,
 };
-use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair, signer::Signer};
 use std::str::FromStr;
 
 /// # Panics
@@ -45,12 +45,22 @@ pub fn create(options: &ArgMatches) -> Result<Config, NeonError> {
     )
     .ok();
 
+    let key_for_config = if let Some(key_for_config) = pubkey_of(options, "solana_key_for_config") {
+        key_for_config
+    } else {
+        fee_payer
+            .as_ref()
+            .map(Keypair::pubkey)
+            .ok_or(NeonError::SolanaKeyForConfigNotSpecified)?
+    };
+
     let db_config = options
         .value_of("db_config")
         .map(|path| solana_cli_config::load_config_file(path).expect("load db-config error"));
 
     Ok(Config {
         evm_loader,
+        key_for_config,
         fee_payer,
         commitment,
         solana_cli_config,

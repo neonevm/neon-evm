@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use base64::Engine;
 use enum_dispatch::enum_dispatch;
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use solana_program_test::{ProgramTest, ProgramTestContext};
@@ -22,8 +21,7 @@ use crate::{rpc::Rpc, NeonError, NeonResult};
 
 use crate::rpc::{CallDbClient, CloneRpcClient};
 use serde_with::{serde_as, DisplayFromStr};
-use solana_client::client_error::Result as ClientResult;
-use solana_client::rpc_config::{RpcLargestAccountsConfig, RpcSimulateTransactionConfig};
+use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use tokio::sync::{Mutex, MutexGuard, OnceCell};
 
 #[derive(Debug, Serialize)]
@@ -117,8 +115,14 @@ fn set_program_account(
 }
 
 pub enum ConfigSimulator<'r> {
-    CloneRpcClient(Pubkey, &'r CloneRpcClient),
-    ProgramTestContext(Pubkey, MutexGuard<'static, ProgramTestContext>),
+    CloneRpcClient {
+        program_id: Pubkey,
+        rpc: &'r CloneRpcClient,
+    },
+    ProgramTestContext {
+        program_id: Pubkey,
+        program_test: MutexGuard<'static, ProgramTestContext>,
+    },
 }
 
 #[async_trait(?Send)]
@@ -130,7 +134,10 @@ pub trait BuildConfigSimulator {
 #[async_trait(?Send)]
 impl BuildConfigSimulator for CloneRpcClient {
     async fn build_config_simulator(&self, program_id: Pubkey) -> NeonResult<ConfigSimulator> {
-        Ok(ConfigSimulator::CloneRpcClient(program_id, self))
+        Ok(ConfigSimulator::CloneRpcClient {
+            program_id,
+            rpc: self,
+        })
     }
 }
 
@@ -139,15 +146,15 @@ impl BuildConfigSimulator for CallDbClient {
     async fn build_config_simulator(&self, program_id: Pubkey) -> NeonResult<ConfigSimulator> {
         let program_data = self.read_program_data_from_account(program_id).await?;
 
-        let mut program_test_context = program_test_context().await;
+        let mut program_test = program_test_context().await;
 
-        set_program_account(&mut program_test_context, program_id, program_data);
-        program_test_context.get_new_latest_blockhash().await?;
+        set_program_account(&mut program_test, program_id, program_data);
+        program_test.get_new_latest_blockhash().await?;
 
-        Ok(ConfigSimulator::ProgramTestContext(
+        Ok(ConfigSimulator::ProgramTestContext {
             program_id,
-            program_test_context,
-        ))
+            program_test,
+        })
     }
 }
 
@@ -156,8 +163,7 @@ impl CloneRpcClient {
         &self,
         instruction: Instruction,
     ) -> NeonResult<Vec<String>> {
-        let tx =
-            Transaction::new_with_payer(&[instruction], Some(&self.get_account_with_sol().await?));
+        let tx = Transaction::new_with_payer(&[instruction], Some(&self.key_for_config));
 
         let result = self
             .simulate_transaction_with_config(
@@ -216,8 +222,8 @@ impl SolanaInstructionSimulator for ProgramTestContext {
 impl ConfigSimulator<'_> {
     fn program_id(&self) -> Pubkey {
         match self {
-            ConfigSimulator::CloneRpcClient(program_id, _) => *program_id,
-            ConfigSimulator::ProgramTestContext(program_id, _) => *program_id,
+            ConfigSimulator::CloneRpcClient { program_id, .. } => *program_id,
+            ConfigSimulator::ProgramTestContext { program_id, .. } => *program_id,
         }
     }
 
@@ -257,15 +263,11 @@ impl ConfigSimulator<'_> {
         instruction: Instruction,
     ) -> NeonResult<Vec<String>> {
         match self {
-            ConfigSimulator::CloneRpcClient(_, clone_rpc_client) => {
-                clone_rpc_client
-                    .simulate_solana_instruction(instruction)
-                    .await
+            ConfigSimulator::CloneRpcClient { rpc, .. } => {
+                rpc.simulate_solana_instruction(instruction).await
             }
-            ConfigSimulator::ProgramTestContext(_, program_test_context) => {
-                program_test_context
-                    .simulate_solana_instruction(instruction)
-                    .await
+            ConfigSimulator::ProgramTestContext { program_test, .. } => {
+                program_test.simulate_solana_instruction(instruction).await
             }
         }
     }
@@ -367,19 +369,6 @@ pub async fn read_default_chain_id(
     let default_chain = chains.iter().find(|chain| chain.name == "neon").unwrap();
 
     Ok(default_chain.id)
-}
-
-impl CloneRpcClient {
-    async fn get_account_with_sol(&self) -> ClientResult<Pubkey> {
-        let r = self
-            .get_largest_accounts_with_config(RpcLargestAccountsConfig {
-                commitment: Some(self.commitment()),
-                filter: None,
-            })
-            .await?; // TODO https://neonlabs.atlassian.net/browse/NDEV-2462 replace with more efficient RPC call
-
-        Ok(Pubkey::from_str(&r.value[0].address).unwrap())
-    }
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ use neon_lib::{
         cancel_trx, collect_treasury, emulate, get_balance, get_config, get_contract, get_holder,
         get_neon_elf, get_storage_at, init_environment, trace,
     },
+    rpc::CloneRpcClient,
     types::{BalanceAddress, EmulateRequest},
     Config,
 };
@@ -90,7 +91,7 @@ async fn run(options: &ArgMatches<'_>) -> NeonCliResult {
                 .map(|result| json!(result))
         }
         ("cancel-trx", Some(params)) => {
-            let rpc_client = config.build_clone_solana_rpc_client();
+            let rpc_client = CloneRpcClient::new_from_config(config);
             let signer = build_signer(config)?;
 
             let storage_account =
@@ -108,7 +109,7 @@ async fn run(options: &ArgMatches<'_>) -> NeonCliResult {
                 .map(|result| json!(result))
         }
         ("collect-treasury", Some(_)) => {
-            let rpc_client = config.build_clone_solana_rpc_client();
+            let rpc_client = CloneRpcClient::new_from_config(config);
             let signer = build_signer(config)?;
 
             collect_treasury::execute(config, &rpc_client, &*signer)
@@ -116,7 +117,7 @@ async fn run(options: &ArgMatches<'_>) -> NeonCliResult {
                 .map(|result| json!(result))
         }
         ("init-environment", Some(params)) => {
-            let rpc_client = config.build_clone_solana_rpc_client();
+            let rpc_client = CloneRpcClient::new_from_config(config);
             let signer = build_signer(config)?;
 
             let file = params.value_of("file");
@@ -172,7 +173,7 @@ async fn build_rpc(options: &ArgMatches<'_>, config: &Config) -> Result<RpcEnum,
             .await?,
         )
     } else {
-        RpcEnum::CloneRpcClient(config.build_clone_solana_rpc_client())
+        RpcEnum::CloneRpcClient(CloneRpcClient::new_from_config(config))
     })
 }
 

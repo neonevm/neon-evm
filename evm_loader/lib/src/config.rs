@@ -1,18 +1,13 @@
 use std::{env, str::FromStr};
 
-use crate::rpc::CloneRpcClient;
-use crate::{types::ChDbConfig, NeonError};
+use crate::types::ChDbConfig;
 use serde::{Deserialize, Serialize};
-use solana_clap_utils::{
-    input_validators::normalize_to_url_if_moniker, keypair::keypair_from_path,
-};
-use solana_cli_config::Config as SolanaConfig;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair};
 
 #[derive(Debug)]
 pub struct Config {
     pub evm_loader: Pubkey,
+    pub key_for_config: Pubkey,
     pub fee_payer: Option<Keypair>,
     pub commitment: CommitmentConfig,
     pub solana_cli_config: solana_cli_config::Config,
@@ -21,67 +16,13 @@ pub struct Config {
     pub keypair_path: String,
 }
 
-impl Config {
-    pub fn build_solana_rpc_client(&self) -> RpcClient {
-        RpcClient::new_with_commitment(self.json_rpc_url.clone(), self.commitment)
-    }
-
-    pub fn build_clone_solana_rpc_client(&self) -> CloneRpcClient {
-        CloneRpcClient::new(self.build_solana_rpc_client())
-    }
-}
-
-/// # Errors
-pub fn create_from_api_config(api_config: &APIOptions) -> Result<Config, NeonError> {
-    let solana_cli_config: SolanaConfig =
-        if let Some(path) = api_config.solana_cli_config_path.clone() {
-            solana_cli_config::Config::load(path.as_str()).unwrap_or_default()
-        } else {
-            solana_cli_config::Config::default()
-        };
-
-    let commitment = CommitmentConfig::from_str(&api_config.commitment)
-        .unwrap_or_else(|_| CommitmentConfig::confirmed());
-
-    let json_rpc_url = normalize_to_url_if_moniker(api_config.json_rpc_url.clone());
-
-    let evm_loader: Pubkey = if let Ok(val) = Pubkey::from_str(&api_config.evm_loader) {
-        val
-    } else {
-        return Err(NeonError::EvmLoaderNotSpecified);
-    };
-
-    let keypair_path: String = api_config.keypair.clone();
-
-    let fee_payer = keypair_from_path(
-        &Default::default(),
-        &api_config.fee_payer,
-        "fee_payer",
-        true,
-    )
-    .ok();
-
-    let db_config: Option<ChDbConfig> = Option::from(api_config.db_config.clone());
-
-    Ok(Config {
-        evm_loader,
-        fee_payer,
-        commitment,
-        solana_cli_config,
-        db_config,
-        json_rpc_url,
-        keypair_path,
-    })
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct APIOptions {
     pub solana_cli_config_path: Option<String>,
-    pub commitment: String,
+    pub commitment: CommitmentConfig,
     pub json_rpc_url: String,
-    pub evm_loader: String,
-    pub keypair: String,
-    pub fee_payer: String,
+    pub evm_loader: Pubkey,
+    pub key_for_config: Pubkey,
     pub db_config: ChDbConfig,
 }
 
@@ -93,15 +34,21 @@ pub fn load_api_config_from_enviroment() -> APIOptions {
 
     let commitment = env::var("COMMITMENT")
         .map(|v| v.to_lowercase())
-        .expect("commitment variable must be set");
+        .ok()
+        .and_then(|s| CommitmentConfig::from_str(&s).ok())
+        .unwrap_or(CommitmentConfig::confirmed());
 
     let json_rpc_url = env::var("SOLANA_URL").expect("solana url variable must be set");
 
-    let evm_loader = env::var("EVM_LOADER").expect("evm loader variable must be set");
+    let evm_loader = env::var("EVM_LOADER")
+        .ok()
+        .and_then(|v| Pubkey::from_str(&v).ok())
+        .expect("EVM_LOADER variable must be a valid pubkey");
 
-    let keypair = env::var("KEYPAIR").expect("keypair must variable be set");
-
-    let fee_payer = env::var("FEEPAIR").expect("fee pair variable must be set");
+    let key_for_config = env::var("SOLANA_KEY_FOR_CONFIG")
+        .ok()
+        .and_then(|v| Pubkey::from_str(&v).ok())
+        .expect("SOLANA_KEY_FOR_CONFIG variable must be a valid pubkey");
 
     let db_config = load_db_config_from_enviroment();
 
@@ -110,8 +57,7 @@ pub fn load_api_config_from_enviroment() -> APIOptions {
         commitment,
         json_rpc_url,
         evm_loader,
-        keypair,
-        fee_payer,
+        key_for_config,
         db_config,
     }
 }

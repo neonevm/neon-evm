@@ -42,6 +42,7 @@ solana-test-validator "${VALIDATOR_ARGS[@]}" > /dev/null &
 neon-cli --url http://localhost:8899 --evm_loader $EVM_LOADER \
   --commitment confirmed \
   --keypair ${EVM_LOADER_AUTHORITY_KEYPAIR} \
+  --solana_key_for_config BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih \
   --loglevel trace init-environment --send-trx --keys-dir /opt/keys
 
 tail +1f test-ledger/validator.log

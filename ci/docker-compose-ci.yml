@@ -31,12 +31,10 @@ services:
       NEON_API_LISTENER_ADDR: 0.0.0.0:8085
       SOLANA_URL: http://solana:8899
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
-      NEON_TOKEN_MINT: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
-      NEON_CHAIN_ID: 111
+      # operator-keypairs/id.json
+      SOLANA_KEY_FOR_CONFIG: BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih
       COMMITMENT: confirmed
       NEON_DB_CLICKHOUSE_URLS: "http://45.250.253.36:8123;http://45.250.253.38:8123"
-      KEYPAIR: /opt/operator-keypairs/id.json
-      FEEPAIR: /opt/operator-keypairs/id.json
     image: ${EVM_LOADER_IMAGE}
     ports:
     - "8085"

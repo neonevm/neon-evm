@@ -112,6 +112,8 @@ pub enum NeonError {
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("TryFromSlice Error. {0}")]
     TryFromSliceError(#[from] TryFromSliceError),
+    #[error("Solana pubkey for config must be specified.")]
+    SolanaKeyForConfigNotSpecified,
 }
 
 impl NeonError {
@@ -153,6 +155,7 @@ impl NeonError {
             NeonError::BincodeError(_) => 257,
             NeonError::FromUtf8Error(_) => 258,
             NeonError::TryFromSliceError(_) => 259,
+            NeonError::SolanaKeyForConfigNotSpecified => 260,
         }
     }
 }

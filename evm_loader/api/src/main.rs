@@ -52,10 +52,7 @@ async fn main() -> NeonApiResult<()> {
     info!("{}", get_build_info());
 
     let api_config = config::load_api_config_from_enviroment();
-
-    let config = config::create_from_api_config(&api_config)?;
-
-    let state: NeonApiState = Data::new(api_server::state::State::new(config));
+    let state: NeonApiState = Data::new(api_server::state::State::new(api_config));
 
     let listener_addr = options
         .value_of("host")

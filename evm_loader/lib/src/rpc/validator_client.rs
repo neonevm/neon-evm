@@ -1,3 +1,5 @@
+use crate::{config::APIOptions, Config};
+
 use super::Rpc;
 use async_trait::async_trait;
 use solana_client::{
@@ -14,11 +16,32 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CloneRpcClient(Arc<RpcClient>);
+pub struct CloneRpcClient {
+    pub rpc: Arc<RpcClient>,
+    pub key_for_config: Pubkey,
+}
 
 impl CloneRpcClient {
-    pub fn new(rpc_client: RpcClient) -> Self {
-        Self(Arc::new(rpc_client))
+    pub fn new_from_config(config: &Config) -> Self {
+        let url = config.json_rpc_url.clone();
+        let commitment = config.commitment;
+
+        let rpc_client = RpcClient::new_with_commitment(url, commitment);
+        Self {
+            rpc: Arc::new(rpc_client),
+            key_for_config: config.key_for_config,
+        }
+    }
+
+    pub fn new_from_api_config(config: &APIOptions) -> Self {
+        let url = config.json_rpc_url.clone();
+        let commitment = config.commitment;
+
+        let rpc_client = RpcClient::new_with_commitment(url, commitment);
+        Self {
+            rpc: Arc::new(rpc_client),
+            key_for_config: config.key_for_config,
+        }
     }
 }
 
@@ -26,14 +49,14 @@ impl Deref for CloneRpcClient {
     type Target = RpcClient;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.rpc
     }
 }
 
 #[async_trait(?Send)]
 impl Rpc for CloneRpcClient {
     async fn get_account(&self, key: &Pubkey) -> RpcResult<Option<Account>> {
-        self.0
+        self.rpc
             .get_account_with_commitment(key, self.commitment())
             .await
     }
@@ -43,7 +66,7 @@ impl Rpc for CloneRpcClient {
         key: &Pubkey,
         commitment: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
-        self.0.get_account_with_commitment(key, commitment).await
+        self.rpc.get_account_with_commitment(key, commitment).await
     }
 
     async fn get_multiple_accounts(
@@ -52,7 +75,7 @@ impl Rpc for CloneRpcClient {
     ) -> ClientResult<Vec<Option<Account>>> {
         let mut result: Vec<Option<Account>> = Vec::new();
         for chunk in pubkeys.chunks(100) {
-            let mut accounts = self.0.get_multiple_accounts(chunk).await?;
+            let mut accounts = self.rpc.get_multiple_accounts(chunk).await?;
             result.append(&mut accounts);
         }
 
@@ -60,10 +83,10 @@ impl Rpc for CloneRpcClient {
     }
 
     async fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
-        self.0.get_block_time(slot).await
+        self.rpc.get_block_time(slot).await
     }
 
     async fn get_slot(&self) -> ClientResult<Slot> {
-        self.0.get_slot().await
+        self.rpc.get_slot().await
     }
 }
