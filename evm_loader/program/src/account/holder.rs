@@ -116,7 +116,7 @@ impl<'a> Holder<'a> {
         {
             let mut buffer = self.buffer_mut();
             let Some(buffer) = buffer.get_mut(begin..end) else {
-                return Err(Error::HolderInsufficientSize(buffer.len(), end))
+                return Err(Error::HolderInsufficientSize(buffer.len(), end));
             };
 
             buffer.copy_from_slice(bytes);

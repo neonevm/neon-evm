@@ -191,7 +191,7 @@ impl RevisionMap {
             return None;
         }
 
-        let value = self.map.range(..=slot).rev().next();
+        let value = self.map.range(..=slot).next_back();
 
         value.map(|(_, v)| v.clone())
     }

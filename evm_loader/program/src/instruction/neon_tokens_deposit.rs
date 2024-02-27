@@ -5,7 +5,7 @@ use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent, sysv
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{program, token, AccountsDB, BalanceAccount, Operator, ACCOUNT_SEED_VERSION};
-use crate::config::DEFAULT_CHAIN_ID;
+use crate::config::{CHAIN_ID_LIST, DEFAULT_CHAIN_ID};
 use crate::error::{Error, Result};
 use crate::types::Address;
 
@@ -77,11 +77,11 @@ fn validate(
         return Err(Error::AccountInvalidKey(contract_account, expected_pubkey));
     }
 
-    let Ok(chain_id_index) = crate::config::CHAIN_ID_LIST.binary_search_by_key(&chain_id, |c| c.0) else {
+    let Ok(chain_id_index) = CHAIN_ID_LIST.binary_search_by_key(&chain_id, |c| c.0) else {
         return Err(Error::InvalidChainId(chain_id));
     };
 
-    let expected_mint = crate::config::CHAIN_ID_LIST[chain_id_index].2;
+    let expected_mint = CHAIN_ID_LIST[chain_id_index].2;
     if mint != expected_mint {
         return Err(Error::AccountInvalidKey(mint, expected_mint));
     }

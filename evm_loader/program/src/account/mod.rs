@@ -238,9 +238,10 @@ impl<'a> AccountsDB<'a> {
 
     #[must_use]
     pub fn get(&self, pubkey: &Pubkey) -> &AccountInfo<'a> {
-        let Ok(index) = self.sorted_accounts.binary_search_by_key(&pubkey, |a| a.key) else {
-            panic!("address {pubkey} must be present in the transaction");
-        };
+        let index = self
+            .sorted_accounts
+            .binary_search_by_key(&pubkey, |a| a.key)
+            .unwrap_or_else(|_| panic!("address {pubkey} must be present in the transaction"));
 
         // We just got an 'index' from the binary_search over this vector.
         unsafe { self.sorted_accounts.get_unchecked(index) }

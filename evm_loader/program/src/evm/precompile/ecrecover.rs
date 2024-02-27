@@ -26,7 +26,9 @@ pub fn ecrecover(input: &[u8]) -> Vec<u8> {
 
     let recovery_id = v.as_u8() - 27;
 
-    let Ok(public_key) = secp256k1_recover(&msg[..], recovery_id, &sig[..]) else { return vec![] };
+    let Ok(public_key) = secp256k1_recover(&msg[..], recovery_id, &sig[..]) else {
+        return vec![];
+    };
 
     let mut address = keccak::hash(&public_key.to_bytes()).to_bytes();
     address[0..12].fill(0);

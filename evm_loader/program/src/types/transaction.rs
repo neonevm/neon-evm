@@ -221,7 +221,7 @@ impl rlp::Decodable for AccessListTx {
         let rlp_access_list = rlp.at(7)?;
         let mut access_list = vec![];
 
-        for entry in rlp_access_list.iter() {
+        for entry in &rlp_access_list {
             // Check if entry is a list
             if entry.is_list() {
                 // Parse address from first element
@@ -230,7 +230,7 @@ impl rlp::Decodable for AccessListTx {
                 // Get storage keys from second element
                 let mut storage_keys: Vec<StorageKey> = vec![];
 
-                for key in entry.at(1)?.iter() {
+                for key in &entry.at(1)? {
                     storage_keys.push(key.as_val()?);
                 }
 

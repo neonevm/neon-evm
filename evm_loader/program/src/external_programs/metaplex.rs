@@ -1,49 +1,48 @@
+use crate::error::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
-use mpl_token_metadata::assertions::collection::assert_collection_update_is_valid;
-use mpl_token_metadata::assertions::uses::assert_valid_use;
-use mpl_token_metadata::utils::{assert_data_valid, assert_initialized, puff_out_data_fields};
-use solana_program::account_info::IntoAccountInfo;
+use mpl_token_metadata::{
+    accounts::{MasterEdition, Metadata},
+    instructions::{CreateMasterEditionV3InstructionArgs, CreateMetadataAccountV3InstructionArgs},
+    programs::MPL_TOKEN_METADATA_ID,
+    types::{Key, TokenStandard},
+};
 use solana_program::instruction::AccountMeta;
 use solana_program::program_option::COption;
 use solana_program::rent::Rent;
-use spl_token::state::Mint;
+use solana_program::{account_info::IntoAccountInfo, program_pack::Pack};
 use std::collections::BTreeMap;
 
 use crate::executor::OwnedAccountInfo;
-use mpl_token_metadata::instruction::{
-    CreateMasterEditionArgs, CreateMetadataAccountArgsV3, MetadataInstruction,
-};
-use mpl_token_metadata::state::{
-    Key, MasterEditionV2, Metadata, TokenMetadataAccount, TokenStandard, MAX_MASTER_EDITION_LEN,
-    MAX_METADATA_LEN,
-};
-use solana_program::{
-    entrypoint::ProgramResult, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey,
-};
+use solana_program::pubkey::Pubkey;
 
 pub fn emulate(
     instruction: &[u8],
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
     rent: &Rent,
-) -> ProgramResult {
-    match MetadataInstruction::try_from_slice(instruction)? {
-        MetadataInstruction::CreateMetadataAccountV3(args) => {
-            create_metadata_accounts_v3(meta, accounts, &args, rent)
+) -> Result<()> {
+    let discriminator = instruction[0];
+    let data = &instruction[1..];
+
+    match discriminator {
+        33 => {
+            let args = CreateMetadataAccountV3InstructionArgs::try_from_slice(data)?;
+            create_metadata_accounts_v3(meta, accounts, args, rent)
         }
-        MetadataInstruction::CreateMasterEditionV3(args) => {
-            create_master_edition_v3(meta, accounts, &args, rent)
+        17 => {
+            let args = CreateMasterEditionV3InstructionArgs::try_from_slice(data)?;
+            create_master_edition_v3(meta, accounts, args.max_supply, rent)
         }
-        _ => Err!(ProgramError::InvalidInstructionData; "Unknown Metaplex instruction"),
+        _ => Err("Unknown Metaplex instruction".into()),
     }
 }
 
 fn create_metadata_accounts_v3(
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
-    args: &CreateMetadataAccountArgsV3,
+    args: CreateMetadataAccountV3InstructionArgs,
     rent: &Rent,
-) -> ProgramResult {
+) -> Result<()> {
     let metadata_account_key = &meta[0].pubkey;
     let mint_key = &meta[1].pubkey;
     // let _mint_authority_key = &meta[2].pubkey;
@@ -52,68 +51,40 @@ fn create_metadata_accounts_v3(
     // let _system_account_key = &meta[5].pubkey;
     // let _rent_key = &meta[6].pubkey;
 
-    let mut metadata: Metadata = {
-        let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
-        metadata_account.data.resize(MAX_METADATA_LEN, 0);
-        metadata_account.owner = mpl_token_metadata::ID;
-        metadata_account.lamports = metadata_account
-            .lamports
-            .max(rent.minimum_balance(MAX_METADATA_LEN));
-
-        let metadata_account_info = metadata_account.into_account_info();
-        Metadata::from_account_info(&metadata_account_info)?
-    };
-
-    let mint: Mint = {
+    let mint = {
         let mint_info = accounts.get_mut(mint_key).unwrap().into_account_info();
-        assert_initialized(&mint_info)?
+        crate::account::token::Mint::from_account(&mint_info)?.into_data()
     };
 
-    let compatible_data = args.data.to_v1();
-    assert_data_valid(
-        &compatible_data,
-        update_authority_key,
-        &metadata,
-        false,
-        meta[4].is_signer,
-    )?;
+    let (_, edition_bump_seed) = MasterEdition::find_pda(mint_key);
 
-    metadata.mint = *mint_key;
-    metadata.key = Key::MetadataV1;
-    metadata.data = compatible_data;
-    metadata.is_mutable = args.is_mutable;
-    metadata.update_authority = *update_authority_key;
-
-    assert_valid_use(&args.data.uses, &None)?;
-    metadata.uses = args.data.uses.clone();
-
-    assert_collection_update_is_valid(false, &None, &args.data.collection)?;
-    metadata.collection = args.data.collection.clone();
-    metadata.collection_details = None;
-
-    let token_standard = if mint.decimals == 0 {
-        TokenStandard::FungibleAsset
-    } else {
-        TokenStandard::Fungible
+    let metadata = Metadata {
+        key: Key::MetadataV1,
+        update_authority: *update_authority_key,
+        mint: *mint_key,
+        name: args.data.name,
+        symbol: args.data.symbol,
+        uri: args.data.uri,
+        seller_fee_basis_points: args.data.seller_fee_basis_points,
+        creators: args.data.creators,
+        primary_sale_happened: false,
+        is_mutable: args.is_mutable,
+        edition_nonce: Some(edition_bump_seed),
+        token_standard: if mint.decimals == 0 {
+            Some(TokenStandard::FungibleAsset)
+        } else {
+            Some(TokenStandard::Fungible)
+        },
+        collection: args.data.collection,
+        uses: args.data.uses,
+        collection_details: args.collection_details,
+        programmable_config: None,
     };
-    metadata.token_standard = Some(token_standard);
 
-    puff_out_data_fields(&mut metadata);
-
-    let edition_seeds = &[
-        mpl_token_metadata::state::PREFIX.as_bytes(),
-        mpl_token_metadata::ID.as_ref(),
-        metadata.mint.as_ref(),
-        mpl_token_metadata::state::EDITION.as_bytes(),
-    ];
-    let (_, edition_bump_seed) =
-        Pubkey::find_program_address(edition_seeds, &mpl_token_metadata::ID);
-    metadata.edition_nonce = Some(edition_bump_seed);
-
-    {
-        let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
-        metadata.serialize(&mut metadata_account.data.as_mut_slice())?;
-    }
+    let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
+    metadata_account.owner = MPL_TOKEN_METADATA_ID;
+    metadata_account.data = metadata.try_to_vec()?;
+    metadata_account.lamports = rent.minimum_balance(metadata_account.data.len());
 
     Ok(())
 }
@@ -121,9 +92,9 @@ fn create_metadata_accounts_v3(
 fn create_master_edition_v3(
     meta: &[AccountMeta],
     accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>,
-    args: &CreateMasterEditionArgs,
+    max_supply: Option<u64>,
     rent: &Rent,
-) -> ProgramResult {
+) -> Result<()> {
     let edition_account_key = &meta[0].pubkey;
     let mint_key = &meta[1].pubkey;
     // let update_authority_key = &meta[2].pubkey;
@@ -135,53 +106,48 @@ fn create_master_edition_v3(
     // let _rent_key            = &meta[8].pubkey;
 
     let mut metadata: Metadata = {
-        let metadata_info = accounts
-            .get_mut(metadata_account_key)
-            .unwrap()
-            .into_account_info();
-        Metadata::from_account_info(&metadata_info)?
+        let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
+        Metadata::from_bytes(&metadata_account.data)?
     };
 
-    let mut mint: Mint = {
+    let mut mint = {
         let mint_info = accounts.get_mut(mint_key).unwrap().into_account_info();
-        assert_initialized(&mint_info)?
+        crate::account::token::Mint::from_account(&mint_info)?.into_data()
     };
 
     if &metadata.mint != mint_key {
-        return Err!(ProgramError::InvalidArgument; "Metaplex: Invalid token mint");
+        return Err("Metaplex: Invalid token mint".into());
     }
 
     if mint.decimals != 0 {
-        return Err!(ProgramError::InvalidArgument; "Metaplex: mint decimals != 0");
+        return Err("Metaplex: mint decimals != 0".into());
     }
 
     if mint.supply != 1 {
-        return Err!(ProgramError::InvalidArgument; "Metaplex: mint supply != 1");
+        return Err("Metaplex: mint supply != 1".into());
     }
 
+    let edition = MasterEdition {
+        key: Key::MasterEditionV2,
+        supply: 0,
+        max_supply,
+    };
+
+    // Master Edition Account
     {
         let edition_account = accounts.get_mut(edition_account_key).unwrap();
-        edition_account.data.resize(MAX_MASTER_EDITION_LEN, 0);
-        edition_account.owner = mpl_token_metadata::ID;
-        edition_account.lamports = edition_account
-            .lamports
-            .max(rent.minimum_balance(MAX_MASTER_EDITION_LEN));
-
-        let edition = MasterEditionV2 {
-            key: Key::MasterEditionV2,
-            supply: 0,
-            max_supply: args.max_supply,
-        };
-        edition.serialize(&mut edition_account.data.as_mut_slice())?;
+        edition_account.owner = MPL_TOKEN_METADATA_ID;
+        edition_account.data = edition.try_to_vec()?;
+        edition_account.lamports = rent.minimum_balance(edition_account.data.len());
     }
-
+    // Metadata Account
     {
         let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
 
         metadata.token_standard = Some(TokenStandard::NonFungible);
         metadata.serialize(&mut metadata_account.data.as_mut_slice())?;
     }
-
+    // Mint Account
     {
         mint.mint_authority = COption::Some(*edition_account_key);
         if mint.freeze_authority.is_some() {

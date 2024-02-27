@@ -34,6 +34,9 @@ pub enum Error {
     #[error("Bincode error: {0}")]
     BincodeError(#[from] bincode::Error),
 
+    #[error("IO error: {0}")]
+    BorshError(#[from] std::io::Error),
+
     #[error("FromHexError error: {0}")]
     FromHexError(#[from] hex::FromHexError),
 

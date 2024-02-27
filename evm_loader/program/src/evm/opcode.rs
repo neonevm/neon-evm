@@ -1,3 +1,5 @@
+#![allow(clippy::needless_pass_by_ref_mut)]
+
 /// <https://ethereum.github.io/yellowpaper/paper.pdf>
 use ethnum::{I256, U256};
 use maybe_async::maybe_async;

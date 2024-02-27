@@ -167,7 +167,7 @@ impl<'a> StorageCell<'a> {
 
     #[must_use]
     pub fn get(&self, subindex: u8) -> [u8; 32] {
-        for cell in self.cells().iter() {
+        for cell in &*self.cells() {
             if cell.subindex != subindex {
                 continue;
             }
@@ -181,7 +181,7 @@ impl<'a> StorageCell<'a> {
     pub fn update(&mut self, subindex: u8, value: &[u8; 32]) -> Result<()> {
         // todo: if value is zero - destroy cell
 
-        for cell in self.cells_mut().iter_mut() {
+        for cell in &mut *self.cells_mut() {
             if cell.subindex != subindex {
                 continue;
             }

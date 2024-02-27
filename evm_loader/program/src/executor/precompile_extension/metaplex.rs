@@ -3,9 +3,12 @@ use std::convert::{Into, TryInto};
 
 use ethnum::U256;
 use maybe_async::maybe_async;
-use mpl_token_metadata::state::{
-    Creator, Metadata, TokenMetadataAccount, TokenStandard, CREATE_FEE, MAX_MASTER_EDITION_LEN,
-    MAX_METADATA_LEN,
+use mpl_token_metadata::{
+    accounts::{MasterEdition, Metadata},
+    instructions::{CreateMasterEditionV3Builder, CreateMetadataAccountV3Builder},
+    programs::MPL_TOKEN_METADATA_ID,
+    types::{Creator, DataV2, TokenStandard},
+    MAX_CREATOR_LEN, MAX_CREATOR_LIMIT, MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MAX_URI_LENGTH,
 };
 use solana_program::pubkey::Pubkey;
 
@@ -16,6 +19,37 @@ use crate::{
     executor::ExecutorState,
     types::Address,
 };
+
+// TODO: Use solana-program-test in the emulator to calculate fee
+// instead of relying on the hardcoded constants
+const CREATE_FEE: u64 = 10_000_000;
+
+const MAX_DATA_SIZE: usize = 4
+    + MAX_NAME_LENGTH
+    + 4
+    + MAX_SYMBOL_LENGTH
+    + 4
+    + MAX_URI_LENGTH
+    + 2
+    + 1
+    + 4
+    + MAX_CREATOR_LIMIT * MAX_CREATOR_LEN;
+
+const MAX_METADATA_LEN: usize = 1 // key
+    + 32             // update auth pubkey
+    + 32             // mint pubkey
+    + MAX_DATA_SIZE
+    + 1              // primary sale
+    + 1              // mutable
+    + 9              // nonce (pretty sure this only needs to be 2)
+    + 2              // token standard
+    + 34             // collection
+    + 18             // uses
+    + 10             // collection details
+    + 33             // programmable config
+    + 75; // Padding
+
+pub const MAX_MASTER_EDITION_LEN: usize = 1 + 9 + 8 + 264;
 
 // "[0xc5, 0x73, 0x50, 0xc6]": "createMetadata(bytes32,string,string,string)"
 // "[0x4a, 0xe8, 0xb6, 0x6b]": "createMasterEdition(bytes32,uint64)"
@@ -161,37 +195,36 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             vec![bump_seed],
         ];
 
-        let (metadata_pubkey, _) = mpl_token_metadata::pda::find_metadata_account(&mint);
+        let (metadata_pubkey, _) = Metadata::find_pda(&mint);
 
-        let instruction = mpl_token_metadata::instruction::create_metadata_accounts_v3(
-            mpl_token_metadata::ID,
-            metadata_pubkey,
-            mint,
-            signer_pubkey,
-            self.backend.operator(),
-            signer_pubkey,
-            name,
-            symbol,
-            uri,
-            Some(vec![
-                Creator {
-                    address: *self.backend.program_id(),
-                    verified: false,
-                    share: 0,
-                },
-                Creator {
-                    address: signer_pubkey,
-                    verified: true,
-                    share: 100,
-                },
-            ]),
-            0,     // Seller Fee
-            true,  // Update Authority == Mint Authority
-            false, // Is Mutable
-            None,  // Collection
-            None,  // Uses
-            None,  // Collection Details
-        );
+        let instruction = CreateMetadataAccountV3Builder::new()
+            .metadata(metadata_pubkey)
+            .mint(mint)
+            .mint_authority(signer_pubkey)
+            .update_authority(signer_pubkey, true)
+            .payer(self.backend.operator())
+            .is_mutable(true)
+            .data(DataV2 {
+                name,
+                symbol,
+                uri,
+                seller_fee_basis_points: 0,
+                creators: Some(vec![
+                    Creator {
+                        address: *self.backend.program_id(),
+                        verified: false,
+                        share: 0,
+                    },
+                    Creator {
+                        address: signer_pubkey,
+                        verified: true,
+                        share: 100,
+                    },
+                ]),
+                collection: None,
+                uses: None,
+            })
+            .instruction();
 
         let fee = self.backend.rent().minimum_balance(MAX_METADATA_LEN) + CREATE_FEE;
         self.queue_external_instruction(instruction, seeds, fee);
@@ -214,19 +247,23 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             vec![bump_seed],
         ];
 
-        let (metadata_pubkey, _) = mpl_token_metadata::pda::find_metadata_account(&mint);
-        let (edition_pubkey, _) = mpl_token_metadata::pda::find_master_edition_account(&mint);
+        let (metadata_pubkey, _) = Metadata::find_pda(&mint);
+        let (edition_pubkey, _) = MasterEdition::find_pda(&mint);
 
-        let instruction = mpl_token_metadata::instruction::create_master_edition_v3(
-            mpl_token_metadata::ID,
-            edition_pubkey,
-            mint,
-            signer_pubkey,
-            signer_pubkey,
-            metadata_pubkey,
-            self.backend.operator(),
-            max_supply,
-        );
+        let mut instruction_builder = CreateMasterEditionV3Builder::new();
+        instruction_builder
+            .metadata(metadata_pubkey)
+            .edition(edition_pubkey)
+            .mint(mint)
+            .mint_authority(signer_pubkey)
+            .update_authority(signer_pubkey)
+            .payer(self.backend.operator());
+
+        if let Some(max_supply) = max_supply {
+            instruction_builder.max_supply(max_supply);
+        }
+
+        let instruction = instruction_builder.instruction();
 
         let fee = self.backend.rent().minimum_balance(MAX_MASTER_EDITION_LEN) + CREATE_FEE;
         self.queue_external_instruction(instruction, seeds, fee);
@@ -263,7 +300,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let uri = self
             .metadata(context, mint)
             .await?
-            .map_or_else(String::new, |m| m.data.uri);
+            .map_or_else(String::new, |m| m.uri);
 
         Ok(to_solidity_string(uri.trim_end_matches('\0')))
     }
@@ -273,7 +310,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let token_name = self
             .metadata(context, mint)
             .await?
-            .map_or_else(String::new, |m| m.data.name);
+            .map_or_else(String::new, |m| m.name);
 
         Ok(to_solidity_string(token_name.trim_end_matches('\0')))
     }
@@ -283,7 +320,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let symbol = self
             .metadata(context, mint)
             .await?
-            .map_or_else(String::new, |m| m.data.symbol);
+            .map_or_else(String::new, |m| m.symbol);
 
         Ok(to_solidity_string(symbol.trim_end_matches('\0')))
     }
@@ -294,11 +331,11 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         _context: &crate::evm::Context,
         mint: Pubkey,
     ) -> Result<Option<Metadata>> {
-        let (metadata_pubkey, _) = mpl_token_metadata::pda::find_metadata_account(&mint);
+        let (metadata_pubkey, _) = Metadata::find_pda(&mint);
         let metadata_account = self.external_account(metadata_pubkey).await?;
 
         let result = {
-            if mpl_token_metadata::check_id(&metadata_account.owner) {
+            if MPL_TOKEN_METADATA_ID == metadata_account.owner {
                 let metadata = Metadata::safe_deserialize(&metadata_account.data);
                 metadata.ok()
             } else {

@@ -8,10 +8,10 @@ edition = "2021"
 [dependencies]
 clap = "2.33.3"
 evm-loader = { path = "../program", default-features = false, features = ["log"] }
-solana-sdk = "=1.16.23"
-solana-client = "=1.16.23"
-solana-clap-utils = "=1.16.23"
-solana-cli-config = "=1.16.23"
+solana-sdk = "=1.17.23"
+solana-client = "=1.17.23"
+solana-clap-utils = "=1.17.23"
+solana-cli-config = "=1.17.23"
 hex = "0.4.2"
 serde = "1.0.186"
 serde_json = { version = "1.0.107", features = ["preserve_order"] }

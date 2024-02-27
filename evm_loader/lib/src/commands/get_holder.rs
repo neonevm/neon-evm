@@ -124,7 +124,7 @@ pub async fn execute(
 ) -> NeonResult<GetHolderResponse> {
     let response = rpc.get_account(&address).await?;
     let Some(mut account) = response.value else {
-        return Ok(GetHolderResponse::empty())
+        return Ok(GetHolderResponse::empty());
     };
 
     let info = account_info(&address, &mut account);

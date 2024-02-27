@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use ethnum::{AsU256, U256};
 use maybe_async::maybe_async;
+use mpl_token_metadata::programs::MPL_TOKEN_METADATA_ID;
 use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
@@ -159,7 +160,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                             self.rent(),
                         )?;
                     }
-                    program_id if mpl_token_metadata::check_id(program_id) => {
+                    program_id if &MPL_TOKEN_METADATA_ID == program_id => {
                         crate::external_programs::metaplex::emulate(
                             data,
                             meta,
