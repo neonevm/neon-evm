@@ -7,13 +7,14 @@ use crate::evm::tracing::NoopEventListener;
 use crate::evm::{ExitStatus, Machine};
 use crate::executor::{Action, ExecutorState};
 use crate::gasometer::Gasometer;
+use crate::types::Vector;
 
-type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
-type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>, NoopEventListener>;
+pub type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
+pub type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>, NoopEventListener>;
 
 pub fn do_begin<'a>(
     accounts: AccountsDB<'a>,
-    mut storage: StateAccount<'a>,
+    storage: StateAccount<'a>,
     gasometer: Gasometer,
 ) -> Result<()> {
     debug_print!("do_begin");
@@ -31,24 +32,23 @@ pub fn do_begin<'a>(
     let mut origin_account = account_storage.origin(origin, storage.trx())?;
     origin_account.increment_nonce()?;
 
+
     // Burn `gas_limit` tokens from the origin account
     // Later we will mint them to the operator
     // Remaining tokens are returned to the origin in the last iteration
     let gas_limit_in_tokens = storage.trx().gas_limit_in_tokens()?;
     origin_account.burn(gas_limit_in_tokens)?;
 
-    // Initialize EVM and serialize it to the Holder
-    let mut backend = ExecutorState::new(&account_storage);
-    let evm = Machine::new(storage.trx(), origin, &mut backend, None)?;
+    // create and load the PersistentState struct into the holder account heap.
+    storage.alloc(&account_storage)?;
 
-    serialize_evm_state(&mut storage, &backend, &evm)?;
     finalize(0, storage, account_storage, None, gasometer)
 }
 
 pub fn do_continue<'a>(
     step_count: u64,
     accounts: AccountsDB<'a>,
-    mut storage: StateAccount<'a>,
+    storage: StateAccount<'a>,
     gasometer: Gasometer,
     reset: bool,
 ) -> Result<()> {
@@ -61,29 +61,31 @@ pub fn do_continue<'a>(
     }
 
     let account_storage = ProgramAccountStorage::new(accounts)?;
-    let (mut backend, mut evm) = if reset {
-        let mut backend = ExecutorState::new(&account_storage);
-        let evm = Machine::new(storage.trx(), storage.trx_origin(), &mut backend, None)?;
-        (backend, evm)
-    } else {
-        deserialize_evm_state(&storage, &account_storage)?
-    };
+    let (steps_executed, results) = {
+        let (mut backend, mut evm) = if reset {
+            storage.alloc(&account_storage)?;
+            (storage.state(), storage.evm())
+        } else {
+            storage.reinit(&account_storage)?;
+            (storage.state(), storage.evm())
+        };
 
-    let (result, steps_executed, _) = match backend.exit_status() {
-        Some(status) => (status.clone(), 0_u64, None),
-        None => evm.execute(step_count, &mut backend)?,
-    };
+        let (result, steps_executed, _) = match backend.exit_status() {
+            Some(status) => (status.clone(), 0_u64, None),
+            None => evm.execute(step_count, &mut backend)?,
+        };
 
-    if (result != ExitStatus::StepLimit) && (steps_executed > 0) {
-        backend.set_exit_status(result.clone());
-    }
 
-    serialize_evm_state(&mut storage, &backend, &evm)?;
+        if (result != ExitStatus::StepLimit) && (steps_executed > 0) {
+            backend.set_exit_status(result.clone());
+        }
 
-    let results = match result {
-        ExitStatus::StepLimit => None,
-        _ if steps_executed > EVM_STEPS_LAST_ITERATION_MAX => None,
-        result => Some((result, backend.into_actions())),
+        let results = match result {
+            ExitStatus::StepLimit => None,
+            _ if steps_executed > EVM_STEPS_LAST_ITERATION_MAX => None,
+            result => Some((result, backend.into_actions())),
+        };
+        (steps_executed, results)
     };
 
     finalize(steps_executed, storage, account_storage, results, gasometer)
@@ -93,7 +95,7 @@ fn finalize<'a>(
     steps_executed: u64,
     mut storage: StateAccount<'a>,
     mut accounts: ProgramAccountStorage<'a>,
-    results: Option<(ExitStatus, Vec<Action>)>,
+    results: Option<(ExitStatus, Vector<Action>)>,
     mut gasometer: Gasometer,
 ) -> Result<()> {
     debug_print!("finalize");
@@ -132,8 +134,6 @@ fn finalize<'a>(
         storage.refund_unused_gas(&mut origin)?;
 
         storage.finalize(accounts.program_id())?;
-    } else {
-        storage.save_data()?;
     }
 
     Ok(())
@@ -154,40 +154,4 @@ pub fn log_return_value(status: &ExitStatus) {
     }
 
     log_data(&[b"RETURN", &[code]]);
-}
-
-fn serialize_evm_state(
-    state: &mut StateAccount,
-    backend: &EvmBackend,
-    machine: &Evm,
-) -> Result<()> {
-    let (evm_state_len, evm_machine_len) = {
-        let mut buffer = state.buffer_mut();
-        let backend_bytes = backend.serialize_into(&mut buffer)?;
-
-        let buffer = &mut buffer[backend_bytes..];
-        let evm_bytes = machine.serialize_into(buffer)?;
-
-        (backend_bytes, evm_bytes)
-    };
-
-    state.set_buffer_variables(evm_state_len, evm_machine_len);
-
-    Ok(())
-}
-
-fn deserialize_evm_state<'a, 'r>(
-    state: &StateAccount<'a>,
-    account_storage: &'r ProgramAccountStorage<'a>,
-) -> Result<(EvmBackend<'a, 'r>, Evm<'a, 'r>)> {
-    let (evm_state_len, evm_machine_len) = state.buffer_variables();
-    let buffer = state.buffer();
-
-    let executor_state_data = &buffer[..evm_state_len];
-    let backend = ExecutorState::deserialize_from(executor_state_data, account_storage)?;
-
-    let evm_data = &buffer[evm_state_len..][..evm_machine_len];
-    let evm = Machine::deserialize_from(evm_data, &backend)?;
-
-    Ok((backend, evm))
 }

@@ -13,12 +13,9 @@ use mpl_token_metadata::{
 use solana_program::pubkey::Pubkey;
 
 use crate::{
-    account::ACCOUNT_SEED_VERSION,
-    account_storage::AccountStorage,
-    error::{Error, Result},
-    executor::ExecutorState,
-    types::Address,
+    account::ACCOUNT_SEED_VERSION, account_storage::AccountStorage, error::{Error, Result}, executor::ExecutorState, types::{vector::into_vector, Address}
 };
+use crate::vector;
 
 // TODO: Use solana-program-test in the emulator to calculate fee
 // instead of relying on the hardcoded constants
@@ -189,10 +186,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let (metadata_pubkey, _) = Metadata::find_pda(&mint);
@@ -241,10 +238,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let (metadata_pubkey, _) = Metadata::find_pda(&mint);

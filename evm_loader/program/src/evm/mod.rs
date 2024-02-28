@@ -168,42 +168,25 @@ pub struct Machine<B: Database, T: EventListener> {
 
 #[cfg(target_os = "solana")]
 impl<B: Database> Machine<B, NoopEventListener> {
-    pub fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize> {
-        let mut cursor = std::io::Cursor::new(buffer);
-
-        bincode::serialize_into(&mut cursor, &self)?;
-
-        cursor.position().try_into().map_err(Error::from)
+    fn reinit_buffer(buffer: &mut Buffer, backend: &B) {
+        if let Some((key, range)) = buffer.uninit_data() {
+            *buffer =
+                backend.map_solana_account(&key, |i| unsafe { Buffer::from_account(i, range) });
+        }
     }
 
-    pub fn deserialize_from(buffer: &[u8], backend: &B) -> Result<Self> {
-        fn reinit_buffer<B: Database>(buffer: &mut Buffer, backend: &B) {
-            if let Some((key, range)) = buffer.uninit_data() {
-                *buffer =
-                    backend.map_solana_account(&key, |i| unsafe { Buffer::from_account(i, range) });
+    pub fn reinit(&mut self, backend: &B) {
+        let mut machine = self;
+        loop {
+            Self::reinit_buffer(&mut machine.call_data, backend);
+            Self::reinit_buffer(&mut machine.execution_code, backend);
+            Self::reinit_buffer(&mut machine.return_data, backend);
+
+            match &mut machine.parent {
+                None => break,
+                Some(parent) => machine = parent,
             }
         }
-
-        fn reinit_machine<B: Database>(
-            mut machine: &mut Machine<B, NoopEventListener>,
-            backend: &B,
-        ) {
-            loop {
-                reinit_buffer(&mut machine.call_data, backend);
-                reinit_buffer(&mut machine.execution_code, backend);
-                reinit_buffer(&mut machine.return_data, backend);
-
-                match &mut machine.parent {
-                    None => break,
-                    Some(parent) => machine = parent,
-                }
-            }
-        }
-
-        let mut evm: Self = bincode::deserialize(buffer)?;
-        reinit_machine(&mut evm, backend);
-
-        Ok(evm)
     }
 }
 

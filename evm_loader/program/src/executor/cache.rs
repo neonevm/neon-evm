@@ -1,11 +1,11 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use ethnum::U256;
 use maybe_async::maybe_async;
 use serde::{Deserialize, Serialize};
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
-use crate::{account_storage::AccountStorage, types::Address};
+use crate::{account_storage::AccountStorage, types::{Address, TreeMap}};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OwnedAccountInfo {
@@ -57,13 +57,10 @@ impl<'a> solana_program::account_info::IntoAccountInfo<'a> for &'a mut OwnedAcco
     }
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct Cache {
-    pub solana_accounts: BTreeMap<Pubkey, OwnedAccountInfo>,
-    pub native_balances: BTreeMap<(Address, u64), U256>,
-    #[serde(with = "ethnum::serde::bytes::le")]
+    pub solana_accounts: TreeMap<Pubkey, OwnedAccountInfo>,
+    pub native_balances: TreeMap<(Address, u64), U256>,
     pub block_number: U256,
-    #[serde(with = "ethnum::serde::bytes::le")]
     pub block_timestamp: U256,
 }
 
@@ -74,15 +71,14 @@ pub async fn cache_get_or_insert_account<B: AccountStorage>(
     key: Pubkey,
     backend: &B,
 ) -> OwnedAccountInfo {
-    use std::collections::btree_map::Entry;
-
     let mut cache = cache.borrow_mut();
-    match cache.solana_accounts.entry(key) {
-        Entry::Vacant(entry) => {
+    match cache.solana_accounts.get(&key) {
+        None => {
             let owned_account_info = backend.clone_solana_account(&key).await;
-            entry.insert(owned_account_info).clone()
+            cache.solana_accounts.insert(key, &owned_account_info);
+            owned_account_info
         }
-        Entry::Occupied(entry) => entry.get().clone(),
+        Some(info) => info.clone(),
     }
 }
 
@@ -93,15 +89,14 @@ pub async fn cache_get_or_insert_balance<B: AccountStorage>(
     key: (Address, u64),
     backend: &B,
 ) -> U256 {
-    use std::collections::btree_map::Entry;
-
     let mut cache = cache.borrow_mut();
 
-    match cache.native_balances.entry(key) {
-        Entry::Vacant(entry) => {
+    match cache.native_balances.get(&key) {
+        None => {
             let balance = backend.balance(key.0, key.1).await;
-            *entry.insert(balance)
+            cache.native_balances.insert(key, &balance);
+            balance
         }
-        Entry::Occupied(entry) => *entry.get(),
+        Some(balance) => *balance,
     }
 }

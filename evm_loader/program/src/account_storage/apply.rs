@@ -13,7 +13,7 @@ use crate::config::{
 };
 use crate::error::Result;
 use crate::executor::Action;
-use crate::types::Address;
+use crate::types::{Address, Vector};
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn transfer_treasury_payment(&mut self) -> Result<()> {
@@ -64,7 +64,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(total_result)
     }
 
-    pub fn apply_state_change(&mut self, actions: Vec<Action>) -> Result<()> {
+    pub fn apply_state_change(&mut self, actions: Vector<Action>) -> Result<()> {
         debug_print!("Applies begin");
 
         let mut storage = HashMap::with_capacity(16);
@@ -147,8 +147,8 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     let instruction = Instruction {
                         program_id,
-                        accounts,
-                        data,
+                        accounts: accounts.to_vec(),
+                        data: data.to_vec(),
                     };
 
                     if !seeds.is_empty() {

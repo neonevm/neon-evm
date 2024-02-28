@@ -22,7 +22,7 @@ impl Stack {
     pub fn new() -> Self {
         let (begin, end) = unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
-            let begin = crate::allocator::EVM.alloc(layout);
+            let begin = crate::allocator::HOLDER_ACC_ALLOCATOR.alloc(layout);
             if begin.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
@@ -259,7 +259,7 @@ impl Drop for Stack {
     fn drop(&mut self) {
         unsafe {
             let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
-            crate::allocator::EVM.dealloc(self.begin, layout);
+            crate::allocator::HOLDER_ACC_ALLOCATOR.dealloc(self.begin, layout);
         }
     }
 }

@@ -32,6 +32,8 @@ mod state_finalized;
 pub mod token;
 mod treasury;
 
+pub const STATE_ACCOUNT_HEAP_OFFSET: usize = state::HEAP_OBJECT_OFFSET;
+
 pub const TAG_EMPTY: u8 = 0;
 pub const TAG_STATE: u8 = 24;
 pub const TAG_STATE_FINALIZED: u8 = 32;
@@ -137,6 +139,38 @@ fn header_version(info: &AccountInfo) -> u8 {
     // This is used only inside the module and account validation should be already done
     let data = info.data.borrow();
     data[HEADER_VERSION_OFFSET]
+}
+
+/*
+#[inline]
+fn map_obj<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> Ref<'r, T> {
+    let begin = offset;
+    let end = begin + std::mem::size_of::<T>();
+
+    let data = account.data.borrow();
+    Ref::map(data, |d| {
+        let bytes = &d[begin..end];
+
+        assert_eq!(std::mem::size_of::<T>(), bytes.len());
+        assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
+        unsafe { & *(bytes.as_ptr().cast()) }
+    })
+}
+*/
+
+#[inline]
+fn map_obj_mut<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> RefMut<'r, T> {
+    let begin = offset;
+    let end = begin + std::mem::size_of::<T>();
+
+    let data = account.data.borrow_mut();
+    RefMut::map(data, |d| {
+        let bytes = &mut d[begin..end];
+
+        assert_eq!(std::mem::size_of::<T>(), bytes.len());
+        assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
+        unsafe { &mut *(bytes.as_mut_ptr().cast()) }
+    })
 }
 
 pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8> {

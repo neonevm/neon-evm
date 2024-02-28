@@ -236,7 +236,7 @@ impl<'de> serde::Deserialize<'de> for Buffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::OwnedAccountInfo;
+    use crate::{executor::OwnedAccountInfo, types::vector::into_vector};
     use solana_program::account_info::IntoAccountInfo;
 
     macro_rules! assert_slice_ptr_eq {
@@ -267,7 +267,7 @@ mod tests {
             OwnedAccountInfo {
                 key: Pubkey::default(),
                 lamports: 0,
-                data,
+                data: into_vector(data),
                 owner: Pubkey::default(),
                 rent_epoch: 0,
                 is_signer: false,

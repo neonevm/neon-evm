@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
 
 use ethnum::{AsU256, U256};
 use maybe_async::maybe_async;
@@ -9,9 +8,12 @@ use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 
 use crate::account_storage::AccountStorage;
+use crate::allocator::acc_allocator;
 use crate::error::{Error, Result};
 use crate::evm::database::Database;
 use crate::evm::{Context, ExitStatus};
+use crate::types::vector::{into_vector, Vector};
+use crate::types::tree_map::TreeMap;
 use crate::types::Address;
 
 use super::action::Action;
@@ -23,37 +25,17 @@ use super::OwnedAccountInfo;
 pub struct ExecutorState<'a, B: AccountStorage> {
     pub backend: &'a B,
     cache: RefCell<Cache>,
-    actions: Vec<Action>,
-    stack: Vec<usize>,
+    actions: Vector<Action>,
+    stack: Vector<usize>,
     exit_status: Option<ExitStatus>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
-    pub fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize> {
-        let mut cursor = std::io::Cursor::new(buffer);
-
-        let value = (&self.cache, &self.actions, &self.stack, &self.exit_status);
-        bincode::serialize_into(&mut cursor, &value)?;
-
-        cursor.position().try_into().map_err(Error::from)
-    }
-
-    pub fn deserialize_from(buffer: &[u8], backend: &'a B) -> Result<Self> {
-        let (cache, actions, stack, exit_status) = bincode::deserialize(buffer)?;
-        Ok(Self {
-            backend,
-            cache,
-            actions,
-            stack,
-            exit_status,
-        })
-    }
-
     #[must_use]
     pub fn new(backend: &'a B) -> Self {
         let cache = Cache {
-            solana_accounts: BTreeMap::new(),
-            native_balances: BTreeMap::new(),
+            solana_accounts: TreeMap::new(),
+            native_balances: TreeMap::new(),
             block_number: backend.block_number(),
             block_timestamp: backend.block_timestamp(),
         };
@@ -61,16 +43,16 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         Self {
             backend,
             cache: RefCell::new(cache),
-            actions: Vec::with_capacity(64),
-            stack: Vec::with_capacity(16),
+            actions: Vector::with_capacity_in(64, acc_allocator()),
+            stack: Vector::with_capacity_in(16, acc_allocator()),
             exit_status: None,
         }
     }
 
-    pub fn into_actions(self) -> Vec<Action> {
+    pub fn into_actions(&self) -> Vector<Action> {
         assert!(self.stack.is_empty());
 
-        crate::executor::action::filter_selfdestruct(self.actions)
+        crate::executor::action::filter_selfdestruct(self.actions.clone())
     }
 
     pub fn exit_status(&self) -> Option<&ExitStatus> {
@@ -97,13 +79,13 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn queue_external_instruction(
         &mut self,
         instruction: Instruction,
-        seeds: Vec<Vec<u8>>,
+        seeds: Vector<Vector<u8>>,
         fee: u64,
     ) {
         let action = Action::ExternalInstruction {
             program_id: instruction.program_id,
-            data: instruction.data,
-            accounts: instruction.accounts,
+            data: into_vector(instruction.data),
+            accounts: into_vector(instruction.accounts),
             seeds,
             fee,
         };
@@ -124,14 +106,17 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 }
             })
             .flatten()
-            .collect::<Vec<_>>();
+            .collect();
+        let metas = into_vector(metas);
 
         if !metas.iter().any(|m| (m.pubkey == address) && m.is_writable) {
             let account = cache_get_or_insert_account(&self.cache, address, self.backend).await;
             return Ok(account);
         }
 
-        let mut accounts = BTreeMap::<Pubkey, OwnedAccountInfo>::new();
+        // Create accounts map on the default heap, as it's not part of the persistent state.
+        let mut accounts =
+            std::collections::BTreeMap::<Pubkey, OwnedAccountInfo>::new();
 
         for m in metas {
             let account = cache_get_or_insert_account(&self.cache, m.pubkey, self.backend).await;
@@ -178,7 +163,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             }
         }
 
-        Ok(accounts[&address].clone())
+        Ok(accounts.get(&address).unwrap().clone())
     }
 }
 
@@ -320,7 +305,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         let set_code = Action::EvmSetCode {
             address,
             chain_id,
-            code,
+            code: into_vector(code),
         };
         self.actions.push(set_code);
 

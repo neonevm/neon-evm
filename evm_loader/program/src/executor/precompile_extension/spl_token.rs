@@ -15,6 +15,10 @@ use crate::{
     types::Address,
 };
 
+use crate::vector;
+
+use crate::types::vector::{into_vector, Vector};
+
 // [0xa9, 0xc1, 0x58, 0x06] : "approve(bytes32,bytes32,uint64)",
 // [0xc0, 0x67, 0xee, 0xbb] : "burn(bytes32,bytes32,uint64)",
 // [0x57, 0x82, 0xa0, 0x43] : "closeAccount(bytes32)",
@@ -260,7 +264,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         }
     }
 
-    fn create_account(&mut self, account: &OwnedAccountInfo, space: usize, seeds: Vec<Vec<u8>>) {
+    fn create_account(&mut self, account: &OwnedAccountInfo, space: usize, seeds: Vector<Vector<u8>>) {
         let minimum_balance = self.backend.rent().minimum_balance(space);
 
         let required_lamports = minimum_balance.saturating_sub(account.lamports);
@@ -271,7 +275,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
                 &account.key,
                 required_lamports,
             );
-            self.queue_external_instruction(transfer, vec![], required_lamports);
+            self.queue_external_instruction(transfer, vector![], required_lamports);
         }
 
         let allocate = system_instruction::allocate(&account.key, space.try_into().unwrap());
@@ -308,12 +312,12 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             return Err(Error::AccountInvalidOwner(mint_key, system_program::ID));
         }
 
-        let seeds: Vec<Vec<u8>> = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            b"ContractData".to_vec(),
-            signer.as_bytes().to_vec(),
-            seed.to_vec(),
-            vec![bump_seed],
+        let seeds: Vector<Vector<u8>> = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(b"ContractData".to_vec()),
+            into_vector(signer.as_bytes().to_vec()),
+            into_vector(seed.to_vec()),
+            vector![bump_seed],
         ];
 
         self.create_account(&account, spl_token::state::Mint::LEN, seeds);
@@ -325,7 +329,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             Some(&freeze_authority.unwrap_or(signer_pubkey)),
             decimals,
         )?;
-        self.queue_external_instruction(initialize_mint, vec![], 0);
+        self.queue_external_instruction(initialize_mint, vector![], 0);
 
         Ok(mint_key.to_bytes().to_vec())
     }
@@ -356,12 +360,12 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             return Err(Error::AccountInvalidOwner(account_key, system_program::ID));
         }
 
-        let seeds: Vec<Vec<u8>> = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            b"ContractData".to_vec(),
-            signer.as_bytes().to_vec(),
-            seed.to_vec(),
-            vec![bump_seed],
+        let seeds: Vector<Vector<u8>> = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(b"ContractData".to_vec()),
+            into_vector(signer.as_bytes().to_vec()),
+            into_vector(seed.to_vec()),
+            vector![bump_seed],
         ];
 
         self.create_account(&account, spl_token::state::Account::LEN, seeds);
@@ -372,7 +376,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             &mint,
             &owner.unwrap_or(signer_pubkey),
         )?;
-        self.queue_external_instruction(initialize_mint, vec![], 0);
+        self.queue_external_instruction(initialize_mint, vector![], 0);
 
         Ok(account_key.to_bytes().to_vec())
     }
@@ -381,10 +385,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let close_account = spl_token::instruction::close_account(
@@ -409,10 +413,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let approve = spl_token::instruction::approve(
@@ -432,10 +436,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let revoke = spl_token::instruction::revoke(&spl_token::ID, &account, &signer_pubkey, &[])?;
@@ -454,10 +458,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let transfer = spl_token::instruction::transfer(
@@ -490,12 +494,12 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let (signer_pubkey, signer_seed) =
             Pubkey::find_program_address(seeds, self.backend.program_id());
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            b"AUTH".to_vec(),
-            context.caller.as_bytes().to_vec(),
-            seed.to_vec(),
-            vec![signer_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(b"AUTH".to_vec()),
+            into_vector(context.caller.as_bytes().to_vec()),
+            into_vector(seed.to_vec()),
+            vector![signer_seed],
         ];
 
         let transfer = spl_token::instruction::transfer(
@@ -521,10 +525,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let mint_to = spl_token::instruction::mint_to(
@@ -550,10 +554,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let burn = spl_token::instruction::burn(
@@ -578,10 +582,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let freeze = spl_token::instruction::freeze_account(
@@ -605,10 +609,10 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         let signer = context.caller;
         let (signer_pubkey, bump_seed) = self.backend.contract_pubkey(signer);
 
-        let seeds = vec![
-            vec![ACCOUNT_SEED_VERSION],
-            signer.as_bytes().to_vec(),
-            vec![bump_seed],
+        let seeds = vector![
+            vector![ACCOUNT_SEED_VERSION],
+            into_vector(signer.as_bytes().to_vec()),
+            vector![bump_seed],
         ];
 
         let thaw = spl_token::instruction::thaw_account(
