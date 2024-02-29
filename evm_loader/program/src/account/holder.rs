@@ -7,7 +7,7 @@ use crate::account::TAG_STATE_FINALIZED;
 use crate::error::{Error, Result};
 use crate::types::Transaction;
 
-use super::{Operator, HOLDER_PREFIX_LEN, TAG_EMPTY, TAG_HOLDER};
+use super::{AccountHeader, Operator, ACCOUNT_PREFIX_LEN, TAG_EMPTY, TAG_HOLDER};
 
 /// Ethereum holder data account
 #[repr(C, packed)]
@@ -17,18 +17,22 @@ pub struct Header {
     pub transaction_len: usize,
 }
 
+impl AccountHeader for Header {
+    const VERSION: u8 = 0;
+}
+
 pub struct Holder<'a> {
     account: AccountInfo<'a>,
 }
 
-const HEADER_OFFSET: usize = HOLDER_PREFIX_LEN;
+const HEADER_OFFSET: usize = ACCOUNT_PREFIX_LEN;
 const BUFFER_OFFSET: usize = HEADER_OFFSET + size_of::<Header>();
 
 impl<'a> Holder<'a> {
     pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
         match super::tag(program_id, &account)? {
             TAG_STATE_FINALIZED => {
-                super::set_tag(program_id, &account, TAG_HOLDER)?;
+                super::set_tag(program_id, &account, TAG_HOLDER, Header::VERSION)?;
 
                 let mut holder = Self { account };
                 holder.clear();
@@ -56,7 +60,7 @@ impl<'a> Holder<'a> {
         }
 
         super::validate_tag(program_id, &account, TAG_EMPTY)?;
-        super::set_tag(&crate::ID, &account, TAG_HOLDER)?;
+        super::set_tag(&crate::ID, &account, TAG_HOLDER, Header::VERSION)?;
 
         let mut holder = Self::from_account(program_id, account)?;
         holder.header_mut().owner = *operator.key;

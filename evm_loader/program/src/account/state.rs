@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
 use super::{
-    revision, AccountsDB, BalanceAccount, Holder, StateFinalizedAccount, HOLDER_PREFIX_LEN,
-    TAG_HOLDER, TAG_STATE, TAG_STATE_FINALIZED,
+    revision, AccountHeader, AccountsDB, BalanceAccount, Holder, StateFinalizedAccount,
+    ACCOUNT_PREFIX_LEN, TAG_HOLDER, TAG_STATE, TAG_STATE_FINALIZED,
 };
 
 #[derive(PartialEq, Eq)]
@@ -41,21 +41,28 @@ struct Header {
     pub evm_machine_len: usize,
     pub data_len: usize,
 }
+impl AccountHeader for Header {
+    const VERSION: u8 = 0;
+}
 
 pub struct StateAccount<'a> {
     account: AccountInfo<'a>,
     data: Data,
 }
 
-const HEADER_OFFSET: usize = HOLDER_PREFIX_LEN;
-const BUFFER_OFFSET: usize = HEADER_OFFSET + size_of::<Header>();
+const BUFFER_OFFSET: usize = ACCOUNT_PREFIX_LEN + size_of::<Header>();
 
 impl<'a> StateAccount<'a> {
+    #[must_use]
+    pub fn into_account(self) -> AccountInfo<'a> {
+        self.account
+    }
+
     pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
         super::validate_tag(program_id, &account, TAG_STATE)?;
 
         let (offset, len) = {
-            let header = super::section::<Header>(&account, HEADER_OFFSET);
+            let header = super::header::<Header>(&account);
             let offset = BUFFER_OFFSET + header.evm_state_len + header.evm_machine_len;
             (offset, header.data_len)
         };
@@ -91,7 +98,6 @@ impl<'a> StateAccount<'a> {
             tag => return Err(Error::AccountInvalidTag(*info.key, tag)),
         };
 
-        // todo: get revision from account
         let revisions = accounts
             .into_iter()
             .map(|account| {
@@ -108,10 +114,10 @@ impl<'a> StateAccount<'a> {
             gas_used: U256::ZERO,
         };
 
-        super::set_tag(program_id, &info, TAG_STATE)?;
+        super::set_tag(program_id, &info, TAG_STATE, Header::VERSION)?;
         {
             // Set header
-            let mut header = super::section_mut::<Header>(&info, HEADER_OFFSET);
+            let mut header = super::header_mut::<Header>(&info);
             header.evm_state_len = 0;
             header.evm_machine_len = 0;
             header.data_len = 0;
@@ -151,18 +157,8 @@ impl<'a> StateAccount<'a> {
     pub fn finalize(self, program_id: &Pubkey) -> Result<()> {
         debug_print!("Finalize Storage {}", self.account.key);
 
-        let owner = self.owner();
-        let trx_hash = self.trx().hash();
-
         // Change tag to finalized
-        let account = self.account.clone();
-        std::mem::drop(self);
-
-        super::set_tag(account.owner, &account, TAG_STATE_FINALIZED)?;
-        StateFinalizedAccount::from_account(program_id, account)?.update(|f| {
-            f.owner = owner;
-            f.transaction_hash = trx_hash;
-        });
+        StateFinalizedAccount::convert_from_state(program_id, self)?;
 
         Ok(())
     }
@@ -174,13 +170,13 @@ impl<'a> StateAccount<'a> {
     #[inline]
     #[must_use]
     fn header(&self) -> Ref<Header> {
-        super::section(&self.account, HEADER_OFFSET)
+        super::header(&self.account)
     }
 
     #[inline]
     #[must_use]
     fn header_mut(&mut self) -> RefMut<Header> {
-        super::section_mut(&self.account, HEADER_OFFSET)
+        super::header_mut(&self.account)
     }
 
     #[must_use]

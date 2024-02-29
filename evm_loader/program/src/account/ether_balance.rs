@@ -1,7 +1,4 @@
-use std::{
-    cell::{Ref, RefMut},
-    mem::size_of,
-};
+use std::mem::size_of;
 
 use crate::{
     account::{TAG_ACCOUNT_CONTRACT, TAG_EMPTY},
@@ -13,7 +10,9 @@ use crate::{
 use ethnum::U256;
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent, system_program};
 
-use super::{AccountsDB, ACCOUNT_PREFIX_LEN, ACCOUNT_SEED_VERSION, TAG_ACCOUNT_BALANCE};
+use super::{
+    AccountHeader, AccountsDB, ACCOUNT_PREFIX_LEN, ACCOUNT_SEED_VERSION, TAG_ACCOUNT_BALANCE,
+};
 
 #[repr(C, packed)]
 pub struct Header {
@@ -22,12 +21,13 @@ pub struct Header {
     pub trx_count: u64,
     pub balance: U256,
 }
+impl AccountHeader for Header {
+    const VERSION: u8 = 0;
+}
 
 pub struct BalanceAccount<'a> {
     account: AccountInfo<'a>,
 }
-
-const HEADER_OFFSET: usize = ACCOUNT_PREFIX_LEN;
 
 impl<'a> BalanceAccount<'a> {
     #[must_use]
@@ -97,17 +97,16 @@ impl<'a> BalanceAccount<'a> {
             rent,
         )?;
 
-        super::set_tag(&crate::ID, &account, TAG_ACCOUNT_BALANCE)?;
-        let mut balance_account = Self { account };
+        super::set_tag(&crate::ID, &account, TAG_ACCOUNT_BALANCE, Header::VERSION)?;
         {
-            let mut header = balance_account.header_mut();
+            let mut header = super::header_mut::<Header>(&account);
             header.address = address;
             header.chain_id = chain_id;
             header.trx_count = 0;
             header.balance = U256::ZERO;
         }
 
-        Ok(balance_account)
+        Ok(Self { account })
     }
 
     #[must_use]
@@ -115,34 +114,27 @@ impl<'a> BalanceAccount<'a> {
         self.account.key
     }
 
-    #[inline]
-    fn header(&self) -> Ref<Header> {
-        super::section(&self.account, HEADER_OFFSET)
-    }
-
-    #[inline]
-    fn header_mut(&mut self) -> RefMut<Header> {
-        super::section_mut(&self.account, HEADER_OFFSET)
-    }
-
     #[must_use]
     pub fn address(&self) -> Address {
-        self.header().address
+        let header = super::header::<Header>(&self.account);
+        header.address
     }
 
     #[must_use]
     pub fn chain_id(&self) -> u64 {
-        self.header().chain_id
+        let header = super::header::<Header>(&self.account);
+        header.chain_id
     }
 
     #[must_use]
     pub fn nonce(&self) -> u64 {
-        self.header().trx_count
+        let header = super::header::<Header>(&self.account);
+        header.trx_count
     }
 
     #[must_use]
     pub fn exists(&self) -> bool {
-        let header = self.header();
+        let header = super::header::<Header>(&self.account);
 
         ({ header.trx_count } > 0) || ({ header.balance } > 0)
     }
@@ -152,7 +144,7 @@ impl<'a> BalanceAccount<'a> {
     }
 
     pub fn increment_nonce_by(&mut self, value: u64) -> Result<()> {
-        let mut header = self.header_mut();
+        let mut header = super::header_mut::<Header>(&self.account);
 
         header.trx_count = header
             .trx_count
@@ -164,7 +156,8 @@ impl<'a> BalanceAccount<'a> {
 
     #[must_use]
     pub fn balance(&self) -> U256 {
-        self.header().balance
+        let header = super::header::<Header>(&self.account);
+        header.balance
     }
 
     pub fn transfer(&mut self, target: &mut BalanceAccount, value: U256) -> Result<()> {
@@ -179,7 +172,7 @@ impl<'a> BalanceAccount<'a> {
     }
 
     pub fn burn(&mut self, value: U256) -> Result<()> {
-        let mut header = self.header_mut();
+        let mut header = super::header_mut::<Header>(&self.account);
 
         header.balance = header
             .balance
@@ -194,7 +187,7 @@ impl<'a> BalanceAccount<'a> {
     }
 
     pub fn mint(&mut self, value: U256) -> Result<()> {
-        let mut header = self.header_mut();
+        let mut header = super::header_mut::<Header>(&self.account);
 
         header.balance = header
             .balance

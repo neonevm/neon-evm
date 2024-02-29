@@ -1,15 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::instruction::Instruction;
 use solana_program::program::{invoke_signed_unchecked, invoke_unchecked};
-use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 
-use crate::account::{increment_revision, BalanceAccount};
-use crate::account::{AllocateResult, ContractAccount, StorageCell};
-use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::account::{AllocateResult, BalanceAccount, ContractAccount, StorageCell};
+use crate::account_storage::ProgramAccountStorage;
 use crate::config::{
     ACCOUNT_SEED_VERSION, PAYMENT_TO_TREASURE, STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
 };
@@ -69,7 +67,6 @@ impl<'a> ProgramAccountStorage<'a> {
     pub fn apply_state_change(&mut self, actions: Vec<Action>) -> Result<()> {
         debug_print!("Applies begin");
 
-        let mut modified_accounts: HashSet<Pubkey> = HashSet::with_capacity(64);
         let mut storage = HashMap::with_capacity(16);
 
         for action in actions {
@@ -105,15 +102,13 @@ impl<'a> ProgramAccountStorage<'a> {
                 Action::EvmIncrementNonce { address, chain_id } => {
                     let mut account = self.create_balance_account(address, chain_id)?;
                     account.increment_nonce()?;
-
-                    // Nonce increment is not count as account modification
                 }
                 Action::EvmSetCode {
                     address,
                     chain_id,
                     code,
                 } => {
-                    let account = ContractAccount::init(
+                    ContractAccount::init(
                         address,
                         chain_id,
                         0,
@@ -121,8 +116,6 @@ impl<'a> ProgramAccountStorage<'a> {
                         &self.accounts,
                         Some(&self.keys),
                     )?;
-
-                    modified_accounts.insert(*account.pubkey());
                 }
                 Action::EvmSelfDestruct { address: _ } => {
                     // EIP-6780: SELFDESTRUCT only in the same transaction
@@ -167,23 +160,14 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         }
 
-        self.apply_storage(storage, &mut modified_accounts)?;
-
-        for pubkey in modified_accounts {
-            let account = self.accounts.get(&pubkey);
-            increment_revision(self.program_id(), account)?;
-        }
+        self.apply_storage(storage)?;
 
         debug_print!("Applies done");
 
         Ok(())
     }
 
-    fn apply_storage(
-        &mut self,
-        storage: HashMap<Address, HashMap<U256, [u8; 32]>>,
-        modified_accounts: &mut HashSet<Pubkey>,
-    ) -> Result<()> {
+    fn apply_storage(&mut self, storage: HashMap<Address, HashMap<U256, [u8; 32]>>) -> Result<()> {
         const STATIC_STORAGE_LIMIT: U256 = U256::new(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as u128);
 
         for (address, storage) in storage {
@@ -214,15 +198,14 @@ impl<'a> ProgramAccountStorage<'a> {
                 }
             }
 
-            if let Some(contract) = contract {
-                modified_accounts.insert(*contract.pubkey());
+            if let Some(mut contract) = contract {
+                contract.increment_revision(&self.rent, &self.accounts)?;
             }
 
             for (index, values) in infinite_values {
                 let cell_address = self.keys.storage_cell_address(&crate::ID, address, index);
 
                 let account = self.accounts.get(cell_address.pubkey());
-                modified_accounts.insert(*account.key);
 
                 if system_program::check_id(account.owner) {
                     let (_, bump) = self.keys.contract_with_bump_seed(&crate::ID, address);
@@ -245,6 +228,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
 
                     storage.sync_lamports(&self.rent, &self.accounts)?;
+                    storage.increment_revision(&self.rent, &self.accounts)?;
                 };
             }
         }

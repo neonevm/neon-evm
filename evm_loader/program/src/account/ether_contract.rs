@@ -15,7 +15,9 @@ use std::{
 
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 
-use super::{AccountsDB, ACCOUNT_PREFIX_LEN, ACCOUNT_SEED_VERSION, TAG_ACCOUNT_CONTRACT};
+use super::{
+    AccountHeader, AccountsDB, ACCOUNT_PREFIX_LEN, ACCOUNT_SEED_VERSION, TAG_ACCOUNT_CONTRACT,
+};
 
 #[derive(Eq, PartialEq)]
 pub enum AllocateResult {
@@ -24,11 +26,29 @@ pub enum AllocateResult {
 }
 
 #[repr(C, packed)]
-pub struct Header {
+pub struct HeaderV0 {
     pub address: Address,
     pub chain_id: u64,
     pub generation: u32,
 }
+
+impl AccountHeader for HeaderV0 {
+    const VERSION: u8 = 0;
+}
+
+#[repr(C, packed)]
+pub struct HeaderWithRevision {
+    pub v0: HeaderV0,
+    pub revision: u32,
+}
+
+impl AccountHeader for HeaderWithRevision {
+    const VERSION: u8 = 2;
+}
+
+// Set the last version of the Header struct here
+// and change the `header_size` and `header_upgrade` functions
+pub type Header = HeaderWithRevision;
 
 pub type Storage = [[u8; 32]; STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT];
 pub type Code = [u8];
@@ -37,14 +57,16 @@ pub struct ContractAccount<'a> {
     account: AccountInfo<'a>,
 }
 
-const HEADER_OFFSET: usize = ACCOUNT_PREFIX_LEN;
-const STORAGE_OFFSET: usize = HEADER_OFFSET + size_of::<Header>();
-const CODE_OFFSET: usize = STORAGE_OFFSET + size_of::<Storage>();
-
 impl<'a> ContractAccount<'a> {
     #[must_use]
     pub fn required_account_size(code: &[u8]) -> usize {
         ACCOUNT_PREFIX_LEN + size_of::<Header>() + size_of::<Storage>() + code.len()
+    }
+
+    #[must_use]
+    pub fn required_header_realloc(&self) -> usize {
+        let allocated_header_size = self.header_size();
+        size_of::<Header>().saturating_sub(allocated_header_size)
     }
 
     pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
@@ -118,14 +140,15 @@ impl<'a> ContractAccount<'a> {
         let account = accounts.get(&pubkey).clone();
 
         super::validate_tag(&crate::ID, &account, TAG_EMPTY)?;
-        super::set_tag(&crate::ID, &account, TAG_ACCOUNT_CONTRACT)?;
+        super::set_tag(&crate::ID, &account, TAG_ACCOUNT_CONTRACT, Header::VERSION)?;
 
-        let mut contract = Self::from_account(&crate::ID, account)?;
+        let mut contract = Self { account };
         {
-            let mut header = contract.header_mut();
-            header.address = address;
-            header.chain_id = chain_id;
-            header.generation = generation;
+            let mut header = super::header_mut::<Header>(&contract.account);
+            header.v0.address = address;
+            header.v0.chain_id = chain_id;
+            header.v0.generation = generation;
+            header.revision = 1;
         }
         {
             let mut contract_code = contract.code_mut();
@@ -140,44 +163,72 @@ impl<'a> ContractAccount<'a> {
         self.account.key
     }
 
-    #[inline]
-    #[must_use]
-    fn header(&self) -> Ref<Header> {
-        super::section(&self.account, HEADER_OFFSET)
+    fn header_size(&self) -> usize {
+        match super::header_version(&self.account) {
+            0 | 1 => size_of::<HeaderV0>(),
+            HeaderWithRevision::VERSION => size_of::<HeaderWithRevision>(),
+            _ => panic!("Unknown header version"),
+        }
+    }
+
+    fn header_upgrade(&mut self, rent: &Rent, db: &AccountsDB<'a>) -> Result<()> {
+        match super::header_version(&self.account) {
+            0 | 1 => {
+                super::expand_header::<HeaderV0, Header>(&self.account, rent, db)?;
+            }
+            HeaderWithRevision::VERSION => {
+                super::expand_header::<HeaderWithRevision, Header>(&self.account, rent, db)?;
+            }
+            _ => panic!("Unknown header version"),
+        }
+
+        Ok(())
     }
 
     #[inline]
     #[must_use]
-    fn header_mut(&mut self) -> RefMut<Header> {
-        super::section_mut(&self.account, HEADER_OFFSET)
+    fn storage_offset(&self) -> usize {
+        ACCOUNT_PREFIX_LEN + self.header_size()
     }
 
     #[inline]
     fn storage(&self) -> Ref<Storage> {
-        super::section(&self.account, STORAGE_OFFSET)
+        let offset = self.storage_offset();
+        super::section(&self.account, offset)
     }
 
     #[inline]
     fn storage_mut(&mut self) -> RefMut<Storage> {
-        super::section_mut(&self.account, STORAGE_OFFSET)
+        let offset = self.storage_offset();
+        super::section_mut(&self.account, offset)
+    }
+
+    #[inline]
+    #[must_use]
+    fn code_offset(&self) -> usize {
+        self.storage_offset() + size_of::<Storage>()
     }
 
     #[inline]
     #[must_use]
     pub fn code(&self) -> Ref<Code> {
+        let offset = self.code_offset();
+
         let data = self.account.data.borrow();
-        Ref::map(data, |d| &d[CODE_OFFSET..])
+        Ref::map(data, |d| &d[offset..])
     }
 
     #[inline]
-    fn code_mut(&self) -> RefMut<Code> {
+    fn code_mut(&mut self) -> RefMut<Code> {
+        let offset = self.code_offset();
+
         let data = self.account.data.borrow_mut();
-        RefMut::map(data, |d| &mut d[CODE_OFFSET..])
+        RefMut::map(data, |d| &mut d[offset..])
     }
 
     #[must_use]
     pub fn code_buffer(&self) -> crate::evm::Buffer {
-        let begin = CODE_OFFSET;
+        let begin = self.code_offset();
         let end = begin + self.code_len();
 
         unsafe { crate::evm::Buffer::from_account(&self.account, begin..end) }
@@ -185,22 +236,48 @@ impl<'a> ContractAccount<'a> {
 
     #[must_use]
     pub fn code_len(&self) -> usize {
-        self.account.data_len().saturating_sub(CODE_OFFSET)
+        let offset = self.code_offset();
+
+        self.account.data_len().saturating_sub(offset)
     }
 
     #[must_use]
     pub fn address(&self) -> Address {
-        self.header().address
+        let header = super::header::<HeaderV0>(&self.account);
+        header.address
     }
 
     #[must_use]
     pub fn chain_id(&self) -> u64 {
-        self.header().chain_id
+        let header = super::header::<HeaderV0>(&self.account);
+        header.chain_id
     }
 
     #[must_use]
     pub fn generation(&self) -> u32 {
-        self.header().generation
+        let header = super::header::<HeaderV0>(&self.account);
+        header.generation
+    }
+
+    #[must_use]
+    pub fn revision(&self) -> u32 {
+        if super::header_version(&self.account) < HeaderWithRevision::VERSION {
+            return 0;
+        }
+
+        let header = super::header::<HeaderWithRevision>(&self.account);
+        header.revision
+    }
+
+    pub fn increment_revision(&mut self, rent: &Rent, db: &AccountsDB<'a>) -> Result<()> {
+        if super::header_version(&self.account) < HeaderWithRevision::VERSION {
+            self.header_upgrade(rent, db)?;
+        }
+
+        let mut header = super::header_mut::<HeaderWithRevision>(&self.account);
+        header.revision = header.revision.wrapping_add(1);
+
+        Ok(())
     }
 
     #[must_use]

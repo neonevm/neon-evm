@@ -1,7 +1,7 @@
 use std::cell::{Ref, RefMut};
 use std::mem::size_of;
 
-use super::{AccountsDB, ACCOUNT_PREFIX_LEN, TAG_STORAGE_CELL};
+use super::{AccountHeader, AccountsDB, NoHeader, ACCOUNT_PREFIX_LEN, TAG_STORAGE_CELL};
 use crate::error::Result;
 use ethnum::U256;
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey, rent::Rent};
@@ -78,12 +78,28 @@ pub struct StorageCell<'a> {
     account: AccountInfo<'a>,
 }
 
-const CELLS_OFFSET: usize = ACCOUNT_PREFIX_LEN;
+#[repr(C, packed)]
+pub struct HeaderWithRevision {
+    revision: u32,
+}
+impl AccountHeader for HeaderWithRevision {
+    const VERSION: u8 = 2;
+}
+
+// Set the last version of the Header struct here
+// and change the `header_size` and `header_upgrade` functions
+pub type Header = HeaderWithRevision;
 
 impl<'a> StorageCell<'a> {
     #[must_use]
     pub fn required_account_size(cells: usize) -> usize {
-        ACCOUNT_PREFIX_LEN + cells * size_of::<Cell>()
+        ACCOUNT_PREFIX_LEN + size_of::<Header>() + cells * size_of::<Cell>()
+    }
+
+    #[must_use]
+    pub fn required_header_realloc(&self) -> usize {
+        let allocated_header_size = self.header_size();
+        size_of::<Header>().saturating_sub(allocated_header_size)
     }
 
     pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
@@ -103,7 +119,7 @@ impl<'a> StorageCell<'a> {
         let cell_account = accounts.get(&address.pubkey);
 
         assert!(allocate_cells <= u8::MAX.into());
-        let space = ACCOUNT_PREFIX_LEN + (allocate_cells * size_of::<Cell>());
+        let space = Self::required_account_size(allocate_cells);
 
         let system = accounts.system();
 
@@ -118,7 +134,12 @@ impl<'a> StorageCell<'a> {
             rent,
         )?;
 
-        super::set_tag(&crate::ID, cell_account, TAG_STORAGE_CELL)?;
+        super::set_tag(&crate::ID, cell_account, TAG_STORAGE_CELL, Header::VERSION)?;
+        {
+            let mut header = super::header_mut::<Header>(cell_account);
+            header.revision = 1;
+        }
+
         Ok(Self {
             account: cell_account.clone(),
         })
@@ -129,10 +150,38 @@ impl<'a> StorageCell<'a> {
         self.account.key
     }
 
+    fn header_size(&self) -> usize {
+        match super::header_version(&self.account) {
+            0 | 1 => size_of::<NoHeader>(),
+            HeaderWithRevision::VERSION => size_of::<HeaderWithRevision>(),
+            _ => panic!("Unknown header version"),
+        }
+    }
+
+    fn header_upgrade(&mut self, rent: &Rent, db: &AccountsDB<'a>) -> Result<()> {
+        match super::header_version(&self.account) {
+            0 | 1 => {
+                super::expand_header::<NoHeader, Header>(&self.account, rent, db)?;
+            }
+            HeaderWithRevision::VERSION => {
+                super::expand_header::<HeaderWithRevision, Header>(&self.account, rent, db)?;
+            }
+            _ => panic!("Unknown header version"),
+        }
+
+        Ok(())
+    }
+
+    fn cells_offset(&self) -> usize {
+        ACCOUNT_PREFIX_LEN + self.header_size()
+    }
+
     #[must_use]
     pub fn cells(&self) -> Ref<[Cell]> {
+        let cells_offset = self.cells_offset();
+
         let data = self.account.data.borrow();
-        let data = Ref::map(data, |d| &d[CELLS_OFFSET..]);
+        let data = Ref::map(data, |d| &d[cells_offset..]);
 
         Ref::map(data, |bytes| {
             static_assertions::assert_eq_align!(Cell, u8);
@@ -149,8 +198,10 @@ impl<'a> StorageCell<'a> {
 
     #[must_use]
     pub fn cells_mut(&mut self) -> RefMut<[Cell]> {
+        let cells_offset = self.cells_offset();
+
         let data = self.account.data.borrow_mut();
-        let data = RefMut::map(data, |d| &mut d[CELLS_OFFSET..]);
+        let data = RefMut::map(data, |d| &mut d[cells_offset..]);
 
         RefMut::map(data, |bytes| {
             static_assertions::assert_eq_align!(Cell, u8);
@@ -190,7 +241,7 @@ impl<'a> StorageCell<'a> {
             return Ok(());
         }
 
-        let new_len = self.account.data_len() + std::mem::size_of::<Cell>(); // new_len <= 8.25 kb
+        let new_len = self.account.data_len() + size_of::<Cell>(); // new_len <= 8.25 kb
         self.account.realloc(new_len, false)?;
 
         let mut cells = self.cells_mut();
@@ -218,6 +269,27 @@ impl<'a> StorageCell<'a> {
 
         let lamports = minimum_balance - self.account.lamports();
         system.transfer(operator, &self.account, lamports)?;
+
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn revision(&self) -> u32 {
+        if super::header_version(&self.account) < HeaderWithRevision::VERSION {
+            return 0;
+        }
+
+        let header = super::header::<HeaderWithRevision>(&self.account);
+        header.revision
+    }
+
+    pub fn increment_revision(&mut self, rent: &Rent, accounts: &AccountsDB<'a>) -> Result<()> {
+        if super::header_version(&self.account) < HeaderWithRevision::VERSION {
+            self.header_upgrade(rent, accounts)?;
+        }
+
+        let mut header = super::header_mut::<HeaderWithRevision>(&self.account);
+        header.revision = header.revision.wrapping_add(1);
 
         Ok(())
     }

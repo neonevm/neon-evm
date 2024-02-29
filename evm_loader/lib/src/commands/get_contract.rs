@@ -5,7 +5,7 @@ use evm_loader::{
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
-use crate::{account_storage::account_info, account_update::update_account, rpc::Rpc, NeonResult};
+use crate::{account_storage::account_info, rpc::Rpc, NeonResult};
 
 use serde_with::{hex::Hex, serde_as, DisplayFromStr};
 
@@ -50,8 +50,6 @@ fn read_account(
     let Some(mut account) = account else {
         return Ok(GetContractResponse::empty(solana_address));
     };
-
-    update_account(program_id, &solana_address, &mut account)?;
 
     let account_info = account_info(&solana_address, &mut account);
     let (chain_id, code) =

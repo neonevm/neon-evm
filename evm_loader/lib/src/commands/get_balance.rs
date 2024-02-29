@@ -4,10 +4,7 @@ use evm_loader::account::BalanceAccount;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
-use crate::{
-    account_storage::account_info, account_update::update_account, rpc::Rpc, types::BalanceAddress,
-    NeonResult,
-};
+use crate::{account_storage::account_info, rpc::Rpc, types::BalanceAddress, NeonResult};
 
 use serde_with::{serde_as, DisplayFromStr};
 
@@ -50,8 +47,6 @@ fn read_account(
     mut account: Account,
 ) -> NeonResult<GetBalanceResponse> {
     let solana_address = address.find_pubkey(program_id);
-
-    update_account(program_id, &solana_address, &mut account)?;
 
     let account_info = account_info(&solana_address, &mut account);
     let balance_account = BalanceAccount::from_account(program_id, account_info)?;

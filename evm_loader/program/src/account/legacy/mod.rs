@@ -1,7 +1,6 @@
 mod legacy_ether;
 mod legacy_holder;
 mod legacy_storage_cell;
-mod update;
 
 pub use legacy_ether::LegacyEtherData;
 pub use legacy_holder::LegacyFinalizedData;
@@ -11,10 +10,12 @@ pub use legacy_storage_cell::LegacyStorageData;
 use solana_program::system_program;
 use solana_program::{account_info::AccountInfo, rent::Rent, sysvar::Sysvar};
 
+use super::AccountHeader;
 use super::Holder;
+use super::HolderHeader;
 use super::StateFinalizedAccount;
-use super::TAG_ACCOUNT_BALANCE;
-use super::TAG_ACCOUNT_CONTRACT;
+use super::StateFinalizedHeader;
+use super::StorageCellHeader;
 use super::TAG_HOLDER;
 use super::TAG_STATE_FINALIZED;
 use super::{AccountsDB, ContractAccount, TAG_STORAGE_CELL};
@@ -32,11 +33,6 @@ pub const TAG_ACCOUNT_CONTRACT_DEPRECATED: u8 = 12;
 pub const TAG_STORAGE_CELL_DEPRECATED: u8 = 42;
 // Before account revision (Holder and Finalized remain the same)
 pub const TAG_STATE_BEFORE_REVISION: u8 = 23;
-pub const TAG_ACCOUNT_BALANCE_BEFORE_REVISION: u8 = 60;
-pub const TAG_ACCOUNT_CONTRACT_BEFORE_REVISION: u8 = 70;
-pub const TAG_STORAGE_CELL_BEFORE_REVISION: u8 = 43;
-
-pub const ACCOUNT_PREFIX_LEN_BEFORE_REVISION: usize = 2;
 
 fn reduce_account_size(account: &AccountInfo, required_len: usize, rent: &Rent) -> Result<u64> {
     assert!(account.data_len() > required_len);
@@ -150,10 +146,16 @@ fn update_storage_account_from_v1(
 
     // Fill it with new data
     cell_account.try_borrow_mut_data()?.fill(0);
-    super::set_tag(&crate::ID, &cell_account, TAG_STORAGE_CELL)?;
+    super::set_tag(
+        &crate::ID,
+        &cell_account,
+        TAG_STORAGE_CELL,
+        StorageCellHeader::VERSION,
+    )?;
 
     let mut storage = StorageCell::from_account(&crate::ID, cell_account)?;
     storage.cells_mut().copy_from_slice(&cells);
+    storage.increment_revision(rent, db)?;
 
     Ok(lamports_collected)
 }
@@ -163,7 +165,7 @@ pub fn update_holder_account(account: &AccountInfo) -> Result<u8> {
         TAG_HOLDER_DEPRECATED => {
             let legacy_data = LegacyHolderData::from_account(&crate::ID, account)?;
 
-            super::set_tag(&crate::ID, account, TAG_HOLDER)?;
+            super::set_tag(&crate::ID, account, TAG_HOLDER, HolderHeader::VERSION)?;
 
             let mut holder = Holder::from_account(&crate::ID, account.clone())?;
             holder.update(|data| {
@@ -177,7 +179,12 @@ pub fn update_holder_account(account: &AccountInfo) -> Result<u8> {
         TAG_STATE_FINALIZED_DEPRECATED => {
             let legacy_data = LegacyFinalizedData::from_account(&crate::ID, account)?;
 
-            super::set_tag(&crate::ID, account, TAG_STATE_FINALIZED)?;
+            super::set_tag(
+                &crate::ID,
+                account,
+                TAG_STATE_FINALIZED,
+                StateFinalizedHeader::VERSION,
+            )?;
 
             let mut state = StateFinalizedAccount::from_account(&crate::ID, account.clone())?;
             state.update(|data| {
@@ -198,8 +205,6 @@ pub fn update_legacy_accounts(accounts: &AccountsDB) -> Result<u64> {
     let mut legacy_storage = Vec::with_capacity(accounts.accounts_len());
 
     let rent = Rent::get()?;
-    let op = accounts.operator();
-    let system = accounts.system();
 
     for account in accounts {
         if !crate::check_id(account.owner) {
@@ -220,15 +225,6 @@ pub fn update_legacy_accounts(accounts: &AccountsDB) -> Result<u64> {
             LegacyStorageData::TAG => {
                 let legacy_data = LegacyStorageData::from_account(&crate::ID, account)?;
                 legacy_storage.push(legacy_data);
-            }
-            TAG_ACCOUNT_BALANCE_BEFORE_REVISION => {
-                update::from_before_revision(account, TAG_ACCOUNT_BALANCE, op, system, &rent)?;
-            }
-            TAG_ACCOUNT_CONTRACT_BEFORE_REVISION => {
-                update::from_before_revision(account, TAG_ACCOUNT_CONTRACT, op, system, &rent)?;
-            }
-            TAG_STORAGE_CELL_BEFORE_REVISION => {
-                update::from_before_revision(account, TAG_STORAGE_CELL, op, system, &rent)?;
             }
             _ => {}
         }
@@ -251,8 +247,5 @@ pub fn is_legacy_tag(tag: u8) -> bool {
             | TAG_STATE_FINALIZED_DEPRECATED
             | TAG_STATE_DEPRECATED
             | TAG_STATE_BEFORE_REVISION
-            | TAG_ACCOUNT_BALANCE_BEFORE_REVISION
-            | TAG_ACCOUNT_CONTRACT_BEFORE_REVISION
-            | TAG_STORAGE_CELL_BEFORE_REVISION
     )
 }
