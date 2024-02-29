@@ -83,9 +83,6 @@ impl<'a> ProgramAccountStorage<'a> {
                     let mut source = self.balance_account(source, chain_id)?;
                     let mut target = self.create_balance_account(target, chain_id)?;
                     source.transfer(&mut target, value)?;
-
-                    modified_accounts.insert(*source.pubkey());
-                    modified_accounts.insert(*target.pubkey());
                 }
                 Action::Burn {
                     source,
@@ -94,8 +91,6 @@ impl<'a> ProgramAccountStorage<'a> {
                 } => {
                     let mut account = self.create_balance_account(source, chain_id)?;
                     account.burn(value)?;
-
-                    modified_accounts.insert(*account.pubkey());
                 }
                 Action::EvmSetStorage {
                     address,
