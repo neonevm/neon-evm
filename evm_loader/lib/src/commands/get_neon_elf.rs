@@ -85,6 +85,16 @@ pub fn read_elf_parameters(_config: &Config, program_data: &[u8]) -> GetNeonElfR
 
 pub fn get_elf_parameter(data: &[u8], elf_parameter: &str) -> Result<String> {
     let offset = UpgradeableLoaderState::size_of_programdata_metadata();
+
+    // Check if the offset is within the bounds of `data`
+    if data.len() <= offset {
+        let error_msg = format!(
+            "Offset beyond data bounds. Data len: {}, offset: {offset}, data bytes: {data:?}",
+            data.len(),
+        );
+        return Err(anyhow::anyhow!(error_msg));
+    }
+
     let program_data = &data[offset..];
 
     let elf = goblin::elf::Elf::parse(program_data).context("Unable to parse ELF file")?;
