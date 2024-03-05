@@ -141,38 +141,6 @@ fn header_version(info: &AccountInfo) -> u8 {
     data[HEADER_VERSION_OFFSET]
 }
 
-/*
-#[inline]
-fn map_obj<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> Ref<'r, T> {
-    let begin = offset;
-    let end = begin + std::mem::size_of::<T>();
-
-    let data = account.data.borrow();
-    Ref::map(data, |d| {
-        let bytes = &d[begin..end];
-
-        assert_eq!(std::mem::size_of::<T>(), bytes.len());
-        assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
-        unsafe { & *(bytes.as_ptr().cast()) }
-    })
-}
-*/
-
-#[inline]
-fn map_obj_mut<'r, T>(account: &'r AccountInfo<'_>, offset: usize) -> RefMut<'r, T> {
-    let begin = offset;
-    let end = begin + std::mem::size_of::<T>();
-
-    let data = account.data.borrow_mut();
-    RefMut::map(data, |d| {
-        let bytes = &mut d[begin..end];
-
-        assert_eq!(std::mem::size_of::<T>(), bytes.len());
-        assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
-        unsafe { &mut *(bytes.as_mut_ptr().cast()) }
-    })
-}
-
 pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8> {
     if info.owner != program_id {
         return Err(Error::AccountInvalidOwner(*info.key, *program_id));
