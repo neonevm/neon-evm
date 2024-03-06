@@ -11,7 +11,7 @@ evm-loader = { path = "../program", default-features = false, features = ["log"]
 solana-sdk = "=1.17.24"
 solana-client = "=1.17.24"
 serde = "1.0.186"
-serde_json = { version = "1.0.107", features = ["preserve_order"] }
+serde_json = { version = "1.0.114", features = ["preserve_order"] }
 ethnum = { version = "1.4", default-features = false, features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

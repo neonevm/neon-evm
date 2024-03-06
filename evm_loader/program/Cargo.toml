@@ -63,7 +63,7 @@ features = ["is_sync"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
-serde_json = { version = "1.0.107", features = ["preserve_order"] }
+serde_json = { version = "1.0.114", features = ["preserve_order"] }
 
 [lib]
 crate-type = ["cdylib", "lib"]
