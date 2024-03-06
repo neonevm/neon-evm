@@ -1,6 +1,6 @@
-use crate::allocator::{acc_allocator, AccountAllocator};
+use crate::allocator::{acc_allocator, StateAccountAllocator};
 
-pub type Vector<T> = allocator_api2::vec::Vec<T, AccountAllocator>;
+pub type Vector<T> = allocator_api2::vec::Vec<T, StateAccountAllocator>;
 
 #[macro_export]
 macro_rules! vector {
@@ -11,7 +11,7 @@ macro_rules! vector {
         allocator_api2::vec::from_elem_in($elem, $n, $crate::allocator::acc_allocator())
     );
     ($($x:expr),+ $(,)?) => (
-        allocator_api2::boxed::Box::<[_], $crate::allocator::AccountAllocator>::into_vec(
+        allocator_api2::boxed::Box::<[_], $crate::allocator::StateAccountAllocator>::into_vec(
             allocator_api2::boxed::Box::slice(
                 allocator_api2::boxed::Box::new_in([$($x),+], $crate::allocator::acc_allocator())
             )

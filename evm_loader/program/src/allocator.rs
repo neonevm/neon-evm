@@ -6,10 +6,9 @@ use std::{
 };
 
 use linked_list_allocator::Heap;
-use solana_program::{entrypoint::HEAP_START_ADDRESS, pubkey::Pubkey};
+use solana_program::entrypoint::HEAP_START_ADDRESS;
 use static_assertions::{const_assert, const_assert_eq};
 
-//use crate::persistent_state::PersistentState;
 
 // Solana heap constants.
 #[allow(clippy::cast_possible_truncation)] // HEAP_START_ADDRESS < usize::max
@@ -19,70 +18,82 @@ const SOLANA_HEAP_SIZE: usize = 256 * 1024;
 const_assert!(HEAP_START_ADDRESS < (usize::MAX as u64));
 const_assert_eq!(SOLANA_HEAP_START_ADDRESS % align_of::<Heap>(), 0);
 
-// Holder account heap constants.
-const FIRST_ACCOUNT_DATA_OFFSET: usize =
-    /* number of accounts */
-    size_of::<u64>() +
-    /* duplication marker */ size_of::<u8>() +
-    /* is signer? */ size_of::<u8>() +
-    /* is writable? */ size_of::<u8>() +
-    /* is executable? */ size_of::<u8>() +
-    /* original_data_len */ size_of::<u32>() +
-    /* key */ size_of::<Pubkey>() +
-    /* owner */ size_of::<Pubkey>() +
-    /* lamports */ size_of::<u64>() +
-    /* factual_data_len */ size_of::<u64>();
-
-#[allow(clippy::cast_possible_truncation)] // HEAP_START_ADDRESS < usize::max
-const HOLDER_HEAP_START_ADDRESS: usize = 0x400000000u64 as usize + FIRST_ACCOUNT_DATA_OFFSET + crate::account::STATE_ACCOUNT_HEAP_OFFSET;
-const_assert_eq!(HOLDER_HEAP_START_ADDRESS % align_of::<Heap>(), 0);
-
-#[inline]
-pub fn acc_allocator() -> AccountAllocator {
-    unsafe { HOLDER_ACC_ALLOCATOR }
-}
-
-#[inline]
-fn solana_default_heap() -> &'static mut Heap {
-    // This is legal since all-zero is a valid `Heap`-struct representation
-    const HEAP_PTR: *mut Heap = SOLANA_HEAP_START_ADDRESS as *mut Heap;
-    let heap = unsafe { &mut *HEAP_PTR };
-
-    if heap.bottom().is_null() {
-        let start = (SOLANA_HEAP_START_ADDRESS + size_of::<Heap>()) as *mut u8;
-        let size = SOLANA_HEAP_SIZE - size_of::<Heap>();
-        unsafe { heap.init(start, size) };
-    }
-
-    heap
-}
-
-#[inline]
-fn holder_account_heap() -> &'static mut Heap {
-    // This is legal since all-zero is a valid `Heap`-struct representation
-    const HEAP_PTR: *mut Heap = HOLDER_HEAP_START_ADDRESS as *mut Heap;
-    let heap = unsafe { &mut *HEAP_PTR };
-    // We do not init account heap, it's account's responsibility to initialize it itself.
-
-    heap
-}
-
 #[derive(Clone, Copy)]
-pub struct AccountAllocator;
+pub struct StateAccountAllocator;
 
-impl AccountAllocator {
-    fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
-        holder_account_heap().allocate_first_fit(layout)
-    }
+#[inline]
+pub fn acc_allocator() -> StateAccountAllocator {
+    unsafe { STATE_ACCOUNT_ALLOCATOR }
+}
 
-    fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
-        unsafe {
-            holder_account_heap().deallocate(NonNull::new_unchecked(ptr), layout);
+// Conditional implementation of base StateAccountAllocator functionality.
+// For Solana case, it uses the heap residing in the StateAccount
+// For non-Solana case, it uses standard System allocator.
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "solana")] {
+        use solana_program::pubkey::Pubkey;
+
+        // Holder account heap constants.
+        const FIRST_ACCOUNT_DATA_OFFSET: usize =
+        /* number of accounts */
+        size_of::<u64>() +
+        /* duplication marker */ size_of::<u8>() +
+        /* is signer? */ size_of::<u8>() +
+        /* is writable? */ size_of::<u8>() +
+        /* is executable? */ size_of::<u8>() +
+        /* original_data_len */ size_of::<u32>() +
+        /* key */ size_of::<Pubkey>() +
+        /* owner */ size_of::<Pubkey>() +
+        /* lamports */ size_of::<u64>() +
+        /* factual_data_len */ size_of::<u64>();
+
+        #[allow(clippy::cast_possible_truncation)] // HEAP_START_ADDRESS < usize::max
+        // Configure StateAccount heap start address by offsetting the start to take into account the tag, header and correct alignment.
+        const STATE_ACCOUNT_HEAP_START_ADDRESS: usize = 0x400000000u64 as usize + FIRST_ACCOUNT_DATA_OFFSET + crate::account::STATE_ACCOUNT_HEAP_OFFSET;
+        const_assert_eq!(STATE_ACCOUNT_HEAP_START_ADDRESS % align_of::<Heap>(), 0);
+
+        #[inline]
+        fn state_account_heap() -> &'static mut Heap {
+            const HEAP_PTR: *mut Heap = STATE_ACCOUNT_HEAP_START_ADDRESS as *mut Heap;
+            let heap = unsafe { &mut *HEAP_PTR };
+            // Unlike SolanaAllocator, StateAccountAllocator do not init account heap here.It's account's responsibility to initialize it itself (likely during StateAccount creation), because account knows its size and thus can correctly specify heap size.
+
+            heap
+        }
+
+        impl StateAccountAllocator {
+            fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
+                state_account_heap().allocate_first_fit(layout)
+            }
+
+            fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
+                unsafe {
+                    state_account_heap().deallocate(NonNull::new_unchecked(ptr), layout);
+                }
+            }
+        }
+    } else {
+        use std::alloc::System;
+
+        impl StateAccountAllocator {
+            fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
+                let new_ptr = System.alloc(layout);
+                if !new_ptr.is_null() {
+                    Ok(unsafe{NonNull::new_unchecked(new_ptr)})
+                } else {
+                    Err(())
+                }
+            }
+
+            fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
+                System.dealloc(ptr, layout)
+            }
         }
     }
 }
 
-unsafe impl GlobalAlloc for AccountAllocator {
+// Common StateAccountAllocator traits implementations.
+unsafe impl GlobalAlloc for StateAccountAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         #[allow(clippy::option_if_let_else)]
         if let Ok(non_null) = self.alloc_impl(layout) {
@@ -129,7 +140,7 @@ unsafe impl GlobalAlloc for AccountAllocator {
     }
 }
 
-unsafe impl allocator_api2::alloc::Allocator for AccountAllocator {
+unsafe impl allocator_api2::alloc::Allocator for StateAccountAllocator {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, allocator_api2::alloc::AllocError> {
         unsafe {
             self.alloc_impl(layout)
@@ -150,6 +161,21 @@ unsafe impl allocator_api2::alloc::Allocator for AccountAllocator {
 
 #[derive(Clone, Copy)]
 pub struct SolanaAllocator;
+
+#[inline]
+fn solana_default_heap() -> &'static mut Heap {
+    // This is legal since all-zero is a valid `Heap`-struct representation
+    const HEAP_PTR: *mut Heap = SOLANA_HEAP_START_ADDRESS as *mut Heap;
+    let heap = unsafe { &mut *HEAP_PTR };
+
+    if heap.bottom().is_null() {
+        let start = (SOLANA_HEAP_START_ADDRESS + size_of::<Heap>()) as *mut u8;
+        let size = SOLANA_HEAP_SIZE - size_of::<Heap>();
+        unsafe { heap.init(start, size) };
+    }
+
+    heap
+}
 
 impl SolanaAllocator {
     fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
@@ -229,21 +255,16 @@ unsafe impl allocator_api2::alloc::Allocator for SolanaAllocator {
     }
 }
 
-
 cfg_if::cfg_if! {
     if #[cfg(target_os = "solana")] {
         #[global_allocator]
         static mut DEFAULT: SolanaAllocator = SolanaAllocator;
-        pub static mut SOLANA_ALLOCATOR: SolanaAllocator = SolanaAllocator;
-        pub static mut HOLDER_ACC_ALLOCATOR: AccountAllocator = AccountAllocator;
+        pub static mut STATE_ACCOUNT_ALLOCATOR: StateAccountAllocator = StateAccountAllocator;
     } else {
-        use std::alloc::System;
-
         #[global_allocator]
         static mut DEFAULT: System = System;
-        pub static mut EVM: System = System;
-        // TODO add newtype pattern around System, implement allocator_api2 trait for it and define HOLDER_ACC_ALLOCATOR.
-        pub static mut SOLANA_ALLOCATOR: SolanaAllocator = SolanaAllocator;
-        pub static mut HOLDER_ACC_ALLOCATOR: AccountAllocator = AccountAllocator;
+        // StateAccountAllocator here operates exactly as System, delegating all the calls to it.
+        // The type is different to comply with persisten types definitions.
+        pub static mut STATE_ACCOUNT_ALLOCATOR: StateAccountAllocator = StateAccountAllocator;
     }
 }
