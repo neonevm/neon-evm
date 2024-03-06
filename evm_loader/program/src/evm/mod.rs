@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 pub use buffer::Buffer;
 
-use crate::evm::tracing::EventListener;
+use crate::{evm::tracing::EventListener, types::boxx::Boxx};
 #[cfg(target_os = "solana")]
 use crate::evm::tracing::NoopEventListener;
 use crate::{
@@ -133,16 +133,12 @@ pub struct Context {
     pub code_address: Option<Address>,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "B: Database")]
 pub struct Machine<B: Database, T: EventListener> {
     origin: Address,
     chain_id: u64,
     context: Context,
 
-    #[serde(with = "ethnum::serde::bytes::le")]
     gas_price: U256,
-    #[serde(with = "ethnum::serde::bytes::le")]
     gas_limit: U256,
 
     execution_code: Buffer,
@@ -157,12 +153,10 @@ pub struct Machine<B: Database, T: EventListener> {
     is_static: bool,
     reason: Reason,
 
-    parent: Option<Box<Self>>,
+    parent: Option<Boxx<Self>>,
 
-    #[serde(skip)]
     phantom: PhantomData<*const B>,
 
-    #[serde(skip)]
     tracer: Option<T>,
 }
 
@@ -427,13 +421,13 @@ impl<B: Database, T: EventListener> Machine<B, T> {
         };
 
         core::mem::swap(self, &mut other);
-        self.parent = Some(Box::new(other));
+        self.parent = Some(crate::types::boxx::boxx(other));
     }
 
     fn join(&mut self) -> Self {
         assert!(self.parent.is_some());
 
-        let mut other = *self.parent.take().unwrap();
+        let mut other = Boxx::into_inner(self.parent.take().unwrap());
         core::mem::swap(self, &mut other);
 
         self.tracer = other.tracer.take();
