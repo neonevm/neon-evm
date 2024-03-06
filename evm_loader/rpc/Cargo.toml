@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.8.0"
-clap = "2.33.3"
+clap = "2.34.0"
 jsonrpc-v2 = "0.13.0"
 neon-lib-interface = { path = "../lib-interface" }
 neon-lib = { path = "../lib" }

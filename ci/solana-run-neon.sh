@@ -20,6 +20,7 @@ VALIDATOR_ARGS=(
   --ticks-per-slot 16
   --upgradeable-program ${EVM_LOADER} ${EVM_LOADER_PATH} ${EVM_LOADER_AUTHORITY_KEYPAIR}
   --bpf-program ${METAPLEX} ${METAPLEX_PATH}
+  --limit-ledger-size 400000000
 )
 
 LIST_OF_TEST_PROGRAMS=("test_invoke_program" "counter" "cross_program_invocation" "transfer_sol" "transfer_tokens")

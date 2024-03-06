@@ -207,7 +207,11 @@ impl<'rpc, T: Rpc + BuildConfigSimulator> EmulatorAccountStorage<'rpc, T> {
             block_number: other.block_number.saturating_add(block_shift),
             block_timestamp: other.block_timestamp.saturating_add(timestamp_shift),
             timestamp_used: RefCell::new(false),
-            rent: other.rent,
+            rent: Rent {
+                lamports_per_byte_year: other.rent.lamports_per_byte_year,
+                exemption_threshold: other.rent.exemption_threshold,
+                burn_percent: other.rent.burn_percent,
+            },
             state_overrides: other.state_overrides.clone(),
             accounts_cache: other.accounts_cache.clone(),
             used_accounts: other.used_accounts.clone(),

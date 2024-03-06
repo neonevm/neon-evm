@@ -1,4 +1,4 @@
-# Note: This crate must be built using cargo build-bpf
+# Note: This crate must be built using cargo build-sbf
 
 [package]
 name = "evm-loader"
@@ -44,8 +44,8 @@ spl-token = { version = "~4.0", default-features = false, features = ["no-entryp
 spl-associated-token-account = { version = "~2.3", default-features = false, features = ["no-entrypoint"] }
 mpl-token-metadata = { version = "~4.1", default-features = false }
 thiserror = "1.0"
-arrayref = "0.3.6"
-hex = "0.4.2"
+arrayref = "0.3.7"
+hex = "0.4.3"
 ripemd = "0.1"
 rlp = "0.5"
 static_assertions = "1"
@@ -57,14 +57,14 @@ ethnum = { version = "1.5", default-features = false, features = ["serde"] }
 cfg-if = { version = "1.0" }
 log = { version = "0.4", default-features = false, optional = true }
 maybe-async = "0.2.10"
-async-trait = { version = "0.1.80", optional = true }
+async-trait = { version = "0.1.81", optional = true }
 
 [target.'cfg(target_os = "solana")'.dependencies.maybe-async]
-version = "0.2.7"
+version = "0.2.10"
 features = ["is_sync"]
 
 [dev-dependencies]
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.38", features = ["full"] }
 serde_json = { version = "1.0.120", features = ["preserve_order"] }
 solana-sdk.workspace = true
 

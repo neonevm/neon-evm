@@ -21,6 +21,7 @@ use {
 };
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+#[allow(clippy::struct_field_names)]
 pub struct Stats {
     pub total_objects: u32,
     pub corrected_objects: u32,

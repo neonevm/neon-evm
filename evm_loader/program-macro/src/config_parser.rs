@@ -138,7 +138,7 @@ impl Parse for CommonConfig {
                         r#type: Type::Verbatim(quote!(bool)),
                         value: Lit::Bool(LitBool::new(v, input.span())),
                     }),
-                    toml::Value::Array(ref array) => match (array.get(0), array.get(1)) {
+                    toml::Value::Array(ref array) => match (array.first(), array.get(1)) {
                         (Some(toml::Value::Integer(v)), Some(toml::Value::String(t))) => {
                             let s = v.to_string();
                             let v: LitInt = parse_str(&s)?;

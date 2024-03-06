@@ -122,7 +122,7 @@ impl ClickHouseDb {
 
         info!("get_branch_slots {{ slot: {slot:?} }}");
 
-        let query = r#"
+        let query = r"
             SELECT DISTINCT ON (slot, parent) slot, parent, status
             FROM events.update_slot
             WHERE slot >= (
@@ -133,7 +133,7 @@ impl ClickHouseDb {
                 )
                 AND isNotNull(parent)
             ORDER BY slot DESC, status DESC
-            "#;
+            ";
         let time_start = Instant::now();
         let mut rows = self
             .client
@@ -183,7 +183,7 @@ impl ClickHouseDb {
     async fn get_account_rooted_slot(&self, key: &str, slot: u64) -> ChResult<Option<u64>> {
         info!("get_account_rooted_slot {{ key: {key}, slot: {slot} }}");
 
-        let query = r#"
+        let query = r"
         SELECT DISTINCT uad.slot
         FROM events.update_account_distributed AS uad
         WHERE uad.pubkey = ?
@@ -195,7 +195,7 @@ impl ClickHouseDb {
           ) >= 1
         ORDER BY uad.slot DESC
         LIMIT 1
-        "#;
+        ";
 
         let time_start = Instant::now();
         let slot_opt = Self::row_opt(
@@ -264,14 +264,14 @@ impl ClickHouseDb {
         let mut row = if branch.is_empty() {
             None
         } else {
-            let query = r#"
+            let query = r"
                 SELECT owner, lamports, executable, rent_epoch, data, txn_signature
                 FROM events.update_account_distributed
                 WHERE pubkey = ?
                   AND slot IN ?
                 ORDER BY pubkey, slot DESC, write_version DESC
                 LIMIT 1
-            "#;
+            ";
 
             let time_start = Instant::now();
             let row = Self::row_opt(
@@ -325,7 +325,7 @@ impl ClickHouseDb {
             "get_account_at_index_in_block {{ pubkey: {pubkey}, slot: {slot}, tx_index_in_block: {tx_index_in_block} }}"
         );
 
-        let query = r#"
+        let query = r"
             SELECT owner, lamports, executable, rent_epoch, data, txn_signature
             FROM events.update_account_distributed
             WHERE pubkey = ?
@@ -333,7 +333,7 @@ impl ClickHouseDb {
               AND write_version <= ?
             ORDER BY write_version DESC
             LIMIT 1
-        "#;
+        ";
 
         let time_start = Instant::now();
 
@@ -368,13 +368,13 @@ impl ClickHouseDb {
         pubkey: &str,
         slot: u64,
     ) -> ChResult<Option<AccountRow>> {
-        let query = r#"
+        let query = r"
             SELECT owner, lamports, executable, rent_epoch, data, txn_signature
             FROM events.older_account_distributed FINAL
             WHERE pubkey = ? AND slot <= ?
             ORDER BY slot DESC
             LIMIT 1
-        "#;
+        ";
         Self::row_opt(
             self.client
                 .query(query)
@@ -390,7 +390,7 @@ impl ClickHouseDb {
     }
 
     async fn get_sol_sig_rooted_slot(&self, sol_sig: &[u8; 64]) -> ChResult<Option<SlotParent>> {
-        let query = r#"
+        let query = r"
             SELECT slot, parent
             FROM events.rooted_slots
             WHERE slot IN (
@@ -400,7 +400,7 @@ impl ClickHouseDb {
                 )
             ORDER BY slot DESC
             LIMIT 1
-        "#;
+        ";
 
         Self::row_opt(
             self.client
@@ -418,7 +418,7 @@ impl ClickHouseDb {
 
     async fn get_sol_sig_confirmed_slot(&self, sol_sig: &[u8; 64]) -> ChResult<Option<SlotParent>> {
         let (_, slot_vec) = self.get_branch_slots(None).await?;
-        let query = r#"
+        let query = r"
             SELECT slot, parent, status
             FROM events.update_slot
             WHERE slot IN ?
@@ -429,7 +429,7 @@ impl ClickHouseDb {
                 )
             ORDER BY slot DESC
             LIMIT 1
-        "#;
+        ";
 
         Self::row_opt(
             self.client
@@ -476,13 +476,13 @@ impl ClickHouseDb {
         };
 
         // Try to find account changes within the given slot.
-        let query = r#"
+        let query = r"
             SELECT DISTINCT ON (pubkey, txn_signature, write_version)
                    owner, lamports, executable, rent_epoch, data, txn_signature
             FROM events.update_account_distributed
             WHERE slot = ? AND pubkey = ?
             ORDER BY write_version DESC
-        "#;
+        ";
 
         let pubkey_str = format!("{:?}", pubkey.to_bytes());
         let time_start = Instant::now();
@@ -538,7 +538,7 @@ impl ClickHouseDb {
     }
 
     pub async fn get_neon_revision(&self, slot: Slot, pubkey: &Pubkey) -> ChResult<String> {
-        let query = r#"SELECT data
+        let query = r"SELECT data
         FROM events.update_account_distributed
         WHERE
             pubkey = ? AND slot <= ?
@@ -547,7 +547,7 @@ impl ClickHouseDb {
             slot ASC,
             write_version ASC
         LIMIT 1
-        "#;
+        ";
 
         let pubkey_str = format!("{:?}", pubkey.to_bytes());
 
@@ -576,13 +576,13 @@ impl ClickHouseDb {
     }
 
     pub async fn get_neon_revisions(&self, pubkey: &Pubkey) -> ChResult<RevisionMap> {
-        let query = r#"SELECT slot, data
+        let query = r"SELECT slot, data
         FROM events.update_account_distributed
         WHERE
             pubkey = ?
         ORDER BY
             slot ASC,
-            write_version ASC"#;
+            write_version ASC";
 
         let pubkey_str = format!("{:?}", pubkey.to_bytes());
         let rows: Vec<RevisionRow> = self
@@ -608,11 +608,11 @@ impl ClickHouseDb {
     }
 
     pub async fn get_slot_by_blockhash(&self, blockhash: &str) -> ChResult<u64> {
-        let query = r#"SELECT slot
+        let query = r"SELECT slot
         FROM events.notify_block_distributed
         WHERE hash = ?
         LIMIT 1
-        "#;
+        ";
 
         let slot = Self::row_opt(
             self.client
@@ -632,14 +632,14 @@ impl ClickHouseDb {
     }
 
     pub async fn get_sync_status(&self) -> ChResult<EthSyncStatus> {
-        let query_is_startup = r#"SELECT is_startup
+        let query_is_startup = r"SELECT is_startup
         FROM events.update_account_distributed
         WHERE slot = (
           SELECT MAX(slot)
           FROM events.update_account_distributed
         )
         LIMIT 1
-        "#;
+        ";
 
         let is_startup = Self::row_opt(
             self.client
@@ -649,7 +649,7 @@ impl ClickHouseDb {
         )?;
 
         if is_startup == Some(true) {
-            let query = r#"SELECT slot
+            let query = r"SELECT slot
             FROM (
               (SELECT MIN(slot) as slot FROM events.notify_block_distributed)
               UNION ALL
@@ -658,7 +658,7 @@ impl ClickHouseDb {
               (SELECT MAX(slot) as slot FROM events.notify_block_distributed)
             )
             ORDER BY slot ASC
-            "#;
+            ";
 
             let data = Self::row_opt(self.client.query(query).fetch_one::<EthSyncing>().await)?;
 

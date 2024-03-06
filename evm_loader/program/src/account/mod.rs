@@ -282,6 +282,7 @@ impl<'a> AccountsDB<'a> {
     }
 }
 
+#[allow(clippy::into_iter_without_iter)]
 impl<'a, 'r> IntoIterator for &'r AccountsDB<'a> {
     type Item = &'r AccountInfo<'a>;
     type IntoIter = std::slice::Iter<'r, AccountInfo<'a>>;

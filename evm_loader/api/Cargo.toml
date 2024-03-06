@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "2.33.3"
+clap = "2.34.0"
 evm-loader = { path = "../program", default-features = false, features = ["log"] }
 solana-sdk.workspace = true
 solana-client.workspace = true
@@ -20,7 +20,7 @@ tracing-appender = "0.2.3"
 neon-lib = { path = "../lib" }
 actix-web = "4.8.0"
 actix-request-identifier = "4.2.0"
-hex = "0.4.2"
+hex = "0.4.3"
 build-info = "0.0.37"
 
 [build-dependencies]

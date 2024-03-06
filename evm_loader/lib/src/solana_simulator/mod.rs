@@ -1,8 +1,10 @@
+use solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING;
 use std::sync::Arc;
 
 use solana_accounts_db::transaction_results::{
     TransactionExecutionDetails, TransactionExecutionResult,
 };
+use solana_runtime::installed_scheduler_pool::BankWithScheduler;
 use solana_runtime::{
     bank::{Bank, TransactionSimulationResult},
     runtime_config::RuntimeConfig,
@@ -52,7 +54,11 @@ impl SolanaSimulator {
         let info = utils::genesis_config_info(rpc, sync_state, 1_000.0).await?;
         let payer = info.mint_keypair;
 
-        let genesis_bank = Arc::new(Bank::new_with_paths(
+        let mut config = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
+        if let Some(index_config) = config.index.as_mut() {
+            index_config.flush_threads = Some(0);
+        }
+        let genesis_bank = Bank::new_with_paths(
             &info.genesis_config,
             Arc::clone(&runtime_config),
             Vec::default(),
@@ -61,10 +67,14 @@ impl SolanaSimulator {
             solana_accounts_db::accounts_index::AccountSecondaryIndexes::default(),
             solana_accounts_db::accounts_db::AccountShrinkThreshold::default(),
             false,
+            Some(config),
             None,
             None,
             Arc::default(),
-        ));
+        );
+
+        // Check https://github.com/solana-labs/solana/pull/34271 for more details
+        let (genesis_bank, _) = genesis_bank.wrap_with_bank_forks_for_tests();
 
         genesis_bank.set_capitalization();
 
@@ -141,7 +151,10 @@ impl SolanaSimulator {
     }
 
     pub fn replace_blockhash(&mut self, blockhash: &Hash) {
-        self.bank().register_recent_blockhash(blockhash);
+        while !self.bank().is_complete() {
+            self.bank()
+                .register_tick(blockhash, &BankWithScheduler::no_scheduler_available());
+        }
     }
 
     pub fn set_sysvar<T>(&self, sysvar: &T)
@@ -152,7 +165,7 @@ impl SolanaSimulator {
     }
 
     pub fn set_program_account(&mut self, pubkey: &Pubkey, data: Vec<u8>) {
-        let rent = self.bank().rent_collector().rent;
+        let rent = &self.bank().rent_collector().rent;
         let lamports = rent.minimum_balance(data.len());
 
         self.set_account(
@@ -172,17 +185,7 @@ impl SolanaSimulator {
     }
 
     pub fn set_multiple_accounts(&mut self, accounts: &[(&Pubkey, &Account)]) {
-        let include_slot_in_hash = if self
-            .bank()
-            .feature_set
-            .is_active(&solana_sdk::feature_set::account_hash_ignore_slot::id())
-        {
-            solana_accounts_db::accounts_db::IncludeSlotInHash::RemoveSlot
-        } else {
-            solana_accounts_db::accounts_db::IncludeSlotInHash::IncludeSlot
-        };
-
-        let storable_accounts = (self.slot(), accounts, include_slot_in_hash);
+        let storable_accounts = (self.slot(), accounts);
         self.bank().store_accounts(storable_accounts);
     }
 
@@ -261,7 +264,7 @@ impl SolanaSimulator {
         let sanitized =
             SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self.bank())?;
 
-        let simulation_result = self.bank().simulate_transaction_unchecked(sanitized);
+        let simulation_result = self.bank().simulate_transaction_unchecked(&sanitized, true);
 
         Ok(simulation_result)
     }
