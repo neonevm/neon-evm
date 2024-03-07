@@ -5,7 +5,7 @@ use evm_loader::account::legacy::{
 };
 use evm_loader::account::{TAG_ACCOUNT_CONTRACT, TAG_STORAGE_CELL};
 use evm_loader::account_storage::find_slot_hash;
-use evm_loader::types::Address;
+use evm_loader::types::{Address, Vector};
 use solana_sdk::rent::Rent;
 use solana_sdk::system_program;
 use solana_sdk::sysvar::slot_hashes;
@@ -214,7 +214,7 @@ impl<T: Rpc> EmulatorAccountStorage<'_, T> {
         Ok((*cell_address.pubkey(), account))
     }
 
-    pub async fn apply_actions(&mut self, actions: Vec<Action>) -> Result<(), NeonError> {
+    pub async fn apply_actions(&mut self, actions: Vector<Action>) -> Result<(), NeonError> {
         info!("apply_actions");
 
         let mut new_balance_accounts = HashSet::new();

@@ -1,6 +1,7 @@
 use evm_loader::account::ContractAccount;
 use evm_loader::account_storage::AccountStorage;
 use evm_loader::error::build_revert_message;
+use evm_loader::executor::ExecutorStateData;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -97,18 +98,22 @@ async fn emulate_trx<T: Tracer>(
     let chain_id = tx.chain_id().unwrap_or_else(|| storage.default_chain_id());
     storage.use_balance_account(origin, chain_id, true).await?;
 
-    let mut backend = ExecutorState::new(storage);
-    let mut evm = match Machine::new(&tx, origin, &mut backend, tracer).await {
-        Ok(evm) => evm,
-        Err(e) => return Ok((EmulateResponse::revert(e), None)),
+    // Execute and return results to restrict the lifetime of mutable borrow.
+    let (actions, exit_status, steps_executed, tracer) = {
+        let mut executor_state_data = ExecutorStateData::new(storage);
+        let mut backend = ExecutorState::new(storage, &mut executor_state_data);
+        let mut evm = match Machine::new(&tx, origin, &mut backend, tracer).await {
+            Ok(evm) => evm,
+            Err(e) => return Ok((EmulateResponse::revert(e), None)),
+        };
+
+        let (exit_status, steps_executed, tracer) = evm.execute(step_limit, &mut backend).await?;
+        if exit_status == ExitStatus::StepLimit {
+            return Err(NeonError::TooManySteps);
+        }
+
+        (backend.into_actions(), exit_status, steps_executed, tracer)
     };
-
-    let (exit_status, steps_executed, tracer) = evm.execute(step_limit, &mut backend).await?;
-    if exit_status == ExitStatus::StepLimit {
-        return Err(NeonError::TooManySteps);
-    }
-
-    let actions = backend.into_actions();
 
     storage.apply_actions(actions.clone()).await?;
     storage.mark_legacy_accounts().await?;

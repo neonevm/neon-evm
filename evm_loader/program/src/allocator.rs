@@ -77,7 +77,7 @@ cfg_if::cfg_if! {
 
         impl StateAccountAllocator {
             fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
-                let new_ptr = System.alloc(layout);
+                let new_ptr = unsafe{System.alloc(layout)};
                 if !new_ptr.is_null() {
                     Ok(unsafe{NonNull::new_unchecked(new_ptr)})
                 } else {
@@ -86,7 +86,7 @@ cfg_if::cfg_if! {
             }
 
             fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
-                System.dealloc(ptr, layout)
+                unsafe { System.dealloc(ptr, layout)}
             }
         }
     }
