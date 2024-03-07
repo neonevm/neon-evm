@@ -20,19 +20,16 @@ use super::action::Action;
 use super::cache::{cache_get_or_insert_account, cache_get_or_insert_balance, Cache};
 use super::OwnedAccountInfo;
 
-/// Represents the state of executor abstracted away from a self.backend.
-/// UPDATE `serialize/deserialize` WHEN THIS STRUCTURE CHANGES
-pub struct ExecutorState<'a, B: AccountStorage> {
-    pub backend: &'a B,
+// Persistent part of ExecutorState.
+pub struct ExecutorStateData {
     cache: RefCell<Cache>,
     actions: Vector<Action>,
     stack: Vector<usize>,
     exit_status: Option<ExitStatus>,
 }
 
-impl<'a, B: AccountStorage> ExecutorState<'a, B> {
-    #[must_use]
-    pub fn new(backend: &'a B) -> Self {
+impl ExecutorStateData {
+    pub fn new<'a, B: AccountStorage>(backend: &'a B) -> Self {
         let cache = Cache {
             solana_accounts: TreeMap::new(),
             native_balances: TreeMap::new(),
@@ -41,30 +38,47 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         };
 
         Self {
-            backend,
             cache: RefCell::new(cache),
             actions: Vector::with_capacity_in(64, acc_allocator()),
             stack: Vector::with_capacity_in(16, acc_allocator()),
             exit_status: None,
         }
     }
+}
+
+/// Represents the state of executor abstracted away from a self.backend.
+/// UPDATE `serialize/deserialize` WHEN THIS STRUCTURE CHANGES
+pub struct ExecutorState<'a, B: AccountStorage> {
+    pub backend: &'a B,
+    pub data: &'a mut ExecutorStateData,
+}
+
+
+impl<'a, B: AccountStorage> ExecutorState<'a, B> {
+    #[must_use]
+    pub fn new(backend: &'a B, data: &'a mut ExecutorStateData) -> Self {
+        Self {
+            backend,
+            data,
+        }
+    }
 
     pub fn into_actions(&self) -> Vector<Action> {
-        assert!(self.stack.is_empty());
+        assert!(self.data.stack.is_empty());
 
-        crate::executor::action::filter_selfdestruct(self.actions.clone())
+        crate::executor::action::filter_selfdestruct(self.data.actions.clone())
     }
 
     pub fn exit_status(&self) -> Option<&ExitStatus> {
-        self.exit_status.as_ref()
+        self.data.exit_status.as_ref()
     }
 
     pub fn set_exit_status(&mut self, status: ExitStatus) {
-        self.exit_status = Some(status);
+        self.data.exit_status = Some(status);
     }
 
     pub fn call_depth(&self) -> usize {
-        self.stack.len()
+        self.data.stack.len()
     }
 
     pub fn burn(&mut self, source: Address, chain_id: u64, value: U256) {
@@ -73,7 +87,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             chain_id,
             value,
         };
-        self.actions.push(burn);
+        self.data.actions.push(burn);
     }
 
     pub fn queue_external_instruction(
@@ -90,12 +104,13 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             fee,
         };
 
-        self.actions.push(action);
+        self.data.actions.push(action);
     }
 
     #[maybe_async]
     pub async fn external_account(&self, address: Pubkey) -> Result<OwnedAccountInfo> {
         let metas = self
+            .data
             .actions
             .iter()
             .filter_map(|a| {
@@ -110,7 +125,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let metas = into_vector(metas);
 
         if !metas.iter().any(|m| (m.pubkey == address) && m.is_writable) {
-            let account = cache_get_or_insert_account(&self.cache, address, self.backend).await;
+            let account = cache_get_or_insert_account(&self.data.cache, address, self.backend).await;
             return Ok(account);
         }
 
@@ -119,11 +134,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             std::collections::BTreeMap::<Pubkey, OwnedAccountInfo>::new();
 
         for m in metas {
-            let account = cache_get_or_insert_account(&self.cache, m.pubkey, self.backend).await;
+            let account = cache_get_or_insert_account(&self.data.cache, m.pubkey, self.backend).await;
             accounts.insert(account.key, account);
         }
 
-        for action in &self.actions {
+        for action in &self.data.actions {
             if let Action::ExternalInstruction {
                 program_id,
                 data,
@@ -173,7 +188,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         let mut nonce = self.backend.nonce(from_address, from_chain_id).await;
         let mut increment = 0_u64;
 
-        for action in &self.actions {
+        for action in &self.data.actions {
             if let Action::EvmIncrementNonce { address, chain_id } = action {
                 if (&from_address == address) && (&from_chain_id == chain_id) {
                     increment += 1;
@@ -188,16 +203,16 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
 
     fn increment_nonce(&mut self, address: Address, chain_id: u64) -> Result<()> {
         let increment = Action::EvmIncrementNonce { address, chain_id };
-        self.actions.push(increment);
+        self.data.actions.push(increment);
 
         Ok(())
     }
 
     async fn balance(&self, from_address: Address, from_chain_id: u64) -> Result<U256> {
         let cache_key = (from_address, from_chain_id);
-        let mut balance = cache_get_or_insert_balance(&self.cache, cache_key, self.backend).await;
+        let mut balance = cache_get_or_insert_balance(&self.data.cache, cache_key, self.backend).await;
 
-        for action in &self.actions {
+        for action in &self.data.actions {
             match action {
                 Action::Transfer {
                     source,
@@ -258,7 +273,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             chain_id,
             value,
         };
-        self.actions.push(transfer);
+        self.data.actions.push(transfer);
 
         Ok(())
     }
@@ -268,7 +283,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             return Ok(1); // This is required in order to make a normal call to an extension contract
         }
 
-        for action in &self.actions {
+        for action in &self.data.actions {
             if let Action::EvmSetCode { address, code, .. } = action {
                 if &from_address == address {
                     return Ok(code.len());
@@ -280,7 +295,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     async fn code(&self, from_address: Address) -> Result<crate::evm::Buffer> {
-        for action in &self.actions {
+        for action in &self.data.actions {
             if let Action::EvmSetCode { address, code, .. } = action {
                 if &from_address == address {
                     return Ok(crate::evm::Buffer::from_slice(code));
@@ -307,20 +322,20 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             chain_id,
             code: into_vector(code),
         };
-        self.actions.push(set_code);
+        self.data.actions.push(set_code);
 
         Ok(())
     }
 
     fn selfdestruct(&mut self, address: Address) -> Result<()> {
         let suicide = Action::EvmSelfDestruct { address };
-        self.actions.push(suicide);
+        self.data.actions.push(suicide);
 
         Ok(())
     }
 
     async fn storage(&self, from_address: Address, from_index: U256) -> Result<[u8; 32]> {
-        for action in self.actions.iter().rev() {
+        for action in self.data.actions.iter().rev() {
             if let Action::EvmSetStorage {
                 address,
                 index,
@@ -342,7 +357,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
             index,
             value,
         };
-        self.actions.push(set_storage);
+        self.data.actions.push(set_storage);
 
         Ok(())
     }
@@ -358,7 +373,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
         }
 
         let number = number.as_u64();
-        let block_slot = self.cache.borrow().block_number.as_u64();
+        let block_slot = self.data.cache.borrow().block_number.as_u64();
         let lower_block_slot = if block_slot < 257 {
             0
         } else {
@@ -373,12 +388,12 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     fn block_number(&self) -> Result<U256> {
-        let cache = self.cache.borrow();
+        let cache = self.data.cache.borrow();
         Ok(cache.block_number)
     }
 
     fn block_timestamp(&self) -> Result<U256> {
-        let cache = self.cache.borrow();
+        let cache = self.data.cache.borrow();
         Ok(cache.block_timestamp)
     }
 
@@ -398,25 +413,26 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     fn snapshot(&mut self) {
-        self.stack.push(self.actions.len());
+        self.data.stack.push(self.data.actions.len());
     }
 
     fn revert_snapshot(&mut self) {
         let actions_len = self
+            .data
             .stack
             .pop()
             .expect("Fatal Error: Inconsistent EVM Call Stack");
 
-        self.actions.truncate(actions_len);
+        self.data.actions.truncate(actions_len);
 
-        if self.stack.is_empty() {
+        if self.data.stack.is_empty() {
             // sanity check
-            assert!(self.actions.is_empty());
+            assert!(self.data.actions.is_empty());
         }
     }
 
     fn commit_snapshot(&mut self) {
-        self.stack
+        self.data.stack
             .pop()
             .expect("Fatal Error: Inconsistent EVM Call Stack");
     }
@@ -441,7 +457,7 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     async fn contract_chain_id(&self, contract: Address) -> Result<u64> {
-        for action in self.actions.iter().rev() {
+        for action in self.data.actions.iter().rev() {
             if let Action::EvmSetCode {
                 address, chain_id, ..
             } = action

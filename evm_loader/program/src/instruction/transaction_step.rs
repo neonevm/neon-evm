@@ -5,8 +5,9 @@ use crate::debug::log_data;
 use crate::error::{Error, Result};
 use crate::evm::tracing::NoopEventListener;
 use crate::evm::{ExitStatus, Machine};
-use crate::executor::{Action, ExecutorState};
+use crate::executor::{Action, ExecutorState, ExecutorStateData};
 use crate::gasometer::Gasometer;
+use crate::types::boxx::boxx;
 use crate::types::Vector;
 
 pub type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
@@ -14,7 +15,7 @@ pub type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>, NoopEventListener>;
 
 pub fn do_begin<'a>(
     accounts: AccountsDB<'a>,
-    storage: StateAccount<'a>,
+    mut storage: StateAccount<'a>,
     gasometer: Gasometer,
 ) -> Result<()> {
     debug_print!("do_begin");
@@ -39,8 +40,7 @@ pub fn do_begin<'a>(
     let gas_limit_in_tokens = storage.trx().gas_limit_in_tokens()?;
     origin_account.burn(gas_limit_in_tokens)?;
 
-    // create and load the PersistentState struct into the holder account heap.
-    storage.alloc(&account_storage)?;
+    allocate_or_reinit_state(&account_storage, &mut storage, true)?;
 
     finalize(0, storage, account_storage, None, gasometer)
 }
@@ -48,7 +48,7 @@ pub fn do_begin<'a>(
 pub fn do_continue<'a>(
     step_count: u64,
     accounts: AccountsDB<'a>,
-    storage: StateAccount<'a>,
+    mut storage: StateAccount<'a>,
     gasometer: Gasometer,
     reset: bool,
 ) -> Result<()> {
@@ -62,16 +62,15 @@ pub fn do_continue<'a>(
 
     let account_storage = ProgramAccountStorage::new(accounts)?;
     let (steps_executed, results) = {
-        let (mut backend, mut evm) = if reset {
-            storage.alloc(&account_storage)?;
-            (storage.state(), storage.evm())
-        } else {
-            storage.reinit(&account_storage)?;
-            (storage.state(), storage.evm())
-        };
+        allocate_or_reinit_state(&account_storage, &mut storage, reset)?;
+
+        let mut state_data = storage.read_executor_state();
+        let mut evm = storage.read_evm();
+        //let (mut state, mut evm): (RefMut<'_, ExecutorStateData>, RefMut<'_, Evm>) = (storage.state(), storage.evm());
+        let mut backend = ExecutorState::new(&account_storage, &mut state_data); 
 
         let (result, steps_executed, _) = match backend.exit_status() {
-            Some(status) => (status.clone(), 0_u64, None),
+            Some(status) => (status.clone(), 0_u64, None::<NoopEventListener>),
             None => evm.execute(step_count, &mut backend)?,
         };
 
@@ -89,6 +88,24 @@ pub fn do_continue<'a>(
     };
 
     finalize(steps_executed, storage, account_storage, results, gasometer)
+}
+
+fn allocate_or_reinit_state(account_storage: &ProgramAccountStorage<'_>, storage: & mut StateAccount<'_>, allocate: bool) -> Result<()> {
+    if allocate {
+        let mut state_data = boxx(ExecutorStateData::new(account_storage));
+        let mut evm_backend = ExecutorState::new(account_storage, &mut state_data);
+        let evm = boxx(Evm::new(storage.trx(), storage.trx_origin(), &mut evm_backend, None)?);
+        //storage.alloc(state_data, evm)?;
+        storage.alloc_evm(evm)?;
+        storage.alloc_executor_state(state_data)?;
+    } else {
+        let mut state_data = storage.read_executor_state();
+        let mut evm = storage.read_evm();
+
+        let evm_backend = ExecutorState::new(account_storage, &mut state_data);
+        evm.reinit(&evm_backend);
+    };
+    Ok(())
 }
 
 fn finalize<'a>(

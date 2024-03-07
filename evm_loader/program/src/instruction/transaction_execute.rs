@@ -4,7 +4,7 @@ use crate::debug::log_data;
 use crate::error::{Error, Result};
 use crate::evm::tracing::NoopEventListener;
 use crate::evm::Machine;
-use crate::executor::ExecutorState;
+use crate::executor::{ExecutorState, ExecutorStateData};
 use crate::gasometer::Gasometer;
 use crate::instruction::transaction_step::log_return_value;
 use crate::types::{Address, Transaction};
@@ -26,7 +26,8 @@ pub fn execute(
     account_storage.origin(origin, &trx)?.increment_nonce()?;
 
     let (exit_reason, apply_state) = {
-        let mut backend = ExecutorState::new(&account_storage);
+        let mut backend_data = ExecutorStateData::new(&account_storage);
+        let mut backend = ExecutorState::new(&account_storage, &mut backend_data);
 
         let mut evm = Machine::new(&trx, origin, &mut backend, None::<NoopEventListener>)?;
         let (result, _, _) = evm.execute(u64::MAX, &mut backend)?;

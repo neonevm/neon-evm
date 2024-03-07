@@ -1,10 +1,15 @@
 use std::cell::{Ref, RefMut};
 use std::mem::{size_of, ManuallyDrop};
+use std::ptr;
 
 use crate::account_storage::AccountStorage;
 use crate::config::DEFAULT_CHAIN_ID;
 use crate::error::{Error, Result};
 
+use crate::evm::database::Database;
+use crate::evm::tracing::EventListener;
+use crate::evm::Machine;
+use crate::executor::ExecutorStateData;
 use crate::types::boxx::{boxx, Boxx};
 use crate::types::{Address, Transaction, TreeMap};
 use ethnum::U256;
@@ -20,87 +25,6 @@ use super::{
 pub enum AccountsStatus {
     Ok,
     RevisionChanged,
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "solana")] {
-        // Solana specific impl
-        use crate::evm::tracing::NoopEventListener;
-        use crate::evm::Machine;
-        use crate::account_storage::ProgramAccountStorage;
-        use crate::executor::ExecutorState;
-        use std::ptr::addr_of_mut;
-
-        type EvmBackend<'a, 'r> = ExecutorState<'r, ProgramAccountStorage<'a>>;
-        type Evm<'a, 'r> = Machine<EvmBackend<'a, 'r>, NoopEventListener>;
-
-        impl<'a> StateAccount<'a> {
-            pub fn alloc<'r>(&self, account_storage: &'r ProgramAccountStorage<'a>) -> Result<()> {
-                let mut state = boxx(EvmBackend::new(&account_storage));
-                let evm = boxx(Evm::new(self.trx(), self.trx_origin(), &mut state, None)?);
-
-                // Write offsets for just created objects into the header.
-                let mut header = super::header_mut::<Header>(&self.account);
-                let data_ptr = self.account.try_borrow_data()?.as_ptr();
-                unsafe {
-                    let state_addr = (&*state) as *const EvmBackend as *const u8;
-                    let evm_addr = (&*evm) as *const Evm as *const u8;
-                    header.evm_state_offset = state_addr.offset_from(data_ptr) as usize;
-                    header.evm_machine_offset = evm_addr.offset_from(data_ptr) as usize;
-                }
-                // allocator_api2 does not expose Box::leak.
-                // We avoid drop of persistent objects using mem::forget.
-                std::mem::forget(Boxx::into_inner(state));
-                std::mem::forget(Boxx::into_inner(evm));
-
-                Ok(())
-            }
-
-            pub fn reinit<'r>(&self, account_storage: &'r ProgramAccountStorage<'a>) -> Result<()> {
-                let header = super::header_mut::<Header>(&self.account);
-                let data_ptr = self.account.try_borrow_data()?.as_ptr();
-                // Reinit the reference onto ProgramAccountStorage.
-                // N.B. Rust currently does not allow (UB) to implicitly create a ref to
-                // an uninitialized or invalid piece of memory.
-                // The following seems the least dirty approach to keep the code sound.
-                unsafe {
-                    let state_ptr = data_ptr.add(header.evm_state_offset) as *mut EvmBackend;
-                    addr_of_mut!((*state_ptr).backend).write_unaligned(account_storage);
-                };
-
-                let mut evm = self.evm();
-                let backend = self.state();
-                evm.reinit(&backend);
-
-                Ok(())
-            }
-
-            pub fn evm<'b>(&self) -> RefMut<'b, Evm> {
-                self.map_obj_mut(super::header::<Header>(&self.account).evm_machine_offset)
-            }
-
-            pub fn state<'b>(&self) -> RefMut<'b, EvmBackend> {
-                self.map_obj_mut(super::header::<Header>(&self.account).evm_state_offset)
-            }
-
-            #[inline]
-            fn map_obj_mut<'r, T>(&'r self, offset: usize) -> RefMut<'r, T> {
-                let begin = offset;
-                let end = begin + std::mem::size_of::<T>();
-
-                let data = self.account.data.borrow_mut();
-                RefMut::map(data, |d| {
-                    let bytes = &mut d[begin..end];
-
-                    assert_eq!(std::mem::size_of::<T>(), bytes.len());
-                    assert_eq!(bytes.as_ptr().align_offset(std::mem::align_of::<T>()), 0);
-                    unsafe { &mut *(bytes.as_mut_ptr().cast()) }
-                })
-            }
-        }
-    } else {
-        // Simulation specific impl.
-    }
 }
 
 /// Storage data account to store execution metainfo between steps for iterative execution
@@ -119,7 +43,7 @@ struct Data {
 // Stores relative offsets for the corresponding objects as allocated by the AccountAllocator.
 #[repr(C, packed)]
 struct Header {
-    pub evm_state_offset: usize,
+    pub executor_state_offset: usize,
     pub evm_machine_offset: usize,
     pub data_offset: usize,
 }
@@ -209,7 +133,7 @@ impl<'a> StateAccount<'a> {
         {
             // Set header
             let mut header = super::header_mut::<Header>(&info);
-            header.evm_state_offset = 0;
+            header.executor_state_offset = 0;
             header.evm_machine_offset = 0;
 
             let account_data_ptr = info.try_borrow_data()?.as_ptr();
@@ -364,5 +288,56 @@ impl<'a> StateAccount<'a> {
             heap.init(heap_bottom, heap_size)
         };
         Ok(())
+    }
+}
+
+// Implementation of functional to save/restore persistent state of iterative transactions.
+impl<'a> StateAccount<'a> {
+    pub fn alloc_executor_state(&self, data: Boxx<ExecutorStateData>) -> Result<()> {
+        let mut header = super::header_mut::<Header>(&self.account);
+        header.executor_state_offset = self.leak_and_offset(data);
+        Ok(())
+    }
+
+    pub fn alloc_evm<B: Database, T:EventListener>(&self, evm: Boxx<Machine<B, T>>) -> Result<()> {
+        let mut header = super::header_mut::<Header>(&self.account);
+        header.evm_machine_offset = self.leak_and_offset(evm);
+        Ok(())
+    }
+
+    /// Leak the Box's underlying data and returns offset from the account data start.
+    fn leak_and_offset<T>(&self, object: Boxx<T>) -> usize {
+        let data_ptr = self.account.data.borrow().as_ptr();
+        unsafe {
+            // allocator_api2 does not expose Box::leak (private associated fn).
+            // We avoid drop of persistent object by leaking via Box::into_raw.
+            let obj_addr = Boxx::into_raw(object) as *const T as *const u8;
+
+            let offset = obj_addr.offset_from(data_ptr);
+            assert!(offset > 0);
+            offset as usize
+        }
+    }
+
+    pub fn read_evm<B: Database, T:EventListener>(&self) -> ManuallyDrop<Machine<B, T>> {
+        let header = super::header::<Header>(&self.account);
+        assert!(header.evm_machine_offset > HEAP_OBJECT_OFFSET);
+        self.map_obj(header.evm_machine_offset)
+    }
+
+    pub fn read_executor_state(&self) -> ManuallyDrop<ExecutorStateData> {
+        let header = super::header::<Header>(&self.account);
+        assert!(header.executor_state_offset > HEAP_OBJECT_OFFSET);
+        self.map_obj(header.executor_state_offset)
+    }
+
+    fn map_obj<'r, T>(&'r self, offset: usize) -> ManuallyDrop<T> {
+        let data = self.account.data.borrow().as_ptr();
+        unsafe {
+            let ptr = data.add(offset);
+            assert_eq!(ptr.align_offset(std::mem::align_of::<T>()), 0);
+            let data_ptr = ptr as *const T;
+            ManuallyDrop::new(ptr::read(data_ptr))
+        }
     }
 }

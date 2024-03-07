@@ -6,3 +6,4 @@ mod state;
 pub use action::Action;
 pub use cache::OwnedAccountInfo;
 pub use state::ExecutorState;
+pub use state::ExecutorStateData;
