@@ -140,10 +140,7 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
             spl_amount.as_u64(),
             mint_data.decimals,
         )?;
-        let transfer_seeds = vector![
-            into_vector(b"Deposit".to_vec()),
-            vector![bump_seed]
-        ];
+        let transfer_seeds = vector![into_vector(b"Deposit".to_vec()), vector![bump_seed]];
         self.queue_external_instruction(transfer, transfer_seeds, 0);
 
         self.burn(source, chain_id, value);

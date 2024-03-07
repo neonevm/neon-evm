@@ -69,7 +69,7 @@ pub fn process<'a>(
         }
         TAG_STATE => {
             let (storage, accounts_status) =
-                StateAccount::restore(program_id, storage_info, &accounts_db)?;
+                StateAccount::restore(program_id, &storage_info, &accounts_db)?;
 
             log_data(&[b"HASH", &storage.trx().hash()]);
             log_data(&[b"MINER", miner_address.as_bytes()]);

@@ -26,7 +26,7 @@ pub async fn execute(
 ) -> NeonResult<CancelTrxReturn> {
     let mut acc = rpc_client.get_account(storage_account).await?;
     let storage_info = account_info(storage_account, &mut acc);
-    let storage = StateAccount::from_account(&program_id, storage_info)?;
+    let storage = StateAccount::from_account(&program_id, &storage_info)?;
 
     let operator = &signer.pubkey();
 

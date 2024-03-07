@@ -12,8 +12,8 @@ use crate::allocator::acc_allocator;
 use crate::error::{Error, Result};
 use crate::evm::database::Database;
 use crate::evm::{Context, ExitStatus};
-use crate::types::vector::{into_vector, Vector};
 use crate::types::tree_map::TreeMap;
+use crate::types::vector::{into_vector, Vector};
 use crate::types::Address;
 
 use super::action::Action;
@@ -29,7 +29,7 @@ pub struct ExecutorStateData {
 }
 
 impl ExecutorStateData {
-    pub fn new<'a, B: AccountStorage>(backend: &'a B) -> Self {
+    pub fn new<B: AccountStorage>(backend: &B) -> Self {
         let cache = Cache {
             solana_accounts: TreeMap::new(),
             native_balances: TreeMap::new(),
@@ -53,22 +53,20 @@ pub struct ExecutorState<'a, B: AccountStorage> {
     pub data: &'a mut ExecutorStateData,
 }
 
-
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     pub fn new(backend: &'a B, data: &'a mut ExecutorStateData) -> Self {
-        Self {
-            backend,
-            data,
-        }
+        Self { backend, data }
     }
 
+    #[must_use]
     pub fn into_actions(&self) -> Vector<Action> {
         assert!(self.data.stack.is_empty());
 
         crate::executor::action::filter_selfdestruct(self.data.actions.clone())
     }
 
+    #[must_use]
     pub fn exit_status(&self) -> Option<&ExitStatus> {
         self.data.exit_status.as_ref()
     }
@@ -77,6 +75,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.data.exit_status = Some(status);
     }
 
+    #[must_use]
     pub fn call_depth(&self) -> usize {
         self.data.stack.len()
     }
@@ -125,16 +124,17 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let metas = into_vector(metas);
 
         if !metas.iter().any(|m| (m.pubkey == address) && m.is_writable) {
-            let account = cache_get_or_insert_account(&self.data.cache, address, self.backend).await;
+            let account =
+                cache_get_or_insert_account(&self.data.cache, address, self.backend).await;
             return Ok(account);
         }
 
         // Create accounts map on the default heap, as it's not part of the persistent state.
-        let mut accounts =
-            std::collections::BTreeMap::<Pubkey, OwnedAccountInfo>::new();
+        let mut accounts = std::collections::BTreeMap::<Pubkey, OwnedAccountInfo>::new();
 
         for m in metas {
-            let account = cache_get_or_insert_account(&self.data.cache, m.pubkey, self.backend).await;
+            let account =
+                cache_get_or_insert_account(&self.data.cache, m.pubkey, self.backend).await;
             accounts.insert(account.key, account);
         }
 
@@ -210,7 +210,8 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
 
     async fn balance(&self, from_address: Address, from_chain_id: u64) -> Result<U256> {
         let cache_key = (from_address, from_chain_id);
-        let mut balance = cache_get_or_insert_balance(&self.data.cache, cache_key, self.backend).await;
+        let mut balance =
+            cache_get_or_insert_balance(&self.data.cache, cache_key, self.backend).await;
 
         for action in &self.data.actions {
             match action {
@@ -432,7 +433,8 @@ impl<'a, B: AccountStorage> Database for ExecutorState<'a, B> {
     }
 
     fn commit_snapshot(&mut self) {
-        self.data.stack
+        self.data
+            .stack
             .pop()
             .expect("Fatal Error: Inconsistent EVM Call Stack");
     }

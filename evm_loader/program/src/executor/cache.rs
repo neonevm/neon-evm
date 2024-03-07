@@ -5,7 +5,10 @@ use maybe_async::maybe_async;
 use serde::{Deserialize, Serialize};
 use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 
-use crate::{account_storage::AccountStorage, types::{Address, TreeMap}};
+use crate::{
+    account_storage::AccountStorage,
+    types::{Address, TreeMap},
+};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OwnedAccountInfo {

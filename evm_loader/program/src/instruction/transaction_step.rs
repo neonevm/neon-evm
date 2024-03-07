@@ -33,7 +33,6 @@ pub fn do_begin<'a>(
     let mut origin_account = account_storage.origin(origin, storage.trx())?;
     origin_account.increment_nonce()?;
 
-
     // Burn `gas_limit` tokens from the origin account
     // Later we will mint them to the operator
     // Remaining tokens are returned to the origin in the last iteration
@@ -67,13 +66,12 @@ pub fn do_continue<'a>(
         let mut state_data = storage.read_executor_state();
         let mut evm = storage.read_evm();
         //let (mut state, mut evm): (RefMut<'_, ExecutorStateData>, RefMut<'_, Evm>) = (storage.state(), storage.evm());
-        let mut backend = ExecutorState::new(&account_storage, &mut state_data); 
+        let mut backend = ExecutorState::new(&account_storage, &mut state_data);
 
         let (result, steps_executed, _) = match backend.exit_status() {
             Some(status) => (status.clone(), 0_u64, None::<NoopEventListener>),
             None => evm.execute(step_count, &mut backend)?,
         };
-
 
         if (result != ExitStatus::StepLimit) && (steps_executed > 0) {
             backend.set_exit_status(result.clone());
@@ -90,11 +88,20 @@ pub fn do_continue<'a>(
     finalize(steps_executed, storage, account_storage, results, gasometer)
 }
 
-fn allocate_or_reinit_state(account_storage: &ProgramAccountStorage<'_>, storage: & mut StateAccount<'_>, allocate: bool) -> Result<()> {
+fn allocate_or_reinit_state(
+    account_storage: &ProgramAccountStorage<'_>,
+    storage: &mut StateAccount<'_>,
+    allocate: bool,
+) -> Result<()> {
     if allocate {
         let mut state_data = boxx(ExecutorStateData::new(account_storage));
         let mut evm_backend = ExecutorState::new(account_storage, &mut state_data);
-        let evm = boxx(Evm::new(storage.trx(), storage.trx_origin(), &mut evm_backend, None)?);
+        let evm = boxx(Evm::new(
+            storage.trx(),
+            storage.trx_origin(),
+            &mut evm_backend,
+            None,
+        )?);
         //storage.alloc(state_data, evm)?;
         storage.alloc_evm(evm)?;
         storage.alloc_executor_state(state_data)?;

@@ -9,7 +9,6 @@ use linked_list_allocator::Heap;
 use solana_program::entrypoint::HEAP_START_ADDRESS;
 use static_assertions::{const_assert, const_assert_eq};
 
-
 // Solana heap constants.
 #[allow(clippy::cast_possible_truncation)] // HEAP_START_ADDRESS < usize::max
 const SOLANA_HEAP_START_ADDRESS: usize = HEAP_START_ADDRESS as usize;
@@ -62,11 +61,11 @@ cfg_if::cfg_if! {
         }
 
         impl StateAccountAllocator {
-            fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
+            fn alloc_impl(layout: Layout) -> Result<NonNull<u8>, ()> {
                 state_account_heap().allocate_first_fit(layout)
             }
 
-            fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
+            fn dealloc_impl(ptr: *mut u8, layout: Layout) {
                 unsafe {
                     state_account_heap().deallocate(NonNull::new_unchecked(ptr), layout);
                 }
@@ -76,16 +75,16 @@ cfg_if::cfg_if! {
         use std::alloc::System;
 
         impl StateAccountAllocator {
-            fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
+            fn alloc_impl(layout: Layout) -> Result<NonNull<u8>, ()> {
                 let new_ptr = unsafe{System.alloc(layout)};
-                if !new_ptr.is_null() {
-                    Ok(unsafe{NonNull::new_unchecked(new_ptr)})
-                } else {
+                if new_ptr.is_null() {
                     Err(())
+                } else {
+                    Ok(unsafe{NonNull::new_unchecked(new_ptr)})
                 }
             }
 
-            fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
+            fn dealloc_impl(ptr: *mut u8, layout: Layout) {
                 unsafe { System.dealloc(ptr, layout)}
             }
         }
@@ -96,7 +95,7 @@ cfg_if::cfg_if! {
 unsafe impl GlobalAlloc for StateAccountAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         #[allow(clippy::option_if_let_else)]
-        if let Ok(non_null) = self.alloc_impl(layout) {
+        if let Ok(non_null) = Self::alloc_impl(layout) {
             non_null.as_ptr()
         } else {
             solana_program::log::sol_log("EVM Allocator out of memory");
@@ -105,7 +104,7 @@ unsafe impl GlobalAlloc for StateAccountAllocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.dealloc_impl(ptr, layout);
+        Self::dealloc_impl(ptr, layout);
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
@@ -143,19 +142,16 @@ unsafe impl GlobalAlloc for StateAccountAllocator {
 unsafe impl allocator_api2::alloc::Allocator for StateAccountAllocator {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, allocator_api2::alloc::AllocError> {
         unsafe {
-            self.alloc_impl(layout)
+            Self::alloc_impl(layout)
                 .map(|ptr| {
-                    NonNull::new_unchecked(slice::from_raw_parts_mut(
-                        ptr.as_ptr() as *mut u8,
-                        layout.size(),
-                    ))
+                    NonNull::new_unchecked(slice::from_raw_parts_mut(ptr.as_ptr(), layout.size()))
                 })
-                .map_err(|_| allocator_api2::alloc::AllocError)
+                .map_err(|()| allocator_api2::alloc::AllocError)
         }
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        self.dealloc_impl(ptr.as_ptr(), layout);
+        Self::dealloc_impl(ptr.as_ptr(), layout);
     }
 }
 
@@ -178,11 +174,11 @@ fn solana_default_heap() -> &'static mut Heap {
 }
 
 impl SolanaAllocator {
-    fn alloc_impl(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
+    fn alloc_impl(layout: Layout) -> Result<NonNull<u8>, ()> {
         solana_default_heap().allocate_first_fit(layout)
     }
 
-    fn dealloc_impl(&self, ptr: *mut u8, layout: Layout) {
+    fn dealloc_impl(ptr: *mut u8, layout: Layout) {
         unsafe {
             solana_default_heap().deallocate(NonNull::new_unchecked(ptr), layout);
         }
@@ -192,7 +188,7 @@ impl SolanaAllocator {
 unsafe impl GlobalAlloc for SolanaAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         #[allow(clippy::option_if_let_else)]
-        if let Ok(non_null) = self.alloc_impl(layout) {
+        if let Ok(non_null) = Self::alloc_impl(layout) {
             non_null.as_ptr()
         } else {
             solana_program::log::sol_log("EVM Allocator out of memory");
@@ -201,7 +197,7 @@ unsafe impl GlobalAlloc for SolanaAllocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.dealloc_impl(ptr, layout);
+        Self::dealloc_impl(ptr, layout);
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
@@ -239,19 +235,16 @@ unsafe impl GlobalAlloc for SolanaAllocator {
 unsafe impl allocator_api2::alloc::Allocator for SolanaAllocator {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, allocator_api2::alloc::AllocError> {
         unsafe {
-            self.alloc_impl(layout)
+            Self::alloc_impl(layout)
                 .map(|ptr| {
-                    NonNull::new_unchecked(slice::from_raw_parts_mut(
-                        ptr.as_ptr() as *mut u8,
-                        layout.size(),
-                    ))
+                    NonNull::new_unchecked(slice::from_raw_parts_mut(ptr.as_ptr(), layout.size()))
                 })
-                .map_err(|_| allocator_api2::alloc::AllocError)
+                .map_err(|()| allocator_api2::alloc::AllocError)
         }
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        self.dealloc_impl(ptr.as_ptr(), layout);
+        Self::dealloc_impl(ptr.as_ptr(), layout);
     }
 }
 

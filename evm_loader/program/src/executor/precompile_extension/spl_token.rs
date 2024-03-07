@@ -264,7 +264,12 @@ impl<B: AccountStorage> ExecutorState<'_, B> {
         }
     }
 
-    fn create_account(&mut self, account: &OwnedAccountInfo, space: usize, seeds: Vector<Vector<u8>>) {
+    fn create_account(
+        &mut self,
+        account: &OwnedAccountInfo,
+        space: usize,
+        seeds: Vector<Vector<u8>>,
+    ) {
         let minimum_balance = self.backend.rent().minimum_balance(space);
 
         let required_lamports = minimum_balance.saturating_sub(account.lamports);

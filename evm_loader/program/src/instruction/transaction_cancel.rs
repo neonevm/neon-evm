@@ -24,7 +24,7 @@ pub fn process<'a>(
     log_data(&[b"MINER", operator_balance.address().as_bytes()]);
 
     let accounts_db = AccountsDB::new(&accounts[3..], operator, Some(operator_balance), None, None);
-    let (storage, _) = StateAccount::restore(program_id, storage_info, &accounts_db)?;
+    let (storage, _) = StateAccount::restore(program_id, &storage_info, &accounts_db)?;
 
     validate(&storage, transaction_hash)?;
     execute(program_id, accounts_db, storage)

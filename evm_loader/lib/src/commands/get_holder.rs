@@ -101,7 +101,7 @@ pub fn read_holder(program_id: &Pubkey, info: AccountInfo) -> NeonResult<GetHold
             })
         }
         TAG_STATE => {
-            let state = StateAccount::from_account(program_id, info)?;
+            let state = StateAccount::from_account(program_id, &info)?;
             let accounts = state.accounts().copied().collect();
 
             Ok(GetHolderResponse {

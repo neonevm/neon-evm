@@ -19,6 +19,7 @@ macro_rules! vector {
     );
 }
 
+#[must_use]
 pub fn into_vector<T>(v: Vec<T>) -> Vector<T> {
     let mut ret = Vector::with_capacity_in(v.len(), acc_allocator());
     for item in v {
@@ -26,4 +27,3 @@ pub fn into_vector<T>(v: Vec<T>) -> Vector<T> {
     }
     ret
 }
-

@@ -93,8 +93,11 @@ impl Memory {
 
         unsafe {
             let old_layout = Layout::from_size_align_unchecked(self.capacity, MEMORY_ALIGN);
-            let new_data =
-                crate::allocator::STATE_ACCOUNT_ALLOCATOR.realloc(self.data, old_layout, new_capacity);
+            let new_data = crate::allocator::STATE_ACCOUNT_ALLOCATOR.realloc(
+                self.data,
+                old_layout,
+                new_capacity,
+            );
             if new_data.is_null() {
                 let layout = Layout::from_size_align_unchecked(new_capacity, MEMORY_ALIGN);
                 std::alloc::handle_alloc_error(layout);

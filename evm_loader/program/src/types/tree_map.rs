@@ -5,8 +5,8 @@ use std::{
     usize,
 };
 
-use crate::allocator::acc_allocator;
 use super::Vector;
+use crate::allocator::acc_allocator;
 
 pub struct TreeMap<K, V> {
     keys: Vector<K>,
@@ -14,6 +14,7 @@ pub struct TreeMap<K, V> {
 }
 
 impl<K: Ord, V> TreeMap<K, V> {
+    #[must_use]
     pub fn new() -> Self {
         TreeMap {
             keys: Vector::new_in(acc_allocator()),
@@ -21,6 +22,7 @@ impl<K: Ord, V> TreeMap<K, V> {
         }
     }
 
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         TreeMap {
             keys: Vector::with_capacity_in(capacity, acc_allocator()),
@@ -28,26 +30,26 @@ impl<K: Ord, V> TreeMap<K, V> {
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.keys.len()
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        match self.keys.binary_search(&key) {
-            Ok(idx) => Option::Some(&self.values[idx]),
-            Err(_) => Option::None,
-        }
+        self.keys
+            .binary_search(key)
+            .map_or(Option::None, |idx| Option::Some(&self.values[idx]))
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        match self.keys.binary_search(&key) {
-            Ok(_idx) => Option::Some(&mut self.values[_idx]),
-            Err(_idx) => Option::None,
-        }
+        self.keys
+            .binary_search(key)
+            .map_or(Option::None, |idx| Some(&mut self.values[idx]))
     }
 
     pub fn insert(&mut self, key: K, value: &V) -> Option<V>
@@ -69,8 +71,8 @@ impl<K: Ord, V> TreeMap<K, V> {
         }
     }
 
-    pub fn remove(&mut self, key: K) -> Option<V> {
-        match self.keys.binary_search(&key) {
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        match self.keys.binary_search(key) {
             Ok(idx) => {
                 self.keys.remove(idx);
                 Some(self.values.remove(idx))
@@ -79,15 +81,21 @@ impl<K: Ord, V> TreeMap<K, V> {
         }
     }
 
-    pub fn remove_entry(&mut self, key: K) -> Option<(K, V)> {
-        match self.keys.binary_search(&key) {
+    pub fn remove_entry(&mut self, key: &K) -> Option<(K, V)> {
+        match self.keys.binary_search(key) {
             Ok(idx) => Some((self.keys.remove(idx), self.values.remove(idx))),
             Err(_) => None,
         }
     }
 
-    pub fn keys(&self) -> impl Iterator<Item= &K> {
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
         self.keys.iter()
+    }
+}
+
+impl<K: Ord, V> Default for TreeMap<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

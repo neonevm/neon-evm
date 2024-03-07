@@ -12,10 +12,14 @@ use mpl_token_metadata::{
 };
 use solana_program::pubkey::Pubkey;
 
-use crate::{
-    account::ACCOUNT_SEED_VERSION, account_storage::AccountStorage, error::{Error, Result}, executor::ExecutorState, types::{vector::into_vector, Address}
-};
 use crate::vector;
+use crate::{
+    account::ACCOUNT_SEED_VERSION,
+    account_storage::AccountStorage,
+    error::{Error, Result},
+    executor::ExecutorState,
+    types::{vector::into_vector, Address},
+};
 
 // TODO: Use solana-program-test in the emulator to calculate fee
 // instead of relying on the hardcoded constants

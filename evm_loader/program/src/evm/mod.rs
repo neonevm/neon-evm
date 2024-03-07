@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 
 pub use buffer::Buffer;
 
-use crate::{evm::tracing::EventListener, types::boxx::Boxx};
 #[cfg(target_os = "solana")]
 use crate::evm::tracing::NoopEventListener;
 use crate::{
@@ -19,6 +18,7 @@ use crate::{
     evm::{opcode::Action, precompile::is_precompile_address},
     types::{Address, Transaction},
 };
+use crate::{evm::tracing::EventListener, types::boxx::Boxx};
 
 use self::{database::Database, memory::Memory, stack::Stack};
 

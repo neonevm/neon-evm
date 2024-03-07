@@ -1,5 +1,5 @@
 use std::cell::{Ref, RefMut};
-use std::mem::{size_of, ManuallyDrop};
+use std::mem::{align_of, size_of, ManuallyDrop};
 use std::ptr;
 
 use crate::account_storage::AccountStorage;
@@ -70,13 +70,14 @@ impl<'a> StateAccount<'a> {
         self.account
     }
 
-    pub fn from_account(program_id: &Pubkey, account: AccountInfo<'a>) -> Result<Self> {
-        super::validate_tag(program_id, &account, TAG_STATE)?;
+    pub fn from_account(program_id: &Pubkey, account: &AccountInfo<'a>) -> Result<Self> {
+        super::validate_tag(program_id, account, TAG_STATE)?;
 
-        let header = super::header::<Header>(&account);
+        let header = super::header::<Header>(account);
         let data = unsafe {
             let ptr = account.data.borrow().as_ptr().add(header.data_offset);
-            std::ptr::read(ptr as *const Data)
+            #[allow(clippy::cast_ptr_alignment)]
+            std::ptr::read(ptr.cast::<Data>())
         };
         Ok(Self {
             account: account.clone(),
@@ -137,8 +138,11 @@ impl<'a> StateAccount<'a> {
             header.evm_machine_offset = 0;
 
             let account_data_ptr = info.try_borrow_data()?.as_ptr();
-            let data_obj_addr = (&*data) as *const Data as *const u8;
-            header.data_offset = unsafe { data_obj_addr.offset_from(account_data_ptr) as usize };
+            let data_obj_addr = std::ptr::addr_of!(*data).cast::<u8>();
+            let offset = unsafe { data_obj_addr.offset_from(account_data_ptr) };
+            #[allow(clippy::cast_sign_loss)]
+            let offset = offset as usize;
+            header.data_offset = offset;
         }
 
         Ok(Self {
@@ -149,7 +153,7 @@ impl<'a> StateAccount<'a> {
 
     pub fn restore(
         program_id: &Pubkey,
-        info: AccountInfo<'a>,
+        info: &AccountInfo<'a>,
         accounts: &AccountsDB,
     ) -> Result<(Self, AccountsStatus)> {
         let mut state = Self::from_account(program_id, info)?;
@@ -157,13 +161,11 @@ impl<'a> StateAccount<'a> {
 
         for account in accounts {
             let account_revision = revision(program_id, account).unwrap_or(0);
-            let stored_revision = {
-                if let Some(rev) = state.data.revisions.get(account.key) {
-                    *rev
-                } else {
-                    account_revision
-                }
-            };
+            let stored_revision = state
+                .data
+                .revisions
+                .get(account.key)
+                .map_or(account_revision, |rev| *rev);
 
             if stored_revision != account_revision {
                 status = AccountsStatus::RevisionChanged;
@@ -271,7 +273,8 @@ impl<'a> StateAccount<'a> {
     fn init_heap(info: &AccountInfo<'a>) -> Result<()> {
         let data = info.try_borrow_data()?;
         // Init the heap at the predefined address (right after the header with proper alignment).
-        let heap_ptr = data.as_ptr().wrapping_add(HEAP_OBJECT_OFFSET) as *mut u8;
+        let heap_ptr = data.as_ptr().wrapping_add(HEAP_OBJECT_OFFSET).cast_mut();
+        assert_eq!(heap_ptr.align_offset(align_of::<Heap>()), 0);
         unsafe {
             // First, zero out underlying bytes of the future heap representation.
             heap_ptr.write_bytes(0, size_of::<Heap>());
@@ -284,8 +287,9 @@ impl<'a> StateAccount<'a> {
             // Cast to reference and init.
             // Zeroed memory is a valid representation of the Heap and hence we can safely do it.
             // That's a safety reason we zeroed the memory above.
-            let heap = &mut *(heap_ptr as *mut Heap);
-            heap.init(heap_bottom, heap_size)
+            #[allow(clippy::cast_ptr_alignment)]
+            let heap = &mut *(heap_ptr.cast::<Heap>());
+            heap.init(heap_bottom, heap_size);
         };
         Ok(())
     }
@@ -299,7 +303,7 @@ impl<'a> StateAccount<'a> {
         Ok(())
     }
 
-    pub fn alloc_evm<B: Database, T:EventListener>(&self, evm: Boxx<Machine<B, T>>) -> Result<()> {
+    pub fn alloc_evm<B: Database, T: EventListener>(&self, evm: Boxx<Machine<B, T>>) -> Result<()> {
         let mut header = super::header_mut::<Header>(&self.account);
         header.evm_machine_offset = self.leak_and_offset(evm);
         Ok(())
@@ -311,32 +315,36 @@ impl<'a> StateAccount<'a> {
         unsafe {
             // allocator_api2 does not expose Box::leak (private associated fn).
             // We avoid drop of persistent object by leaking via Box::into_raw.
-            let obj_addr = Boxx::into_raw(object) as *const T as *const u8;
+            let obj_addr = Boxx::into_raw(object).cast_const().cast::<u8>();
 
             let offset = obj_addr.offset_from(data_ptr);
             assert!(offset > 0);
-            offset as usize
+            #[allow(clippy::cast_sign_loss)]
+            let offset = offset as usize;
+            offset
         }
     }
 
-    pub fn read_evm<B: Database, T:EventListener>(&self) -> ManuallyDrop<Machine<B, T>> {
+    #[must_use]
+    pub fn read_evm<B: Database, T: EventListener>(&self) -> ManuallyDrop<Machine<B, T>> {
         let header = super::header::<Header>(&self.account);
         assert!(header.evm_machine_offset > HEAP_OBJECT_OFFSET);
         self.map_obj(header.evm_machine_offset)
     }
 
+    #[must_use]
     pub fn read_executor_state(&self) -> ManuallyDrop<ExecutorStateData> {
         let header = super::header::<Header>(&self.account);
         assert!(header.executor_state_offset > HEAP_OBJECT_OFFSET);
         self.map_obj(header.executor_state_offset)
     }
 
-    fn map_obj<'r, T>(&'r self, offset: usize) -> ManuallyDrop<T> {
+    fn map_obj<T>(&self, offset: usize) -> ManuallyDrop<T> {
         let data = self.account.data.borrow().as_ptr();
         unsafe {
             let ptr = data.add(offset);
-            assert_eq!(ptr.align_offset(std::mem::align_of::<T>()), 0);
-            let data_ptr = ptr as *const T;
+            assert_eq!(ptr.align_offset(align_of::<T>()), 0);
+            let data_ptr = ptr.cast::<T>();
             ManuallyDrop::new(ptr::read(data_ptr))
         }
     }
