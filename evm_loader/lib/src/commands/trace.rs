@@ -1,6 +1,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 use crate::commands::emulate::EmulateResponse;
+use log::info;
 use serde_json::Value;
 use solana_sdk::pubkey::Pubkey;
 
@@ -23,5 +24,9 @@ pub async fn trace_transaction(
 
     let tracer = new_tracer(&emulate_request.tx, trace_config)?;
 
-    super::emulate::execute(rpc, program_id, emulate_request, Some(tracer)).await
+    let response = super::emulate::execute(rpc, program_id, emulate_request, Some(tracer)).await?;
+
+    info!("response: {:?}", response);
+
+    Ok(response)
 }

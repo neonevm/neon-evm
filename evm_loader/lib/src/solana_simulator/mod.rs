@@ -1,3 +1,4 @@
+use log::debug;
 use solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING;
 use std::sync::Arc;
 
@@ -109,6 +110,9 @@ impl SolanaSimulator {
 
             if account.executable && bpf_loader_upgradeable::check_id(&account.owner) {
                 let programdata_address = utils::program_data_address(account)?;
+                debug!(
+                    "program_data_account: program={key} programdata=address{programdata_address}"
+                );
                 programdata_keys.push(programdata_address);
             }
 
@@ -125,6 +129,7 @@ impl SolanaSimulator {
                 continue;
             };
 
+            debug!("program_data_account: key={key} account={account:?}");
             utils::reset_program_data_slot(account)?;
             storable_accounts.push((key, account));
         }
@@ -186,6 +191,7 @@ impl SolanaSimulator {
 
     pub fn set_multiple_accounts(&mut self, accounts: &[(&Pubkey, &Account)]) {
         let storable_accounts = (self.slot(), accounts);
+        debug!("set_multiple_accounts: {storable_accounts:?}");
         self.bank().store_accounts(storable_accounts);
     }
 

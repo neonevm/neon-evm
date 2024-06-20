@@ -1,4 +1,5 @@
 use super::error::Error;
+use log::debug;
 use solana_runtime::{
     bank::Bank,
     genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
@@ -165,18 +166,26 @@ pub fn reset_program_data_slot(account: &mut Account) -> Result<(), Error> {
     assert!(account.owner == bpf_loader_upgradeable::id());
 
     let UpgradeableLoaderState::ProgramData {
+        slot,
         upgrade_authority_address,
-        ..
     } = account.state()?
     else {
         return Err(Error::ProgramAccountError);
     };
+
+    debug!(
+        "slot_before_update: slot={slot} upgrade_authority_address={upgrade_authority_address:?}"
+    );
 
     let new_state = UpgradeableLoaderState::ProgramData {
         slot: 0,
         upgrade_authority_address,
     };
     account.set_state(&new_state)?;
+
+    debug!(
+        "slot_after_update: slot={slot} upgrade_authority_address={upgrade_authority_address:?}"
+    );
 
     Ok(())
 }

@@ -339,6 +339,11 @@ impl<'a, T: Rpc> EmulatorAccountStorage<'_, T> {
 
         let mut response = self.rpc.get_multiple_accounts(&missing_keys).await?;
 
+        debug!(
+            "get_multiple_accounts: missing_keys={:?} response={response:?}",
+            missing_keys
+        );
+
         let mut j = 0_usize;
         for i in 0..pubkeys.len() {
             if exists[i] {

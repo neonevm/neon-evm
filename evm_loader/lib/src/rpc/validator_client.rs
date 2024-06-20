@@ -17,6 +17,7 @@ use solana_sdk::{
 };
 use std::{error::Error, ops::Deref, time::Duration};
 use std::{future::Future, sync::Arc};
+use tracing::debug;
 
 fn should_retry(e: &ClientError) -> bool {
     let ClientErrorKind::Reqwest(reqwest_error) = e.kind() else {
@@ -142,6 +143,10 @@ impl Rpc for CloneRpcClient {
 
         if pubkeys.len() == 1 {
             let account = Rpc::get_account(self, &pubkeys[0]).await?;
+            debug!(
+                "get_multiple_accounts: single account pubkey={} account={:?}",
+                pubkeys[0], account
+            );
             return Ok(vec![account]);
         }
 
@@ -150,6 +155,10 @@ impl Rpc for CloneRpcClient {
             let request = || self.rpc.get_multiple_accounts(chunk);
 
             let mut accounts = with_retries(self.max_retries, request).await?;
+            debug!(
+                "get_multiple_accounts: chunk pubkey={:?} account={:?}",
+                chunk, accounts
+            );
             result.append(&mut accounts);
         }
 

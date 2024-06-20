@@ -15,7 +15,7 @@ use evm_loader::{
     executor::SyncedExecutorState,
     gasometer::LAMPORTS_PER_SIGNATURE,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{hex::Hex, serde_as, DisplayFromStr};
@@ -176,11 +176,15 @@ async fn emulate_trx<T: Tracer>(
     let mut backend = SyncedExecutorState::new(storage);
     let mut evm = match Machine::new(&tx, origin, &mut backend, tracer).await {
         Ok(evm) => evm,
-        Err(e) => return Ok((EmulateResponse::revert(&e, &backend), None)),
+        Err(e) => {
+            error!("EVM creation failed {e:?}");
+            return Ok((EmulateResponse::revert(&e, &backend), None));
+        }
     };
 
     let (exit_status, steps_executed, tracer) = evm.execute(step_limit, &mut backend).await?;
     if exit_status == ExitStatus::StepLimit {
+        error!("Step_limit={step_limit} exceeded");
         return Ok((
             EmulateResponse::revert(&NeonError::TooManySteps, &backend),
             None,

@@ -2,6 +2,7 @@ use super::{e, Rpc};
 use crate::types::TracerDb;
 use crate::NeonError;
 use async_trait::async_trait;
+use log::debug;
 use solana_client::{
     client_error::Result as ClientResult,
     client_error::{ClientError, ClientErrorKind},
@@ -61,6 +62,7 @@ impl Rpc for CallDbClient {
         for key in pubkeys {
             result.push(self.get_account_at(key).await?);
         }
+        debug!("get_multiple_accounts: pubkeys={pubkeys:?} result={result:?}");
         Ok(result)
     }
 
