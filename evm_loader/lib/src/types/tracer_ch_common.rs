@@ -75,7 +75,7 @@ pub struct AccountRow {
 
 impl fmt::Debug for AccountRow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug_struct = f.debug_struct("Account");
+        let mut debug_struct = f.debug_struct("AccountRow");
 
         debug_struct
             .field("owner", &bs58::encode(&self.owner).into_string())

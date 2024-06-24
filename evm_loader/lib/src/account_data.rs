@@ -1,14 +1,18 @@
-pub use evm_loader::account_storage::{AccountStorage, SyncedAccountStorage};
-// use solana_sdk::account::{ReadableAccount, WritableAccount};
+use std::fmt;
+
+use solana_sdk::account_info::IntoAccountInfo;
+use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use solana_sdk::system_program;
-// use solana_sdk::clock::Epoch;
 use solana_sdk::{
     account::{Account, ReadableAccount},
     account_info::AccountInfo,
     pubkey::Pubkey,
 };
 
-#[derive(Clone, Debug)]
+pub use evm_loader::account_storage::{AccountStorage, SyncedAccountStorage};
+use evm_loader::solana_program::debug_account_data::debug_account_data;
+
+#[derive(Clone)]
 #[repr(C)]
 pub struct AccountData {
     original_length: u32,
@@ -20,8 +24,24 @@ pub struct AccountData {
     pub rent_epoch: u64,
 }
 
-use solana_sdk::account_info::IntoAccountInfo;
-use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
+impl fmt::Debug for AccountData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug_struct = f.debug_struct("AccountData");
+
+        debug_struct
+            .field("original_length", &self.original_length)
+            .field("pubkey", &bs58::encode(&self.pubkey).into_string())
+            .field("lamports", &self.lamports)
+            .field("owner", &bs58::encode(&self.owner).into_string())
+            .field("executable", &self.executable)
+            .field("rent_epoch", &self.rent_epoch)
+            .field("data_len", &self.data.len());
+
+        debug_account_data(&self.data, &mut debug_struct);
+
+        debug_struct.finish()
+    }
+}
 
 impl AccountData {
     #[must_use]
@@ -157,8 +177,9 @@ impl<'a> From<&'a AccountData> for Account {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::str::FromStr;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_account_data() {
