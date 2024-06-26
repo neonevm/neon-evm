@@ -36,7 +36,7 @@ if [[ -n $GEYSER_PLUGIN_CONFIG ]]; then
   VALIDATOR_ARGS+=(--geyser-plugin-config $GEYSER_PLUGIN_CONFIG)
 fi
 
-export RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
+export RUST_LOG=debug
 solana-test-validator "${VALIDATOR_ARGS[@]}" > /dev/null &
 ./wait-for-solana.sh ${SOLANA_WAIT_TIMEOUT:-60}
 ./deploy-multi-tokens.sh
