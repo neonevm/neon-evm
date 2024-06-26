@@ -571,6 +571,7 @@ impl<'a, T: Rpc> EmulatorAccountStorage<'_, T> {
     fn add_empty_account(&self, pubkey: Pubkey) -> &RefCell<AccountData> {
         let account_data = AccountData::new(pubkey);
         self.mark_account(pubkey, false);
+        info!("add_empty_account(pubkey={pubkey}, account_data={account_data:?})");
         self.accounts
             .insert(pubkey, Box::new(RefCell::new(account_data)))
     }
@@ -580,6 +581,8 @@ impl<'a, T: Rpc> EmulatorAccountStorage<'_, T> {
         pubkey: Pubkey,
         is_writable: bool,
     ) -> NeonResult<&RefCell<AccountData>> {
+        info!("use_account(pubkey={pubkey}, is_writable={is_writable})");
+
         if pubkey == self.operator() {
             return Err(EvmLoaderError::InvalidAccountForCall(pubkey).into());
         }
@@ -592,8 +595,10 @@ impl<'a, T: Rpc> EmulatorAccountStorage<'_, T> {
 
         let account = self._get_account_from_rpc(pubkey).await?;
         if let Some(account) = account {
+            info!("found account for pubkey={pubkey} in RPC account={account:?}");
             self.add_account(pubkey, account).await
         } else {
+            info!("account not found in RPC, adding empty account for pubkey={pubkey}");
             Ok(self.add_empty_account(pubkey))
         }
     }
