@@ -19,6 +19,8 @@ solana-cli.workspace = true
 solana-program-runtime.workspace = true
 solana-runtime.workspace = true
 solana-accounts-db.workspace = true
+solana-bpf-loader-program.workspace = true
+solana-loader-v4-program.workspace = true
 spl-token = { version = "~4.0", default-features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "~2.3", default-features = false, features = ["no-entrypoint"] }
 bs58 = "0.5.1"

@@ -28,6 +28,7 @@ pub enum SyncState {
     Yes,
 }
 
+#[allow(dead_code)]
 pub async fn genesis_config_info(
     rpc: &impl Rpc,
     sync: SyncState,
@@ -75,6 +76,7 @@ pub async fn genesis_config_info(
     })
 }
 
+#[allow(dead_code)]
 pub async fn sync_sysvar_accounts(rpc: &impl Rpc, bank: &Bank) -> Result<(), Error> {
     let keys = sysvar::ALL_IDS.clone();
     let accounts = rpc.get_multiple_accounts(&keys).await?;

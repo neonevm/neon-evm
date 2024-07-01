@@ -1,25 +1,42 @@
 use log::debug;
-use solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING;
+use solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1;
+use solana_loader_v4_program::create_program_runtime_environment_v2;
+use solana_program_runtime::loaded_programs::{
+    LoadedProgram, LoadedProgramsForTxBatch, ProgramRuntimeEnvironments,
+};
+use solana_program_runtime::log_collector::LogCollector;
+use solana_program_runtime::message_processor::MessageProcessor;
+use solana_program_runtime::sysvar_cache::SysvarCache;
+use solana_program_runtime::timings::ExecuteTimings;
+use solana_runtime::accounts::construct_instructions_account;
+use solana_runtime::builtins::BUILTINS;
+use solana_sdk::account::{
+    create_account_shared_data_with_fields, AccountSharedData, ReadableAccount,
+    DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+};
+use solana_sdk::address_lookup_table::error::AddressLookupError;
+use solana_sdk::address_lookup_table::state::AddressLookupTable;
+use solana_sdk::clock::Clock;
+use solana_sdk::feature_set::FeatureSet;
+use solana_sdk::fee_calculator::DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE;
+use solana_sdk::message::v0::{LoadedAddresses, MessageAddressTableLookup};
+use solana_sdk::message::{AddressLoader, AddressLoaderError};
+use solana_sdk::rent::Rent;
+use solana_sdk::transaction_context::{IndexOfAccount, TransactionContext};
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use solana_accounts_db::transaction_results::{
-    TransactionExecutionDetails, TransactionExecutionResult,
-};
-use solana_runtime::installed_scheduler_pool::BankWithScheduler;
-use solana_runtime::{
-    bank::{Bank, TransactionSimulationResult},
-    runtime_config::RuntimeConfig,
-};
+use solana_accounts_db::transaction_results::TransactionExecutionDetails;
+use solana_runtime::{bank::TransactionSimulationResult, runtime_config::RuntimeConfig};
 use solana_sdk::{
     account::Account,
-    address_lookup_table, bpf_loader, bpf_loader_upgradeable,
+    address_lookup_table, bpf_loader_upgradeable,
     hash::Hash,
     pubkey::Pubkey,
     signature::Keypair,
     sysvar::{Sysvar, SysvarId},
-    transaction::{
-        MessageHash, SanitizedTransaction, TransactionVerificationMode, VersionedTransaction,
-    },
+    transaction::{SanitizedTransaction, VersionedTransaction},
 };
 
 use crate::rpc::Rpc;
@@ -30,9 +47,12 @@ mod utils;
 pub use error::Error;
 pub use utils::SyncState;
 
+#[derive(Debug)]
 pub struct SolanaSimulator {
-    bank: Bank,
-    runtime_config: Arc<RuntimeConfig>,
+    runtime_config: RuntimeConfig,
+    feature_set: Arc<FeatureSet>,
+    accounts_db: HashMap<Pubkey, AccountSharedData>,
+    sysvar_cache: SysvarCache,
     payer: Keypair,
 }
 
@@ -46,54 +66,33 @@ impl SolanaSimulator {
     }
 
     pub async fn new_with_config(
-        rpc: &impl Rpc,
+        _rpc: &impl Rpc,
         runtime_config: RuntimeConfig,
         sync_state: SyncState,
     ) -> Result<Self, Error> {
-        let runtime_config = Arc::new(runtime_config);
-
-        let info = utils::genesis_config_info(rpc, sync_state, 1_000.0).await?;
-        let payer = info.mint_keypair;
-
-        let mut config = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
-        if let Some(index_config) = config.index.as_mut() {
-            index_config.flush_threads = Some(0);
-        }
-        let genesis_bank = Bank::new_with_paths(
-            &info.genesis_config,
-            Arc::clone(&runtime_config),
-            Vec::default(),
-            None,
-            None,
-            solana_accounts_db::accounts_index::AccountSecondaryIndexes::default(),
-            solana_accounts_db::accounts_db::AccountShrinkThreshold::default(),
-            false,
-            Some(config),
-            None,
-            None,
-            Arc::default(),
-        );
-
-        // Check https://github.com/solana-labs/solana/pull/34271 for more details
-        let (genesis_bank, _) = genesis_bank.wrap_with_bank_forks_for_tests();
-
-        genesis_bank.set_capitalization();
-
-        genesis_bank.fill_bank_with_ticks_for_tests();
-        let bank = Bank::new_from_parent(
-            Arc::clone(&genesis_bank),
-            genesis_bank.collector_id(),
-            genesis_bank.slot() + 1,
-        );
-
         if sync_state == SyncState::Yes {
-            utils::sync_sysvar_accounts(rpc, &bank).await?;
+            // utils::sync_sysvar_accounts(rpc, &bank).await?;
         }
+
+        let feature_set = Arc::new(FeatureSet::all_enabled());
+
+        let mut sysvar_cache = SysvarCache::default();
+
+        sysvar_cache.set_rent(Rent::default());
+        sysvar_cache.set_clock(Clock {
+            slot: 0,
+            epoch_start_timestamp: 0,
+            epoch: 0,
+            leader_schedule_epoch: 0,
+            unix_timestamp: 0,
+        });
 
         Ok(Self {
-            bank,
             runtime_config,
-            payer,
+            feature_set,
+            accounts_db: HashMap::new(),
+            sysvar_cache,
+            payer: Keypair::new(),
         })
     }
 
@@ -134,13 +133,9 @@ impl SolanaSimulator {
             storable_accounts.push((key, account));
         }
 
-        self.set_multiple_accounts(&storable_accounts);
+        // self.set_multiple_accounts(&storable_accounts);
 
         Ok(())
-    }
-
-    const fn bank(&self) -> &Bank {
-        &self.bank
     }
 
     pub const fn payer(&self) -> &Keypair {
@@ -148,57 +143,42 @@ impl SolanaSimulator {
     }
 
     pub fn blockhash(&self) -> Hash {
-        self.bank().last_blockhash()
+        Hash::new_unique()
     }
 
-    pub fn slot(&self) -> u64 {
-        self.bank().slot()
+    pub fn slot(&self) -> Result<u64, Error> {
+        let clock = self.sysvar_cache.get_clock()?;
+        Ok(clock.slot)
     }
 
-    pub fn replace_blockhash(&mut self, blockhash: &Hash) {
-        while !self.bank().is_complete() {
-            self.bank()
-                .register_tick(blockhash, &BankWithScheduler::no_scheduler_available());
-        }
-    }
-
-    pub fn set_sysvar<T>(&self, sysvar: &T)
+    fn replace_sysvar_account<S>(&mut self, sysvar: &S)
     where
-        T: Sysvar + SysvarId,
+        S: Sysvar + SysvarId,
     {
-        self.bank().set_sysvar_for_tests(sysvar);
+        let old_account = self.accounts_db.get(&S::id());
+        let inherit = old_account
+            .map(|a| (a.lamports(), a.rent_epoch()))
+            .unwrap_or(DUMMY_INHERITABLE_ACCOUNT_FIELDS);
+
+        let account = create_account_shared_data_with_fields(sysvar, inherit);
+        self.accounts_db.insert(S::id(), account);
     }
 
-    pub fn set_program_account(&mut self, pubkey: &Pubkey, data: Vec<u8>) {
-        let rent = &self.bank().rent_collector().rent;
-        let lamports = rent.minimum_balance(data.len());
-
-        self.set_account(
-            pubkey,
-            &Account {
-                lamports,
-                data,
-                owner: bpf_loader::ID,
-                executable: true,
-                rent_epoch: 0,
-            },
-        );
+    pub fn set_clock(&mut self, clock: Clock) {
+        self.replace_sysvar_account(&clock);
+        self.sysvar_cache.set_clock(clock);
     }
 
-    pub fn set_account(&mut self, pubkey: &Pubkey, account: &Account) {
-        self.bank().store_account(pubkey, account);
+    pub fn set_account(&mut self, pubkey: Pubkey, account: Account) {
+        self.accounts_db.insert(pubkey, account.into());
     }
 
-    pub fn set_multiple_accounts(&mut self, accounts: &[(&Pubkey, &Account)]) {
-        let storable_accounts = (self.slot(), accounts);
-        debug!("set_multiple_accounts: {storable_accounts:?}");
-        self.bank().store_accounts(storable_accounts);
+    pub fn get_shared_account(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
+        self.accounts_db.get(pubkey).cloned()
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.bank()
-            .get_account_with_fixed_root(pubkey)
-            .map(Account::from)
+        self.get_shared_account(pubkey).map(Account::from)
     }
 
     pub fn sanitize_transaction(
@@ -206,73 +186,156 @@ impl SolanaSimulator {
         tx: VersionedTransaction,
         verify: bool,
     ) -> Result<SanitizedTransaction, Error> {
-        let bank = self.bank();
+        let sanitized_tx = {
+            let size = bincode::serialized_size(&tx)?;
+            if verify && (size > solana_sdk::packet::PACKET_DATA_SIZE as u64) {
+                return Err(solana_sdk::transaction::TransactionError::SanitizeFailure.into());
+            }
 
-        let sanitized = if verify {
-            bank.verify_transaction(tx, TransactionVerificationMode::FullVerification)?
-        } else {
-            let hash = tx.message.hash();
-            SanitizedTransaction::try_create(tx, hash, None, bank)?
-        };
+            let message_hash = if verify {
+                tx.verify_and_hash_message()?
+            } else {
+                tx.message.hash()
+            };
 
-        Ok(sanitized)
+            SanitizedTransaction::try_create(tx, message_hash, None, self)
+        }?;
+
+        if verify {
+            sanitized_tx.verify_precompiles(&self.feature_set)?;
+        }
+
+        Ok(sanitized_tx)
     }
 
     pub fn process_transaction(
         &mut self,
+        blockhash: Hash,
         tx: SanitizedTransaction,
     ) -> Result<TransactionExecutionDetails, Error> {
-        let mut result = self.process_multiple_not_intersected_transactions(&[tx])?;
-
-        Ok(result.remove(0))
-    }
-
-    pub fn process_multiple_not_intersected_transactions(
-        &mut self,
-        txs: &[SanitizedTransaction],
-    ) -> Result<Vec<TransactionExecutionDetails>, Error> {
-        let bank = self.bank();
-
-        let batch = bank.prepare_sanitized_batch(txs);
-
-        let (
-            solana_accounts_db::transaction_results::TransactionResults {
-                execution_results, ..
-            },
-            ..,
-        ) = bank.load_execute_and_commit_transactions(
-            &batch,
-            solana_sdk::clock::MAX_PROCESSING_AGE,
-            false, // collect_balances
-            true,  // enable_cpi_recording
-            true,  // enable_log_recording
-            true,  // enable_return_data_recording
-            &mut solana_program_runtime::timings::ExecuteTimings::default(),
-            self.runtime_config.log_messages_bytes_limit,
-        );
-
-        let mut result = Vec::with_capacity(execution_results.len());
-
-        for execution_result in execution_results {
-            match execution_result {
-                TransactionExecutionResult::Executed { details, .. } => result.push(details),
-                TransactionExecutionResult::NotExecuted(error) => return Err(error.into()),
-            }
+        let mut transaction_accounts = Vec::new();
+        for key in tx.message().account_keys().iter() {
+            let account = if solana_sdk::sysvar::instructions::check_id(key) {
+                construct_instructions_account(tx.message())
+            } else {
+                self.accounts_db.get(key).cloned().unwrap_or_default()
+            };
+            transaction_accounts.push((*key, account));
         }
+        //
+        let builtins_start_index = transaction_accounts.len();
+        let program_indices: Vec<Vec<IndexOfAccount>> = tx
+            .message()
+            .instructions()
+            .iter()
+            .map(|instruction| {
+                let mut account_indices: Vec<IndexOfAccount> = Vec::with_capacity(2);
 
-        Ok(result)
+                let program_index = instruction.program_id_index as usize;
+                let (program_id, program_account) = &transaction_accounts[program_index];
+
+                if solana_sdk::native_loader::check_id(program_id) {
+                    return account_indices;
+                }
+
+                account_indices.insert(0, program_index as IndexOfAccount);
+
+                let owner = program_account.owner();
+                if solana_sdk::native_loader::check_id(owner) {
+                    return account_indices;
+                }
+
+                if let Some(owner_index) = transaction_accounts[builtins_start_index..]
+                    .iter()
+                    .position(|a| &a.0 == owner)
+                {
+                    let owner_index = owner_index + builtins_start_index;
+                    account_indices.insert(0, owner_index as IndexOfAccount);
+                } else {
+                    let owner_account = self.accounts_db.get(owner).cloned().unwrap_or_default();
+                    transaction_accounts.push((*owner, owner_account));
+
+                    let owner_index = transaction_accounts.len();
+                    account_indices.insert(0, owner_index as IndexOfAccount);
+                }
+
+                account_indices
+            })
+            .collect();
+        //
+        let compute_budget = self.runtime_config.compute_budget.unwrap_or_default();
+        let rent: Arc<Rent> = self.sysvar_cache.get_rent()?;
+        let clock: Arc<Clock> = self.sysvar_cache.get_clock()?;
+        //
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            *rent,
+            compute_budget.max_invoke_stack_height,
+            compute_budget.max_instruction_trace_length,
+        );
+        //
+        let program_runtime_environments = ProgramRuntimeEnvironments {
+            program_runtime_v1: Arc::new(create_program_runtime_environment_v1(
+                &self.feature_set,
+                &compute_budget,
+                true,
+                true,
+            )?),
+            program_runtime_v2: Arc::new(create_program_runtime_environment_v2(
+                &compute_budget,
+                true,
+            )),
+        };
+        let mut loaded_programs = LoadedProgramsForTxBatch::new(
+            clock.slot,
+            program_runtime_environments,
+            None,
+            clock.epoch,
+        );
+        //
+        for builtin in BUILTINS {
+            // create_loadable_account_with_fields
+            let program = LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint);
+            loaded_programs.replenish(builtin.program_id, Arc::new(program));
+        }
+        //
+        let mut modified_programs = LoadedProgramsForTxBatch::new(
+            clock.slot,
+            loaded_programs.environments.clone(),
+            loaded_programs.upcoming_environments.clone(),
+            loaded_programs.latest_root_epoch,
+        );
+        //
+        let log_limit = self.runtime_config.log_messages_bytes_limit;
+        let log_collector = LogCollector::new_ref_with_limit(log_limit);
+        //
+        let mut timings = ExecuteTimings::default();
+        let mut executed_units = 0u64;
+        //
+        let _result = MessageProcessor::process_message(
+            tx.message(),
+            &program_indices,
+            &mut transaction_context,
+            Some(Rc::clone(&log_collector)),
+            &loaded_programs,
+            &mut modified_programs,
+            Arc::clone(&self.feature_set),
+            compute_budget,
+            &mut timings,
+            &self.sysvar_cache,
+            blockhash,
+            DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE / 2,
+            &mut executed_units,
+        )?;
+
+        todo!();
     }
 
     pub fn simulate_transaction(
         &self,
-        tx: VersionedTransaction,
+        _tx: VersionedTransaction,
     ) -> Result<TransactionSimulationResult, Error> {
-        let sanitized =
-            SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self.bank())?;
-
-        let simulation_result = self.bank().simulate_transaction_unchecked(&sanitized, true);
-
-        Ok(simulation_result)
+        todo!()
     }
 
     pub fn simulate_legacy_transaction(
@@ -281,5 +344,52 @@ impl SolanaSimulator {
     ) -> Result<TransactionSimulationResult, Error> {
         let versioned_transaction = VersionedTransaction::from(tx);
         self.simulate_transaction(versioned_transaction)
+    }
+}
+
+impl AddressLoader for &SolanaSimulator {
+    fn load_addresses(
+        self,
+        lookups: &[MessageAddressTableLookup],
+    ) -> Result<LoadedAddresses, AddressLoaderError> {
+        let loaded_addresses = lookups
+            .iter()
+            .map(|address_table_lookup| {
+                let table_account = self
+                    .get_shared_account(&address_table_lookup.account_key)
+                    .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
+
+                if table_account.owner() != &address_lookup_table::program::id() {
+                    return Err(AddressLookupError::InvalidAccountOwner);
+                }
+
+                let current_slot = self
+                    .slot()
+                    .map_err(|_| AddressLookupError::LookupTableAccountNotFound)?;
+
+                let slot_hashes = self
+                    .sysvar_cache
+                    .get_slot_hashes()
+                    .map_err(|_| AddressLookupError::LookupTableAccountNotFound)?;
+
+                let lookup_table = AddressLookupTable::deserialize(table_account.data())
+                    .map_err(|_| AddressLookupError::InvalidAccountData)?;
+
+                Ok(LoadedAddresses {
+                    writable: lookup_table.lookup(
+                        current_slot,
+                        &address_table_lookup.writable_indexes,
+                        &slot_hashes,
+                    )?,
+                    readonly: lookup_table.lookup(
+                        current_slot,
+                        &address_table_lookup.readonly_indexes,
+                        &slot_hashes,
+                    )?,
+                })
+            })
+            .collect::<Result<_, AddressLookupError>>()?;
+
+        Ok(loaded_addresses)
     }
 }

@@ -20,4 +20,6 @@ pub enum Error {
     InstructionError(#[from] solana_sdk::instruction::InstructionError),
     #[error("Invalid ALT")]
     InvalidALT,
+    #[error("Error: {0:?}")]
+    Dynamic(#[from] Box<dyn std::error::Error>),
 }

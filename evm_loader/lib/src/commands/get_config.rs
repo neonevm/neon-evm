@@ -3,7 +3,6 @@
 use async_trait::async_trait;
 use base64::Engine;
 use enum_dispatch::enum_dispatch;
-use solana_sdk::signer::Signer;
 use std::collections::BTreeMap;
 use tokio::sync::OnceCell;
 
@@ -16,6 +15,7 @@ use crate::NeonResult;
 use crate::rpc::{CallDbClient, CloneRpcClient};
 use serde_with::{serde_as, DisplayFromStr};
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
+use solana_sdk::signature::Signer;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Status {

@@ -119,12 +119,12 @@ pub async fn execute(
     let accounts = account_keys(&sanitized_transactions);
     simulator.sync_accounts(rpc, &accounts).await?;
 
-    simulator.replace_blockhash(&request.blockhash.into());
+    // simulator.replace_blockhash(&request.blockhash.into());
 
     // Process transactions
     let mut results = Vec::new();
     for tx in sanitized_transactions {
-        let r = simulator.process_transaction(tx)?;
+        let r = simulator.process_transaction(request.blockhash.into(), tx)?;
         results.push(SimulateSolanaTransactionResult {
             error: r.status.err(),
             logs: r.log_messages.unwrap_or_default(),

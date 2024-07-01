@@ -22,6 +22,8 @@ solana-sdk = "=1.18.18"
 solana-program-runtime = "=1.18.18"
 solana-runtime = { version = "=1.18.18", features = ["dev-context-only-utils"] }
 solana-accounts-db = "=1.18.18"
+solana-bpf-loader-program = "=1.18.18"
+solana-loader-v4-program = "=1.18.18"
 
 [profile.test]
 debug = true
