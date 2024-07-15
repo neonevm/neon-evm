@@ -133,7 +133,7 @@ impl SolanaSimulator {
             storable_accounts.push((key, account));
         }
 
-        // self.set_multiple_accounts(&storable_accounts);
+        self.set_multiple_accounts(&storable_accounts);
 
         Ok(())
     }
@@ -171,6 +171,12 @@ impl SolanaSimulator {
 
     pub fn set_account(&mut self, pubkey: Pubkey, account: Account) {
         self.accounts_db.insert(pubkey, account.into());
+    }
+
+    pub fn set_multiple_accounts(&mut self, accounts: &[(&Pubkey, &Account)]) {
+        for (pubkey, account) in accounts {
+            self.accounts_db.insert(**pubkey, AccountSharedData::from((*account).clone()));
+        }
     }
 
     pub fn get_shared_account(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
