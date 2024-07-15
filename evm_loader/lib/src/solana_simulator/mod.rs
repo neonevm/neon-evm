@@ -255,7 +255,7 @@ impl SolanaSimulator {
                     let owner_account = self.accounts_db.get(owner).cloned().unwrap_or_default();
                     transaction_accounts.push((*owner, owner_account));
 
-                    let owner_index = transaction_accounts.len();
+                    let owner_index = transaction_accounts.len() - 1;
                     account_indices.insert(0, owner_index as IndexOfAccount);
                 }
 
