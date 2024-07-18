@@ -313,7 +313,8 @@ impl SolanaSimulator {
                 None => {
                     let account = self.accounts_db.get(key).cloned().unwrap_or_default();
                     if PROGRAM_OWNERS.iter().any(|owner| account.owner() == owner) {
-                        loaded_programs.replenish(*key, Arc::new(account));
+                        // use Bank::load_program_from_bytes
+                        loaded_programs.replenish(*key, Arc::new(LoadedProgram::new().unwrap()));
                     }
                 }
             });
