@@ -253,7 +253,7 @@ impl SolanaSimulator {
 
                 if let Some(owner_index) = transaction_accounts[builtins_start_index..]
                     .iter()
-                    .position(|a| &a.0 == owner)
+                    .position(|(key, _)| key == owner)
                 {
                     let owner_index = owner_index + builtins_start_index;
                     account_indices.insert(0, owner_index as IndexOfAccount);
