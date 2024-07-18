@@ -264,7 +264,7 @@ impl SolanaSimulator {
                         .find(|builtin| builtin.program_id == *owner)
                         .unwrap();
 
-                    let owner_account = AccountSharedData::new(100, 100, owner);
+                    let owner_account = AccountSharedData::new(100, 100, &solana_sdk::native_loader::id());
                     transaction_accounts.push((*owner, owner_account));
 
                     let owner_index = transaction_accounts.len() - 1;
