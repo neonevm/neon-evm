@@ -1,4 +1,9 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
+
 use log::debug;
+use solana_accounts_db::transaction_results::TransactionExecutionDetails;
 use solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1;
 use solana_loader_v4_program::create_program_runtime_environment_v2;
 use solana_program_runtime::loaded_programs::{
@@ -10,6 +15,7 @@ use solana_program_runtime::sysvar_cache::SysvarCache;
 use solana_program_runtime::timings::ExecuteTimings;
 use solana_runtime::accounts::construct_instructions_account;
 use solana_runtime::builtins::BUILTINS;
+use solana_runtime::{bank::TransactionSimulationResult, runtime_config::RuntimeConfig};
 use solana_sdk::account::{
     create_account_shared_data_with_fields, AccountSharedData, ReadableAccount,
     DUMMY_INHERITABLE_ACCOUNT_FIELDS,
@@ -23,12 +29,6 @@ use solana_sdk::message::v0::{LoadedAddresses, MessageAddressTableLookup};
 use solana_sdk::message::{AddressLoader, AddressLoaderError};
 use solana_sdk::rent::Rent;
 use solana_sdk::transaction_context::{IndexOfAccount, TransactionContext};
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
-
-use solana_accounts_db::transaction_results::TransactionExecutionDetails;
-use solana_runtime::{bank::TransactionSimulationResult, runtime_config::RuntimeConfig};
 use solana_sdk::{
     account::Account,
     address_lookup_table, bpf_loader_upgradeable,
@@ -39,13 +39,13 @@ use solana_sdk::{
     transaction::{SanitizedTransaction, VersionedTransaction},
 };
 
+pub use error::Error;
+pub use utils::SyncState;
+
 use crate::rpc::Rpc;
 
 mod error;
 mod utils;
-
-pub use error::Error;
-pub use utils::SyncState;
 
 #[derive(Debug)]
 pub struct SolanaSimulator {
@@ -175,7 +175,8 @@ impl SolanaSimulator {
 
     pub fn set_multiple_accounts(&mut self, accounts: &[(&Pubkey, &Account)]) {
         for (pubkey, account) in accounts {
-            self.accounts_db.insert(**pubkey, AccountSharedData::from((*account).clone()));
+            self.accounts_db
+                .insert(**pubkey, AccountSharedData::from((*account).clone()));
         }
     }
 
@@ -258,7 +259,12 @@ impl SolanaSimulator {
                     let owner_index = owner_index + builtins_start_index;
                     account_indices.insert(0, owner_index as IndexOfAccount);
                 } else {
-                    let owner_account = self.accounts_db.get(owner).cloned().unwrap_or_default(); // todo: fix this
+                    let _builtin = BUILTINS
+                        .iter()
+                        .find(|builtin| builtin.program_id == *owner)
+                        .unwrap();
+
+                    let owner_account = AccountSharedData::new(100, 100, owner);
                     transaction_accounts.push((*owner, owner_account));
 
                     let owner_index = transaction_accounts.len() - 1;
