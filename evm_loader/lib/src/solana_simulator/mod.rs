@@ -18,7 +18,7 @@ use solana_runtime::builtins::BUILTINS;
 use solana_runtime::{bank::TransactionSimulationResult, runtime_config::RuntimeConfig};
 use solana_sdk::account::{
     create_account_shared_data_with_fields, AccountSharedData, ReadableAccount,
-    DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+    DUMMY_INHERITABLE_ACCOUNT_FIELDS, PROGRAM_OWNERS,
 };
 use solana_sdk::address_lookup_table::error::AddressLookupError;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
@@ -264,7 +264,8 @@ impl SolanaSimulator {
                         .find(|builtin| builtin.program_id == *owner)
                         .unwrap();
 
-                    let owner_account = AccountSharedData::new(100, 100, &solana_sdk::native_loader::id());
+                    let owner_account =
+                        AccountSharedData::new(100, 100, &solana_sdk::native_loader::id());
                     transaction_accounts.push((*owner, owner_account));
 
                     let owner_index = transaction_accounts.len() - 1;
@@ -304,7 +305,18 @@ impl SolanaSimulator {
             None,
             clock.epoch,
         );
-        // todo: add program accounts
+        tx.message()
+            .account_keys()
+            .iter()
+            .for_each(|key| match loaded_programs.find(key) {
+                Some(_) => {}
+                None => {
+                    let account = self.accounts_db.get(key).cloned().unwrap_or_default();
+                    if PROGRAM_OWNERS.iter().any(|owner| account.owner() == owner) {
+                        loaded_programs.replenish(*key, Arc::new(account));
+                    }
+                }
+            });
         for builtin in BUILTINS {
             // create_loadable_account_with_fields
             let program = LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint);
