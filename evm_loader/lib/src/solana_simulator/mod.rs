@@ -148,10 +148,12 @@ impl SolanaSimulator {
         Ok(())
     }
 
+    #[must_use]
     pub const fn payer(&self) -> &Keypair {
         &self.payer
     }
 
+    #[must_use]
     pub fn blockhash(&self) -> Hash {
         Hash::new_unique()
     }
@@ -166,9 +168,9 @@ impl SolanaSimulator {
         S: Sysvar + SysvarId,
     {
         let old_account = self.accounts_db.get(&S::id());
-        let inherit = old_account
-            .map(|a| (a.lamports(), a.rent_epoch()))
-            .unwrap_or(DUMMY_INHERITABLE_ACCOUNT_FIELDS);
+        let inherit = old_account.map_or(DUMMY_INHERITABLE_ACCOUNT_FIELDS, |a| {
+            (a.lamports(), a.rent_epoch())
+        });
 
         let account = create_account_shared_data_with_fields(sysvar, inherit);
         self.accounts_db.insert(S::id(), account);
@@ -190,6 +192,7 @@ impl SolanaSimulator {
         }
     }
 
+    #[must_use]
     pub fn get_shared_account(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
         self.accounts_db.get(pubkey).cloned()
     }
@@ -298,12 +301,15 @@ impl SolanaSimulator {
         );
         //
         let program_runtime_environments = ProgramRuntimeEnvironments {
-            program_runtime_v1: Arc::new(create_program_runtime_environment_v1(
-                &self.feature_set,
-                &compute_budget,
-                true,
-                true,
-            ).unwrap()),
+            program_runtime_v1: Arc::new(
+                create_program_runtime_environment_v1(
+                    &self.feature_set,
+                    &compute_budget,
+                    true,
+                    true,
+                )
+                .unwrap(),
+            ),
             program_runtime_v2: Arc::new(create_program_runtime_environment_v2(
                 &compute_budget,
                 true,
@@ -484,8 +490,9 @@ impl SolanaSimulator {
                     .and_then(|state| {
                         (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
                     })
-                    .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
-                    .unwrap_or(ProgramAccountLoadResult::InvalidAccountData),
+                    .map_or(ProgramAccountLoadResult::InvalidAccountData, |slot| {
+                        ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot)
+                    }),
             );
         }
 
