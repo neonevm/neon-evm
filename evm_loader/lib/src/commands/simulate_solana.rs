@@ -124,7 +124,7 @@ pub async fn execute(
     // Process transactions
     let mut results = Vec::new();
     for tx in sanitized_transactions {
-        let r = simulator.process_transaction(request.blockhash.into(), tx)?;
+        let r = simulator.process_transaction(request.blockhash.into(), &tx)?;
         results.push(SimulateSolanaTransactionResult {
             error: r.status.err(),
             logs: r.log_messages.unwrap_or_default(),

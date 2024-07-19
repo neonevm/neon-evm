@@ -44,6 +44,7 @@ pub struct GetConfigResponse {
     pub config: BTreeMap<String, String>,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ConfigSimulator<'r> {
     CloneRpcClient {
         program_id: Pubkey,

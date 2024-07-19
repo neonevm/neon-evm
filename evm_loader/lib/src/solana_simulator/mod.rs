@@ -228,10 +228,11 @@ impl SolanaSimulator {
         Ok(sanitized_tx)
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub fn process_transaction(
         &self,
         blockhash: Hash,
-        tx: SanitizedTransaction,
+        tx: &SanitizedTransaction,
     ) -> Result<TransactionExecutionDetails, Error> {
         let mut transaction_accounts = Vec::new();
         for key in tx.message().account_keys().iter() {
@@ -321,84 +322,80 @@ impl SolanaSimulator {
             None,
             clock.epoch,
         );
-        tx.message()
-            .account_keys()
-            .iter()
-            .for_each(|key| match loaded_programs.find(key) {
-                Some(_) => {}
-                None => {
-                    let account = self.accounts_db.get(key).cloned().unwrap_or_default();
-                    if PROGRAM_OWNERS.iter().any(|owner| account.owner() == owner) {
-                        let mut load_program_metrics = LoadProgramMetrics {
-                            program_id: key.to_string(),
-                            ..LoadProgramMetrics::default()
-                        };
-                        let loaded_program = match self.load_program_accounts(account) {
-                            ProgramAccountLoadResult::InvalidAccountData => {
-                                LoadedProgram::new_tombstone(0, LoadedProgramType::Closed)
-                            }
+        tx.message().account_keys().iter().for_each(|key| {
+            if loaded_programs.find(key).is_none() {
+                let account = self.accounts_db.get(key).cloned().unwrap_or_default();
+                if PROGRAM_OWNERS.iter().any(|owner| account.owner() == owner) {
+                    let mut load_program_metrics = LoadProgramMetrics {
+                        program_id: key.to_string(),
+                        ..LoadProgramMetrics::default()
+                    };
+                    let loaded_program = match self.load_program_accounts(account) {
+                        ProgramAccountLoadResult::InvalidAccountData => {
+                            LoadedProgram::new_tombstone(0, LoadedProgramType::Closed)
+                        }
 
-                            ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
-                                LoadedProgram::new(
-                                    program_account.owner(),
-                                    program_runtime_environments.program_runtime_v1.clone(),
-                                    0,
-                                    0,
-                                    None,
-                                    program_account.data(),
-                                    program_account.data().len(),
-                                    &mut load_program_metrics,
-                                )
-                                .unwrap()
-                            }
+                        ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
+                            LoadedProgram::new(
+                                program_account.owner(),
+                                program_runtime_environments.program_runtime_v1.clone(),
+                                0,
+                                0,
+                                None,
+                                program_account.data(),
+                                program_account.data().len(),
+                                &mut load_program_metrics,
+                            )
+                            .unwrap()
+                        }
 
-                            ProgramAccountLoadResult::ProgramOfLoaderV3(
-                                program_account,
-                                programdata_account,
-                                _slot,
-                            ) => {
-                                let programdata = programdata_account
+                        ProgramAccountLoadResult::ProgramOfLoaderV3(
+                            program_account,
+                            programdata_account,
+                            _slot,
+                        ) => {
+                            let programdata = programdata_account
+                                .data()
+                                .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+                                .unwrap();
+                            LoadedProgram::new(
+                                program_account.owner(),
+                                program_runtime_environments.program_runtime_v1.clone(),
+                                0,
+                                0,
+                                None,
+                                programdata,
+                                program_account
                                     .data()
-                                    .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
-                                    .unwrap();
-                                LoadedProgram::new(
-                                    program_account.owner(),
-                                    program_runtime_environments.program_runtime_v1.clone(),
-                                    0,
-                                    0,
-                                    None,
-                                    programdata,
-                                    program_account
-                                        .data()
-                                        .len()
-                                        .saturating_add(programdata_account.data().len()),
-                                    &mut load_program_metrics,
-                                )
-                                .unwrap()
-                            }
+                                    .len()
+                                    .saturating_add(programdata_account.data().len()),
+                                &mut load_program_metrics,
+                            )
+                            .unwrap()
+                        }
 
-                            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, _slot) => {
-                                let elf_bytes = program_account
-                                    .data()
-                                    .get(LoaderV4State::program_data_offset()..)
-                                    .unwrap();
-                                LoadedProgram::new(
-                                    program_account.owner(),
-                                    program_runtime_environments.program_runtime_v2.clone(),
-                                    0,
-                                    0,
-                                    None,
-                                    elf_bytes,
-                                    program_account.data().len(),
-                                    &mut load_program_metrics,
-                                )
-                                .unwrap()
-                            }
-                        };
-                        loaded_programs.replenish(*key, Arc::new(loaded_program));
-                    }
+                        ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, _slot) => {
+                            let elf_bytes = program_account
+                                .data()
+                                .get(LoaderV4State::program_data_offset()..)
+                                .unwrap();
+                            LoadedProgram::new(
+                                program_account.owner(),
+                                program_runtime_environments.program_runtime_v2.clone(),
+                                0,
+                                0,
+                                None,
+                                elf_bytes,
+                                program_account.data().len(),
+                                &mut load_program_metrics,
+                            )
+                            .unwrap()
+                        }
+                    };
+                    loaded_programs.replenish(*key, Arc::new(loaded_program));
                 }
-            });
+            }
+        });
         for builtin in BUILTINS {
             // create_loadable_account_with_fields
             let program = LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint);
@@ -455,7 +452,7 @@ impl SolanaSimulator {
     ) -> Result<TransactionSimulationResult, Error> {
         self.process_transaction(
             *tx.message.recent_blockhash(),
-            self.sanitize_transaction(tx, false).unwrap(),
+            &self.sanitize_transaction(tx, false).unwrap(),
         )
         .map(|details| TransactionSimulationResult {
             result: details.status,
