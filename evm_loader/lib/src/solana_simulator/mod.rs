@@ -412,7 +412,7 @@ impl SolanaSimulator {
         let mut timings = ExecuteTimings::default();
         let mut executed_units = 0u64;
         //
-        let _result = MessageProcessor::process_message(
+        let status = MessageProcessor::process_message(
             tx.message(),
             &program_indices,
             &mut transaction_context,
@@ -426,9 +426,22 @@ impl SolanaSimulator {
             blockhash,
             DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE / 2,
             &mut executed_units,
-        )?;
+        );
 
-        todo!();
+        let log_messages =
+            Rc::try_unwrap(log_collector)
+                .map(|log_collector| log_collector.into_inner().into_messages())
+                .ok();
+
+        Ok(TransactionExecutionDetails {
+            status,
+            log_messages,
+            inner_instructions: None,
+            durable_nonce_fee: None,
+            return_data: None,
+            executed_units,
+            accounts_data_len_delta: 0,
+        })
     }
 
     pub fn simulate_transaction(
