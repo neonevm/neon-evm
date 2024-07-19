@@ -226,7 +226,7 @@ impl SolanaSimulator {
     }
 
     pub fn process_transaction(
-        &mut self,
+        &self,
         blockhash: Hash,
         tx: SanitizedTransaction,
     ) -> Result<TransactionExecutionDetails, Error> {
@@ -428,10 +428,9 @@ impl SolanaSimulator {
             &mut executed_units,
         );
 
-        let log_messages =
-            Rc::try_unwrap(log_collector)
-                .map(|log_collector| log_collector.into_inner().into_messages())
-                .ok();
+        let log_messages = Rc::try_unwrap(log_collector)
+            .map(|log_collector| log_collector.into_inner().into_messages())
+            .ok();
 
         Ok(TransactionExecutionDetails {
             status,
@@ -446,9 +445,20 @@ impl SolanaSimulator {
 
     pub fn simulate_transaction(
         &self,
-        _tx: VersionedTransaction,
+        tx: VersionedTransaction,
     ) -> Result<TransactionSimulationResult, Error> {
-        todo!()
+        self.process_transaction(
+            *tx.message.recent_blockhash(),
+            self.sanitize_transaction(tx, false).unwrap(),
+        )
+        .map(|details| TransactionSimulationResult {
+            result: details.status,
+            logs: details.log_messages.unwrap(),
+            post_simulation_accounts: vec![],
+            units_consumed: details.executed_units,
+            return_data: None,
+            inner_instructions: None,
+        })
     }
 
     pub fn simulate_legacy_transaction(
