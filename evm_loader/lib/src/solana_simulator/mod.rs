@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use log::debug;
 use solana_accounts_db::transaction_results::TransactionExecutionDetails;
+use solana_bpf_loader_program::load_program_from_bytes;
 use solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1;
 use solana_loader_v4_program::create_program_runtime_environment_v2;
 use solana_program_runtime::loaded_programs::{
-    LoadedProgram, LoadedProgramsForTxBatch, ProgramRuntimeEnvironments,
+    LoadProgramMetrics, LoadedProgram, LoadedProgramsForTxBatch, ProgramRuntimeEnvironments,
 };
 use solana_program_runtime::log_collector::LogCollector;
 use solana_program_runtime::message_processor::MessageProcessor;
@@ -305,6 +306,13 @@ impl SolanaSimulator {
             None,
             clock.epoch,
         );
+        let program_runtime_environment = create_program_runtime_environment_v1(
+            &self.feature_set,
+            &self.runtime_config.compute_budget.as_ref().unwrap(),
+            true, /* deployment */
+            true, /* debugging_features */
+        );
+        let program_runtime_environment = Arc::new(program_runtime_environment.unwrap());
         tx.message()
             .account_keys()
             .iter()
@@ -314,7 +322,22 @@ impl SolanaSimulator {
                     let account = self.accounts_db.get(key).cloned().unwrap_or_default();
                     if PROGRAM_OWNERS.iter().any(|owner| account.owner() == owner) {
                         // use Bank::load_program_from_bytes
-                        loaded_programs.replenish(*key, Arc::new(LoadedProgram::new().unwrap()));
+                        loaded_programs.replenish(
+                            *key,
+                            Arc::new(
+                                load_program_from_bytes(
+                                    None,
+                                    &mut LoadProgramMetrics::default(),
+                                    account.data(),
+                                    account.owner(),
+                                    account.data().len(),
+                                    0,
+                                    program_runtime_environment.clone(),
+                                    false,
+                                )
+                                .unwrap(),
+                            ),
+                        );
                     }
                 }
             });
