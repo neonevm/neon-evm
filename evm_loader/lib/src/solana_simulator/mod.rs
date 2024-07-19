@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use log::debug;
 use solana_accounts_db::transaction_results::TransactionExecutionDetails;
-use solana_bpf_loader_program::load_program_from_bytes;
 use solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1;
 use solana_loader_v4_program::create_program_runtime_environment_v2;
 use solana_program_runtime::loaded_programs::{
@@ -334,15 +333,15 @@ impl SolanaSimulator {
                             }
 
                             ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
-                                load_program_from_bytes(
-                                    None,
-                                    &mut load_program_metrics,
-                                    program_account.data(),
+                                LoadedProgram::new(
                                     program_account.owner(),
-                                    program_account.data().len(),
-                                    0,
                                     program_runtime_environments.program_runtime_v1.clone(),
-                                    false,
+                                    0,
+                                    0,
+                                    None,
+                                    program_account.data(),
+                                    program_account.data().len(),
+                                    &mut load_program_metrics,
                                 )
                                 .unwrap()
                             }
@@ -350,42 +349,42 @@ impl SolanaSimulator {
                             ProgramAccountLoadResult::ProgramOfLoaderV3(
                                 program_account,
                                 programdata_account,
-                                slot,
+                                _slot,
                             ) => {
                                 let programdata = programdata_account
                                     .data()
                                     .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
                                     .unwrap();
-                                load_program_from_bytes(
-                                    None,
-                                    &mut load_program_metrics,
-                                    programdata,
+                                LoadedProgram::new(
                                     program_account.owner(),
+                                    program_runtime_environments.program_runtime_v1.clone(),
+                                    0,
+                                    0,
+                                    None,
+                                    programdata,
                                     program_account
                                         .data()
                                         .len()
                                         .saturating_add(programdata_account.data().len()),
-                                    slot,
-                                    program_runtime_environments.program_runtime_v1.clone(),
-                                    false,
+                                    &mut load_program_metrics,
                                 )
                                 .unwrap()
                             }
 
-                            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
+                            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, _slot) => {
                                 let elf_bytes = program_account
                                     .data()
                                     .get(LoaderV4State::program_data_offset()..)
                                     .unwrap();
-                                load_program_from_bytes(
-                                    None,
-                                    &mut load_program_metrics,
-                                    elf_bytes,
-                                    &loader_v4::id(),
-                                    program_account.data().len(),
-                                    slot,
+                                LoadedProgram::new(
+                                    program_account.owner(),
                                     program_runtime_environments.program_runtime_v2.clone(),
-                                    false,
+                                    0,
+                                    0,
+                                    None,
+                                    elf_bytes,
+                                    program_account.data().len(),
+                                    &mut load_program_metrics,
                                 )
                                 .unwrap()
                             }
