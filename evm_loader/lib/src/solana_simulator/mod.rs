@@ -8,7 +8,8 @@ use solana_bpf_loader_program::load_program_from_bytes;
 use solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1;
 use solana_loader_v4_program::create_program_runtime_environment_v2;
 use solana_program_runtime::loaded_programs::{
-    LoadProgramMetrics, LoadedProgram, LoadedProgramsForTxBatch, ProgramRuntimeEnvironments,
+    LoadProgramMetrics, LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch,
+    ProgramRuntimeEnvironments,
 };
 use solana_program_runtime::log_collector::LogCollector;
 use solana_program_runtime::message_processor::MessageProcessor;
@@ -21,6 +22,7 @@ use solana_sdk::account::{
     create_account_shared_data_with_fields, AccountSharedData, ReadableAccount,
     DUMMY_INHERITABLE_ACCOUNT_FIELDS, PROGRAM_OWNERS,
 };
+use solana_sdk::account_utils::StateMut;
 use solana_sdk::address_lookup_table::error::AddressLookupError;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
 use solana_sdk::clock::Clock;
@@ -41,6 +43,10 @@ use solana_sdk::{
 };
 
 pub use error::Error;
+use evm_loader::solana_program::bpf_loader_upgradeable::UpgradeableLoaderState;
+use evm_loader::solana_program::clock::Slot;
+use evm_loader::solana_program::loader_v4;
+use evm_loader::solana_program::loader_v4::{LoaderV4State, LoaderV4Status};
 pub use utils::SyncState;
 
 use crate::rpc::Rpc;
@@ -67,7 +73,7 @@ impl SolanaSimulator {
     }
 
     pub async fn new_with_config(
-        _rpc: &impl Rpc,
+        rpc: &impl Rpc,
         runtime_config: RuntimeConfig,
         sync_state: SyncState,
     ) -> Result<Self, Error> {
@@ -75,7 +81,11 @@ impl SolanaSimulator {
             // utils::sync_sysvar_accounts(rpc, &bank).await?;
         }
 
-        let feature_set = Arc::new(FeatureSet::all_enabled());
+        let mut feature_set = FeatureSet::all_enabled();
+
+        for feature in rpc.get_deactivated_solana_features().await? {
+            feature_set.deactivate(&feature);
+        }
 
         let mut sysvar_cache = SysvarCache::default();
 
@@ -90,7 +100,7 @@ impl SolanaSimulator {
 
         Ok(Self {
             runtime_config,
-            feature_set,
+            feature_set: Arc::new(feature_set),
             accounts_db: HashMap::new(),
             sysvar_cache,
             payer: Keypair::new(),
@@ -302,17 +312,10 @@ impl SolanaSimulator {
         };
         let mut loaded_programs = LoadedProgramsForTxBatch::new(
             clock.slot,
-            program_runtime_environments,
+            program_runtime_environments.clone(),
             None,
             clock.epoch,
         );
-        let program_runtime_environment = create_program_runtime_environment_v1(
-            &self.feature_set,
-            &self.runtime_config.compute_budget.as_ref().unwrap(),
-            true, /* deployment */
-            true, /* debugging_features */
-        );
-        let program_runtime_environment = Arc::new(program_runtime_environment.unwrap());
         tx.message()
             .account_keys()
             .iter()
@@ -321,23 +324,73 @@ impl SolanaSimulator {
                 None => {
                     let account = self.accounts_db.get(key).cloned().unwrap_or_default();
                     if PROGRAM_OWNERS.iter().any(|owner| account.owner() == owner) {
-                        // use Bank::load_program_from_bytes
-                        loaded_programs.replenish(
-                            *key,
-                            Arc::new(
+                        let mut load_program_metrics = LoadProgramMetrics {
+                            program_id: key.to_string(),
+                            ..LoadProgramMetrics::default()
+                        };
+                        let loaded_program = match self.load_program_accounts(account).unwrap() {
+                            ProgramAccountLoadResult::InvalidAccountData => {
+                                LoadedProgram::new_tombstone(0, LoadedProgramType::Closed)
+                            }
+
+                            ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account) => {
                                 load_program_from_bytes(
                                     None,
-                                    &mut LoadProgramMetrics::default(),
-                                    account.data(),
-                                    account.owner(),
-                                    account.data().len(),
+                                    &mut load_program_metrics,
+                                    program_account.data(),
+                                    program_account.owner(),
+                                    program_account.data().len(),
                                     0,
-                                    program_runtime_environment.clone(),
+                                    program_runtime_environments.program_runtime_v1.clone(),
                                     false,
                                 )
-                                .unwrap(),
-                            ),
-                        );
+                                .unwrap()
+                            }
+
+                            ProgramAccountLoadResult::ProgramOfLoaderV3(
+                                program_account,
+                                programdata_account,
+                                slot,
+                            ) => {
+                                let programdata = programdata_account
+                                    .data()
+                                    .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+                                    .unwrap();
+                                load_program_from_bytes(
+                                    None,
+                                    &mut load_program_metrics,
+                                    programdata,
+                                    program_account.owner(),
+                                    program_account
+                                        .data()
+                                        .len()
+                                        .saturating_add(programdata_account.data().len()),
+                                    slot,
+                                    program_runtime_environments.program_runtime_v1.clone(),
+                                    false,
+                                )
+                                .unwrap()
+                            }
+
+                            ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot) => {
+                                let elf_bytes = program_account
+                                    .data()
+                                    .get(LoaderV4State::program_data_offset()..)
+                                    .unwrap();
+                                load_program_from_bytes(
+                                    None,
+                                    &mut load_program_metrics,
+                                    elf_bytes,
+                                    &loader_v4::id(),
+                                    program_account.data().len(),
+                                    slot,
+                                    program_runtime_environments.program_runtime_v2.clone(),
+                                    false,
+                                )
+                                .unwrap()
+                            }
+                        };
+                        loaded_programs.replenish(*key, Arc::new(loaded_program));
                     }
                 }
             });
@@ -393,6 +446,60 @@ impl SolanaSimulator {
         let versioned_transaction = VersionedTransaction::from(tx);
         self.simulate_transaction(versioned_transaction)
     }
+
+    fn load_program_accounts(
+        &self,
+        program_account: AccountSharedData,
+    ) -> Option<ProgramAccountLoadResult> {
+        debug_assert!(solana_bpf_loader_program::check_loader_id(
+            program_account.owner()
+        ));
+
+        if loader_v4::check_id(program_account.owner()) {
+            return Some(
+                solana_loader_v4_program::get_state(program_account.data())
+                    .ok()
+                    .and_then(|state| {
+                        (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
+                    })
+                    .map(|slot| ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot))
+                    .unwrap_or(ProgramAccountLoadResult::InvalidAccountData),
+            );
+        }
+
+        if !bpf_loader_upgradeable::check_id(program_account.owner()) {
+            return Some(ProgramAccountLoadResult::ProgramOfLoaderV1orV2(
+                program_account,
+            ));
+        }
+
+        if let Ok(UpgradeableLoaderState::Program {
+            programdata_address,
+        }) = program_account.state()
+        {
+            if let Some(programdata_account) = self.accounts_db.get(&programdata_address).cloned() {
+                if let Ok(UpgradeableLoaderState::ProgramData {
+                    slot,
+                    upgrade_authority_address: _,
+                }) = programdata_account.state()
+                {
+                    return Some(ProgramAccountLoadResult::ProgramOfLoaderV3(
+                        program_account,
+                        programdata_account,
+                        slot,
+                    ));
+                }
+            }
+        }
+        Some(ProgramAccountLoadResult::InvalidAccountData)
+    }
+}
+
+enum ProgramAccountLoadResult {
+    InvalidAccountData,
+    ProgramOfLoaderV1orV2(AccountSharedData),
+    ProgramOfLoaderV3(AccountSharedData, AccountSharedData, Slot),
+    ProgramOfLoaderV4(AccountSharedData, Slot),
 }
 
 impl AddressLoader for &SolanaSimulator {

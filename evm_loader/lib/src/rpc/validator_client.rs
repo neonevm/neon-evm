@@ -210,6 +210,10 @@ impl Rpc for CloneRpcClient {
             }
         }
 
+        for feature in &result {
+            log::info!("Deactivated feature: {}", feature);
+        }
+
         cache.replace(Cache {
             data: result.clone(),
             timestamp: Instant::now(),
