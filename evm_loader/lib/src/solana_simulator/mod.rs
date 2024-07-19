@@ -303,7 +303,7 @@ impl SolanaSimulator {
                 &compute_budget,
                 true,
                 true,
-            )?),
+            ).unwrap()),
             program_runtime_v2: Arc::new(create_program_runtime_environment_v2(
                 &compute_budget,
                 true,
