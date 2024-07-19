@@ -333,7 +333,7 @@ impl SolanaSimulator {
                             program_id: key.to_string(),
                             ..LoadProgramMetrics::default()
                         };
-                        let loaded_program = match self.load_program_accounts(account).unwrap() {
+                        let loaded_program = match self.load_program_accounts(account) {
                             ProgramAccountLoadResult::InvalidAccountData => {
                                 LoadedProgram::new_tombstone(0, LoadedProgramType::Closed)
                             }
@@ -478,28 +478,24 @@ impl SolanaSimulator {
     fn load_program_accounts(
         &self,
         program_account: AccountSharedData,
-    ) -> Option<ProgramAccountLoadResult> {
+    ) -> ProgramAccountLoadResult {
         debug_assert!(solana_bpf_loader_program::check_loader_id(
             program_account.owner()
         ));
 
         if loader_v4::check_id(program_account.owner()) {
-            return Some(
-                solana_loader_v4_program::get_state(program_account.data())
-                    .ok()
-                    .and_then(|state| {
-                        (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
-                    })
-                    .map_or(ProgramAccountLoadResult::InvalidAccountData, |slot| {
-                        ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot)
-                    }),
-            );
+            return solana_loader_v4_program::get_state(program_account.data())
+                .ok()
+                .and_then(|state| {
+                    (!matches!(state.status, LoaderV4Status::Retracted)).then_some(state.slot)
+                })
+                .map_or(ProgramAccountLoadResult::InvalidAccountData, |slot| {
+                    ProgramAccountLoadResult::ProgramOfLoaderV4(program_account, slot)
+                });
         }
 
         if !bpf_loader_upgradeable::check_id(program_account.owner()) {
-            return Some(ProgramAccountLoadResult::ProgramOfLoaderV1orV2(
-                program_account,
-            ));
+            return ProgramAccountLoadResult::ProgramOfLoaderV1orV2(program_account);
         }
 
         if let Ok(UpgradeableLoaderState::Program {
@@ -512,15 +508,15 @@ impl SolanaSimulator {
                     upgrade_authority_address: _,
                 }) = programdata_account.state()
                 {
-                    return Some(ProgramAccountLoadResult::ProgramOfLoaderV3(
+                    return ProgramAccountLoadResult::ProgramOfLoaderV3(
                         program_account,
                         programdata_account,
                         slot,
-                    ));
+                    );
                 }
             }
         }
-        Some(ProgramAccountLoadResult::InvalidAccountData)
+        ProgramAccountLoadResult::InvalidAccountData
     }
 }
 
