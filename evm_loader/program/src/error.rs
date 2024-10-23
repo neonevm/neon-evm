@@ -239,8 +239,43 @@ pub enum Error {
     #[error("Transaction Tree - invalid transaction data")]
     TreeAccountTxInvalidData,
 
-    #[error("Transaction Tree - invalid child transaction index")]
-    TreeAccountTxInvalidChildIndex,
+    #[error("Transaction Tree - invalid transaction data pubkey")]
+    TreeAccountTxInvalidDataPubkey,
+
+    #[error("Transaction Tree - invalid transaction data index")]
+    TreeAccountTxInvalidDataIndex,
+
+    #[error("Transaction Tree - invalid transaction data hash")]
+    TreeAccountTxInvalidDataHash,
+
+    #[error("Transaction Tree - invalid transaction data Gas")]
+    TreeAccountTxInvalidDataGas,
+
+    #[error("Transaction Tree - invalid transaction data Value")]
+    TreeAccountTxInvalidDataValue,
+
+    #[error("Transaction Tree - invalid transaction data payer")]
+    TreeAccountTxInvalidDataPayer,
+
+    #[error("Transaction Tree - invalid transaction data ChainId")]
+    TreeAccountTxInvalidDataChainId,
+
+    #[error("Transaction Tree - invalid transaction data index")]
+    TreeAccountTxInvalidDataIndex,
+
+    #[error("Transaction Tree - invalid transaction data Fee")]
+    TreeAccountTxInvalidDataFee,
+
+    #[error("Transaction Tree - invalid transaction data PriorityFee")]
+    TreeAccountTxInvalidDataPriorityFee,
+
+
+    #[error("Transaction Tree - invalid transaction data Intent")]
+    TreeAccountTxInvalidDataIntent,
+
+    #[error("Transaction Tree - invalid transaction data CallData")]
+    TreeAccountTxInvalidDataCallData,
+
 
     #[error("Transaction Tree - transaction invalid parent count")]
     TreeAccountTxInvalidParentCount,

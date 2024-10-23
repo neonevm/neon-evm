@@ -269,50 +269,50 @@ impl<'a> TransactionTree<'a> {
 
         let (pubkey, _) = Self::find_address(&crate::ID, tx.payer, tx.nonce);
         if &pubkey != self.account.key {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataPubkey);
         }
 
         if tx.index as usize >= self.nodes().len() {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataIndex);
         }
 
         let node = self.node(tx.index);
         if node.transaction_hash != hash {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataHash);
         }
 
         let gas_limit = node.gas_limit; // Copy from unaligned
         if gas_limit != tx.gas_limit {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataGas);
         }
         let value = node.value;
         if value != tx.value {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataValue);
         }
 
         if tx.payer != self.payer() {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataPayer);
         }
 
         if tx.chain_id != U256::from(self.chain_id()) {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataChainId);
         }
 
         if tx.max_fee_per_gas != self.max_fee_per_gas() {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataFee);
         }
 
         if tx.max_priority_fee_per_gas != self.max_priority_fee_per_gas() {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataPriorityFee);
         }
 
         // We don't support intents at the moment
         if tx.intent.is_some() {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataIntent);
         }
 
         if !tx.intent_call_data.is_empty() {
-            return Err(Error::TreeAccountTxInvalidData);
+            return Err(Error::TreeAccountTxInvalidDataCallData);
         }
 
         Ok(tx.index)
