@@ -24,6 +24,7 @@ use solana_program::{
 // "cd2d1a3a": "getExtAuthority(bytes32)"
 // "30aa81c6": "getPayer()",
 
+// "09c5eabe": "execute(bytes)"
 // "c549a7af": "execute(uint64,bytes)",
 // "32607450": "executeWithSeed(uint64,bytes32,bytes)",
 // "aeed7f1e": "execute(uint64,(bytes32,(bytes32,bool,bool)[],bytes))",
@@ -56,6 +57,27 @@ pub async fn call_solana<State: Database>(
     log::info!("Call arguments: {}", hex::encode(input));
 
     match selector {
+        // "09c5eabe": "execute(bytes)",
+        [0x09, 0xc5, 0xea, 0xbe] => {
+            if is_static {
+                return Err(Error::StaticModeViolation(*address));
+            }
+
+            let offset = read_usize(&input[32..])?;
+            let instruction: Instruction =
+                bincode::deserialize(&input[offset + 32..]).map_err(|_| Error::OutOfBounds)?;
+
+            let signer = context.caller;
+            let (_signer_pubkey, bump_seed) = state.contract_pubkey(signer);
+
+            let signer_seeds = vector![
+                vector![ACCOUNT_SEED_VERSION],
+                signer.as_bytes().to_vector(),
+                vector![bump_seed],
+            ];
+
+            execute_external_instruction(state, context, instruction, signer_seeds, None).await
+        }
         // "c549a7af": "execute(uint64,bytes)",
         [0xc5, 0x49, 0xa7, 0xaf] => {
             if is_static {
@@ -81,7 +103,7 @@ pub async fn call_solana<State: Database>(
                 context,
                 instruction,
                 signer_seeds,
-                required_lamports,
+                Some(required_lamports),
             )
             .await
         }
@@ -102,8 +124,14 @@ pub async fn call_solana<State: Database>(
                 pda_accounts::contract_auth_address(state.program_id(), &context.caller, salt);
             let seeds = pda_accounts::contract_auth_seeds(&context.caller, salt, signer_seed);
 
-            execute_external_instruction(state, context, instruction, seeds, required_lamports)
-                .await
+            execute_external_instruction(
+                state,
+                context,
+                instruction,
+                seeds,
+                Some(required_lamports),
+            )
+            .await
         }
 
         // "aeed7f1e": "execute(uint64,(bytes32,(bytes32,bool,bool)[],bytes))",
@@ -125,7 +153,7 @@ pub async fn call_solana<State: Database>(
                 context,
                 instruction,
                 signer_seeds,
-                required_lamports,
+                Some(required_lamports),
             )
             .await
         }
@@ -144,8 +172,14 @@ pub async fn call_solana<State: Database>(
             let (_, signer_seed) =
                 pda_accounts::contract_auth_address(state.program_id(), &context.caller, salt);
             let seeds = pda_accounts::contract_auth_seeds(&context.caller, salt, signer_seed);
-            execute_external_instruction(state, context, instruction, seeds, required_lamports)
-                .await
+            execute_external_instruction(
+                state,
+                context,
+                instruction,
+                seeds,
+                Some(required_lamports),
+            )
+            .await
         }
 
         // "154d4aa5": "getNeonAddress(address)"
@@ -261,7 +295,7 @@ pub async fn execute_external_instruction<State: Database>(
     context: &crate::evm::Context,
     instruction: Instruction,
     signer_seeds: Vector<Vector<u8>>,
-    required_lamports: u64,
+    required_lamports: Option<u64>,
 ) -> Result<Vector<u8>> {
     #[cfg(not(target_os = "solana"))]
     log::info!("instruction: {:?}", instruction);
@@ -307,11 +341,17 @@ pub async fn execute_external_instruction<State: Database>(
         let payer_seeds = pda_accounts::contract_payer_seeds(&context.caller, payer_bump_seed);
 
         let payer = state.external_account(payer_pubkey).await?;
-        if payer.lamports < required_lamports {
+        if match required_lamports {
+            Some(balance) => payer.lamports < balance,
+            None => true,
+        } {
             let transfer_instruction = solana_program::system_instruction::transfer(
                 &FAKE_OPERATOR,
                 &payer_pubkey,
-                required_lamports - payer.lamports,
+                match required_lamports {
+                    Some(balance) => balance - payer.lamports,
+                    None => state.external_account(state.operator()).await?.lamports,
+                },
             );
             state
                 .queue_external_instruction(transfer_instruction, vector![], false)

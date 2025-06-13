@@ -95,7 +95,7 @@ pub struct InterruptedInstruction {
 pub struct InterruptedState {
     pub instruction: InterruptedInstruction,
     pub signer_seeds: Vector<Vector<u8>>,
-    pub lamports: u64,
+    pub lamports: Option<u64>,
 }
 
 type VersionSignature = [u8; 40];
